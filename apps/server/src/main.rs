@@ -17,7 +17,7 @@ async fn main() -> anyhow::Result<()> {
 
     let config = Config::from_env()?;
     let pool = connect_sqlite_pool(&config.database_url).await?;
-    let app = build_router(AppState::new(pool));
+    let app = build_router(AppState::new(pool).with_discord_public_key(config.discord_public_key));
     let listener = TcpListener::bind(config.bind_addr).await?;
 
     tracing::info!("listening on {}", config.bind_addr);

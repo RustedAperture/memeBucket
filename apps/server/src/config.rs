@@ -8,6 +8,7 @@ use sqlx::SqlitePool;
 pub struct Config {
     pub bind_addr: SocketAddr,
     pub database_url: String,
+    pub discord_public_key: String,
     pub static_dir: PathBuf,
 }
 
@@ -18,6 +19,7 @@ impl Config {
             .parse()?;
         let database_url =
             env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://data/app.db".to_string());
+        let discord_public_key = env::var("DISCORD_PUBLIC_KEY").unwrap_or_default();
         let static_dir = env::var("STATIC_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("apps/web/out"));
@@ -25,6 +27,7 @@ impl Config {
         Ok(Self {
             bind_addr,
             database_url,
+            discord_public_key,
             static_dir,
         })
     }
@@ -80,10 +83,25 @@ mod tests {
 
     #[test]
     fn config_defaults_to_repo_local_sqlite_path() {
-        assert_eq!(
-            Config::from_env().unwrap().database_url,
-            "sqlite://data/app.db"
-        );
+        let _cwd_lock = CWD_LOCK.lock().unwrap();
+        let old_discord_public_key = std::env::var("DISCORD_PUBLIC_KEY").ok();
+        unsafe {
+            std::env::remove_var("DISCORD_PUBLIC_KEY");
+        }
+
+        let config = Config::from_env().unwrap();
+
+        match old_discord_public_key {
+            Some(value) => unsafe {
+                std::env::set_var("DISCORD_PUBLIC_KEY", value);
+            },
+            None => unsafe {
+                std::env::remove_var("DISCORD_PUBLIC_KEY");
+            },
+        }
+
+        assert_eq!(config.database_url, "sqlite://data/app.db");
+        assert_eq!(config.discord_public_key, "");
     }
 
     #[tokio::test]

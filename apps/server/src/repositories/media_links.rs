@@ -53,4 +53,31 @@ impl MediaLinkRepository {
             url: stored_url,
         })
     }
+
+    pub async fn list_for_category(
+        &self,
+        owner_user_id: Uuid,
+        category_id: Uuid,
+    ) -> Result<Vec<StoredMediaLink>, sqlx::Error> {
+        let rows = sqlx::query_as::<_, (String, String, String, String)>(
+            "SELECT id, owner_user_id, category_id, url FROM media_links WHERE owner_user_id = ? AND category_id = ? ORDER BY created_at",
+        )
+        .bind(owner_user_id.to_string())
+        .bind(category_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|(id, owner, category, url)| {
+                Ok(StoredMediaLink {
+                    id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    owner_user_id: Uuid::parse_str(&owner)
+                        .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    category_id: Uuid::parse_str(&category)
+                        .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    url,
+                })
+            })
+            .collect()
+    }
 }

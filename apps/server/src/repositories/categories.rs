@@ -63,4 +63,29 @@ impl CategoryRepository {
             })
             .collect()
     }
+
+    pub async fn find_by_name_folded(
+        &self,
+        owner_user_id: Uuid,
+        name: &str,
+    ) -> Result<Option<StoredCategory>, sqlx::Error> {
+        let name_folded = name.trim().to_lowercase();
+        let row = sqlx::query_as::<_, (String, String, String)>(
+            "SELECT id, owner_user_id, name FROM categories WHERE owner_user_id = ? AND name_folded = ?",
+        )
+        .bind(owner_user_id.to_string())
+        .bind(name_folded)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(|(id, owner, name)| {
+            Ok(StoredCategory {
+                id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                owner_user_id: Uuid::parse_str(&owner)
+                    .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                name,
+            })
+        })
+        .transpose()
+    }
 }

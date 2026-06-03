@@ -1,4 +1,8 @@
-use std::{env, net::SocketAddr, path::PathBuf};
+use std::{env, fs, net::SocketAddr, path::PathBuf};
+use std::str::FromStr;
+
+use sqlx::sqlite::SqliteConnectOptions;
+use sqlx::SqlitePool;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -23,5 +27,86 @@ impl Config {
             database_url,
             static_dir,
         })
+    }
+}
+
+pub async fn connect_sqlite_pool(database_url: &str) -> anyhow::Result<SqlitePool> {
+    ensure_sqlite_parent_dir(database_url)?;
+    let options = SqliteConnectOptions::from_str(database_url)?.create_if_missing(true);
+    Ok(SqlitePool::connect_with(options).await?)
+}
+
+fn ensure_sqlite_parent_dir(database_url: &str) -> anyhow::Result<()> {
+    let Some(path) = sqlite_file_path(database_url) else {
+        return Ok(());
+    };
+
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn sqlite_file_path(database_url: &str) -> Option<PathBuf> {
+    let url_path = database_url.strip_prefix("sqlite:")?;
+    if url_path == ":memory:" {
+        return None;
+    }
+
+    let path = url_path
+        .split_once('?')
+        .map(|(path, _)| path)
+        .unwrap_or(url_path)
+        .strip_prefix("//")
+        .unwrap_or(url_path);
+
+    if path.is_empty() {
+        return None;
+    }
+
+    Some(PathBuf::from(path))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Config, connect_sqlite_pool};
+    use std::fs;
+    use std::sync::Mutex;
+
+    static CWD_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn config_defaults_to_repo_local_sqlite_path() {
+        assert_eq!(
+            Config::from_env().unwrap().database_url,
+            "sqlite://data/app.db"
+        );
+    }
+
+    #[tokio::test]
+    async fn connect_sqlite_pool_creates_missing_parent_dir() {
+        let _cwd_lock = CWD_LOCK.lock().unwrap();
+        let old_cwd = std::env::current_dir().unwrap();
+        let root = std::env::temp_dir().join(format!("random-media-bot-{}", uuid::Uuid::new_v4()));
+        let db_path = root.join("data").join("app.db");
+
+        fs::create_dir_all(&root).unwrap();
+        std::env::set_current_dir(&root).unwrap();
+
+        assert!(!db_path.parent().unwrap().exists());
+
+        let pool = connect_sqlite_pool("sqlite://data/app.db").await.unwrap();
+
+        assert!(db_path.parent().unwrap().exists());
+        assert!(db_path.exists());
+        drop(pool);
+
+        std::env::set_current_dir(old_cwd).unwrap();
+        if root.exists() {
+            fs::remove_dir_all(&root).unwrap();
+        }
     }
 }

@@ -1,5 +1,8 @@
-use random_media_bot_server::{app_state::AppState, config::Config, router::build_router};
-use sqlx::SqlitePool;
+use random_media_bot_server::{
+    app_state::AppState,
+    config::{Config, connect_sqlite_pool},
+    router::build_router,
+};
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -13,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::from_env()?;
-    let pool = SqlitePool::connect(&config.database_url).await?;
+    let pool = connect_sqlite_pool(&config.database_url).await?;
     let app = build_router(AppState::new(pool));
     let listener = TcpListener::bind(config.bind_addr).await?;
 

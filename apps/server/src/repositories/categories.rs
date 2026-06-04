@@ -24,22 +24,28 @@ impl CategoryRepository {
         name: &str,
     ) -> Result<StoredCategory, sqlx::Error> {
         let id = Uuid::new_v4();
-        let name_folded = name.trim().to_lowercase();
+        let trimmed_name = name.trim();
+        let name_folded = trimmed_name.to_lowercase();
 
-        sqlx::query(
-            "INSERT INTO categories (id, owner_user_id, name, name_folded) VALUES (?, ?, ?, ?)",
-        )
-        .bind(id.to_string())
-        .bind(owner_user_id.to_string())
-        .bind(name.trim())
-        .bind(&name_folded)
-        .execute(&self.pool)
-        .await?;
+        let (stored_id, stored_owner_user_id, stored_name) =
+            sqlx::query_as::<_, (String, String, String)>(
+                "INSERT INTO categories (id, owner_user_id, name, name_folded)
+                 VALUES (?, ?, ?, ?)
+                 ON CONFLICT(owner_user_id, name_folded) DO NOTHING
+                 RETURNING id, owner_user_id, name",
+            )
+            .bind(id.to_string())
+            .bind(owner_user_id.to_string())
+            .bind(trimmed_name)
+            .bind(&name_folded)
+            .fetch_one(&self.pool)
+            .await?;
 
         Ok(StoredCategory {
-            id,
-            owner_user_id,
-            name: name.trim().to_string(),
+            id: Uuid::parse_str(&stored_id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+            owner_user_id: Uuid::parse_str(&stored_owner_user_id)
+                .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+            name: stored_name,
         })
     }
 
@@ -64,6 +70,20 @@ impl CategoryRepository {
                 })
             })
             .collect()
+    }
+
+    pub async fn delete_for_user(
+        &self,
+        owner_user_id: Uuid,
+        category_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query("DELETE FROM categories WHERE owner_user_id = ? AND id = ?")
+            .bind(owner_user_id.to_string())
+            .bind(category_id.to_string())
+            .execute(&self.pool)
+            .await?;
+
+        Ok(result.rows_affected() == 1)
     }
 
     pub async fn find_by_name_folded(

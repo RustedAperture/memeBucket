@@ -6,7 +6,7 @@ use axum::{
 use crate::{
     api::{
         account::{delete_account, export_account},
-        categories::list_categories,
+        categories::{create_category, delete_category, list_categories},
     },
     app_state::AppState,
     auth::discord_oauth::{handle_discord_oauth_callback, start_discord_oauth},
@@ -18,7 +18,11 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/auth/discord/start", get(start_discord_oauth))
         .route("/auth/discord/callback", get(handle_discord_oauth_callback))
-        .route("/api/categories", get(list_categories))
+        .route(
+            "/api/categories",
+            get(list_categories).post(create_category),
+        )
+        .route("/api/categories/{category_id}", delete(delete_category))
         .route("/api/account/export", get(export_account))
         .route("/api/account", delete(delete_account))
         .route("/discord/interactions", post(handle_interaction))

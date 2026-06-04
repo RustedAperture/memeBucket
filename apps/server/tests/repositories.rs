@@ -52,7 +52,7 @@ async fn category_names_are_unique_per_user_case_insensitive() {
     categories.create(user.id, "cats").await.unwrap();
     let duplicate = categories.create(user.id, "Cats").await;
 
-    assert!(duplicate.is_err());
+    assert!(matches!(duplicate, Err(sqlx::Error::RowNotFound)));
 }
 
 #[tokio::test]

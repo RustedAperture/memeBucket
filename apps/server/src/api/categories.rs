@@ -9,7 +9,5 @@ pub struct CategoryListResponse {
 }
 
 pub async fn list_categories(_user: AuthenticatedUser) -> Json<CategoryListResponse> {
-    Json(CategoryListResponse {
-        categories: vec![],
-    })
+    Json(CategoryListResponse { categories: vec![] })
 }

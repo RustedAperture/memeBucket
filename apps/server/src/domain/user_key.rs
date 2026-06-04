@@ -8,8 +8,8 @@ pub struct DiscordUserKey(String);
 
 impl DiscordUserKey {
     pub fn derive(secret: &[u8], discord_user_id: &str) -> Self {
-        let mut mac = HmacSha256::new_from_slice(secret)
-            .expect("HMAC accepts secrets of any length");
+        let mut mac =
+            HmacSha256::new_from_slice(secret).expect("HMAC accepts secrets of any length");
         mac.update(discord_user_id.as_bytes());
         let result = mac.finalize().into_bytes();
         Self(hex::encode(result))

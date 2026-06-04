@@ -43,7 +43,7 @@ pub fn verify_interaction_signature(
 mod tests {
     use super::verify_interaction_signature;
     use axum::body::Bytes;
-    use axum::http::{header::HeaderName, HeaderMap, HeaderValue};
+    use axum::http::{HeaderMap, HeaderValue, header::HeaderName};
     use ed25519_dalek::Signer;
 
     fn signed_request(body: &[u8]) -> (HeaderMap, String) {
@@ -63,10 +63,7 @@ mod tests {
             HeaderValue::from_static(timestamp),
         );
 
-        (
-            headers,
-            hex::encode(signing_key.verifying_key().to_bytes()),
-        )
+        (headers, hex::encode(signing_key.verifying_key().to_bytes()))
     }
 
     #[test]
@@ -74,7 +71,11 @@ mod tests {
         let body = Bytes::from_static(br#"{"type":1}"#);
         let (headers, public_key_hex) = signed_request(body.as_ref());
 
-        assert!(verify_interaction_signature(&headers, &body, &public_key_hex));
+        assert!(verify_interaction_signature(
+            &headers,
+            &body,
+            &public_key_hex
+        ));
     }
 
     #[test]
@@ -107,7 +108,11 @@ mod tests {
             HeaderValue::from_str(&hex::encode(signature_bytes)).unwrap(),
         );
 
-        assert!(!verify_interaction_signature(&headers, &body, &public_key_hex));
+        assert!(!verify_interaction_signature(
+            &headers,
+            &body,
+            &public_key_hex
+        ));
     }
 
     #[test]

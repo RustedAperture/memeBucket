@@ -1,10 +1,11 @@
-use axum::{routing::{get, post}, Router};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 
 use crate::{
-    api::categories::list_categories,
-    app_state::AppState,
-    auth::discord_oauth::start_discord_oauth,
-    discord::interactions::handle_interaction,
+    api::categories::list_categories, app_state::AppState,
+    auth::discord_oauth::start_discord_oauth, discord::interactions::handle_interaction,
 };
 
 pub fn build_router(state: AppState) -> Router {

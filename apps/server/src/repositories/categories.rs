@@ -26,13 +26,15 @@ impl CategoryRepository {
         let id = Uuid::new_v4();
         let name_folded = name.trim().to_lowercase();
 
-        sqlx::query("INSERT INTO categories (id, owner_user_id, name, name_folded) VALUES (?, ?, ?, ?)")
-            .bind(id.to_string())
-            .bind(owner_user_id.to_string())
-            .bind(name.trim())
-            .bind(&name_folded)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(
+            "INSERT INTO categories (id, owner_user_id, name, name_folded) VALUES (?, ?, ?, ?)",
+        )
+        .bind(id.to_string())
+        .bind(owner_user_id.to_string())
+        .bind(name.trim())
+        .bind(&name_folded)
+        .execute(&self.pool)
+        .await?;
 
         Ok(StoredCategory {
             id,

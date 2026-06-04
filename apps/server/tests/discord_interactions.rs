@@ -1,7 +1,7 @@
 use axum::{
-    body::Bytes,
     body::Body,
-    http::{header::HeaderName, Request, StatusCode},
+    body::Bytes,
+    http::{Request, StatusCode, header::HeaderName},
 };
 use ed25519_dalek::Signer;
 use http_body_util::BodyExt;
@@ -54,10 +54,7 @@ async fn signed_ping_payload_returns_pong_with_configured_public_key() {
                     HeaderName::from_static("x-signature-ed25519"),
                     hex::encode(signature),
                 )
-                .header(
-                    HeaderName::from_static("x-signature-timestamp"),
-                    timestamp,
-                )
+                .header(HeaderName::from_static("x-signature-timestamp"), timestamp)
                 .body(Body::from(body))
                 .unwrap(),
         )

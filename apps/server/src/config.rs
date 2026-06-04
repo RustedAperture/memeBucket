@@ -1,8 +1,8 @@
-use std::{env, fs, net::SocketAddr, path::PathBuf};
 use std::str::FromStr;
+use std::{env, fs, net::SocketAddr, path::PathBuf};
 
-use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::SqlitePool;
+use sqlx::sqlite::SqliteConnectOptions;
 
 #[derive(Clone, Debug)]
 pub struct Config {

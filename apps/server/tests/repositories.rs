@@ -1,7 +1,5 @@
 use random_media_bot_server::repositories::{
-    categories::CategoryRepository,
-    media_links::MediaLinkRepository,
-    users::UserRepository,
+    categories::CategoryRepository, media_links::MediaLinkRepository, users::UserRepository,
 };
 use sqlx::SqlitePool;
 
@@ -75,7 +73,11 @@ async fn media_link_rejects_category_owned_by_different_user() {
 
     let alice_category = categories.create(alice.id, "cats").await.unwrap();
     let result = links
-        .create(bob.id, alice_category.id, "https://example.com/not-allowed.gif")
+        .create(
+            bob.id,
+            alice_category.id,
+            "https://example.com/not-allowed.gif",
+        )
         .await;
 
     assert!(result.is_err());
@@ -93,7 +95,11 @@ async fn media_link_rejects_orphan_category_id() {
         .unwrap();
 
     let result = links
-        .create(user.id, uuid::Uuid::new_v4(), "https://example.com/missing.gif")
+        .create(
+            user.id,
+            uuid::Uuid::new_v4(),
+            "https://example.com/missing.gif",
+        )
         .await;
 
     assert!(result.is_err());

@@ -40,8 +40,9 @@ fn key_is_lowercase_hex_sha256_length() {
     let key = DiscordUserKey::derive(b"test-secret", "123456789012345678");
 
     assert_eq!(key.as_hex().len(), 64);
-    assert!(key
-        .as_hex()
-        .chars()
-        .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+    assert!(
+        key.as_hex()
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    );
 }

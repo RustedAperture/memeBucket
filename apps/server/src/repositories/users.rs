@@ -27,7 +27,7 @@ impl UserRepository {
     ) -> Result<StoredUser, sqlx::Error> {
         let (id, discord_user_key, display_name, avatar_url) =
             sqlx::query_as::<_, (String, String, Option<String>, Option<String>)>(
-            r#"
+                r#"
             INSERT INTO users (id, discord_user_key, display_name, avatar_url, updated_at)
             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(discord_user_key) DO UPDATE SET
@@ -36,13 +36,13 @@ impl UserRepository {
                 updated_at = CURRENT_TIMESTAMP
             RETURNING id, discord_user_key, display_name, avatar_url
             "#,
-        )
-        .bind(Uuid::new_v4().to_string())
-        .bind(discord_user_key)
-        .bind(display_name)
-        .bind(avatar_url)
-        .fetch_one(&self.pool)
-        .await?;
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(discord_user_key)
+            .bind(display_name)
+            .bind(avatar_url)
+            .fetch_one(&self.pool)
+            .await?;
 
         Ok(StoredUser {
             id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,

@@ -2,18 +2,18 @@ use sqlx::SqlitePool;
 use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct CategoryRepository {
+pub struct PoolRepository {
     pool: SqlitePool,
 }
 
 #[derive(Clone, Debug)]
-pub struct StoredCategory {
+pub struct StoredPool {
     pub id: Uuid,
     pub owner_user_id: Uuid,
     pub name: String,
 }
 
-impl CategoryRepository {
+impl PoolRepository {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
@@ -22,14 +22,14 @@ impl CategoryRepository {
         &self,
         owner_user_id: Uuid,
         name: &str,
-    ) -> Result<StoredCategory, sqlx::Error> {
+    ) -> Result<StoredPool, sqlx::Error> {
         let id = Uuid::new_v4();
         let trimmed_name = name.trim();
         let name_folded = trimmed_name.to_lowercase();
 
         let (stored_id, stored_owner_user_id, stored_name) =
             sqlx::query_as::<_, (String, String, String)>(
-                "INSERT INTO categories (id, owner_user_id, name, name_folded)
+                "INSERT INTO pools (id, owner_user_id, name, name_folded)
                  VALUES (?, ?, ?, ?)
                  ON CONFLICT(owner_user_id, name_folded) DO NOTHING
                  RETURNING id, owner_user_id, name",
@@ -41,7 +41,7 @@ impl CategoryRepository {
             .fetch_one(&self.pool)
             .await?;
 
-        Ok(StoredCategory {
+        Ok(StoredPool {
             id: Uuid::parse_str(&stored_id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
             owner_user_id: Uuid::parse_str(&stored_owner_user_id)
                 .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
@@ -52,9 +52,9 @@ impl CategoryRepository {
     pub async fn list_for_user(
         &self,
         owner_user_id: Uuid,
-    ) -> Result<Vec<StoredCategory>, sqlx::Error> {
+    ) -> Result<Vec<StoredPool>, sqlx::Error> {
         let rows = sqlx::query_as::<_, (String, String, String)>(
-            "SELECT id, owner_user_id, name FROM categories WHERE owner_user_id = ? ORDER BY name COLLATE NOCASE",
+            "SELECT id, owner_user_id, name FROM pools WHERE owner_user_id = ? ORDER BY name COLLATE NOCASE",
         )
         .bind(owner_user_id.to_string())
         .fetch_all(&self.pool)
@@ -62,7 +62,7 @@ impl CategoryRepository {
 
         rows.into_iter()
             .map(|(id, owner, name)| {
-                Ok(StoredCategory {
+                Ok(StoredPool {
                     id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
                     owner_user_id: Uuid::parse_str(&owner)
                         .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
@@ -75,11 +75,11 @@ impl CategoryRepository {
     pub async fn delete_for_user(
         &self,
         owner_user_id: Uuid,
-        category_id: Uuid,
+        pool_id: Uuid,
     ) -> Result<bool, sqlx::Error> {
-        let result = sqlx::query("DELETE FROM categories WHERE owner_user_id = ? AND id = ?")
+        let result = sqlx::query("DELETE FROM pools WHERE owner_user_id = ? AND id = ?")
             .bind(owner_user_id.to_string())
-            .bind(category_id.to_string())
+            .bind(pool_id.to_string())
             .execute(&self.pool)
             .await?;
 
@@ -90,10 +90,10 @@ impl CategoryRepository {
         &self,
         owner_user_id: Uuid,
         name: &str,
-    ) -> Result<Option<StoredCategory>, sqlx::Error> {
+    ) -> Result<Option<StoredPool>, sqlx::Error> {
         let name_folded = name.trim().to_lowercase();
         let row = sqlx::query_as::<_, (String, String, String)>(
-            "SELECT id, owner_user_id, name FROM categories WHERE owner_user_id = ? AND name_folded = ?",
+            "SELECT id, owner_user_id, name FROM pools WHERE owner_user_id = ? AND name_folded = ?",
         )
         .bind(owner_user_id.to_string())
         .bind(name_folded)
@@ -101,7 +101,7 @@ impl CategoryRepository {
         .await?;
 
         row.map(|(id, owner, name)| {
-            Ok(StoredCategory {
+            Ok(StoredPool {
                 id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
                 owner_user_id: Uuid::parse_str(&owner)
                     .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,

@@ -4,13 +4,13 @@ pub fn command_definitions() -> Vec<Value> {
     vec![
         json!({
             "name": "ez",
-            "description": "Send a random media link from one of your categories",
+            "description": "Send a random image from one of your pools",
             "integration_types": [1],
             "contexts": [0, 1, 2],
             "options": [
                 {
-                    "name": "category",
-                    "description": "Your category",
+                    "name": "pool",
+                    "description": "Your pool",
                     "type": 3,
                     "required": true,
                     "autocomplete": true
@@ -25,37 +25,37 @@ pub fn command_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "pool",
-            "description": "Manage your media pools",
+            "description": "Manage your image pools",
             "integration_types": [1],
             "contexts": [0, 1, 2],
             "options": [
                 {
                     "name": "create",
-                    "description": "Create a category",
+                    "description": "Create a pool",
                     "type": 1,
                     "options": [
-                        {"name": "name", "description": "Category name", "type": 3, "required": true}
+                        {"name": "name", "description": "Pool name", "type": 3, "required": true}
                     ]
                 },
                 {
                     "name": "add",
-                    "description": "Add a URL to a category",
+                    "description": "Add an image URL to a pool",
                     "type": 1,
                     "options": [
-                        {"name": "category", "description": "Your category", "type": 3, "required": true, "autocomplete": true},
+                        {"name": "pool", "description": "Your pool", "type": 3, "required": true, "autocomplete": true},
                         {"name": "url", "description": "Image or GIF URL", "type": 3, "required": true}
                     ]
                 },
                 {
                     "name": "list",
-                    "description": "List your categories",
+                    "description": "List your pools",
                     "type": 1
                 }
             ]
         }),
         json!({
             "name": "manage",
-            "description": "Open the web dashboard to manage your categories",
+            "description": "Open the web dashboard to manage your pools",
             "integration_types": [1],
             "contexts": [0, 1, 2]
         }),

@@ -7,74 +7,74 @@ use uuid::Uuid;
 
 use crate::{
     app_state::AppState, auth::sessions::AuthenticatedUser, error::AppError,
-    repositories::categories::CategoryRepository,
+    repositories::pools::PoolRepository,
 };
 
 #[derive(Deserialize)]
-pub struct CreateCategoryRequest {
+pub struct CreatePoolRequest {
     pub name: String,
 }
 
 #[derive(Serialize)]
-pub struct CategoryResponse {
+pub struct PoolResponse {
     pub id: String,
     pub name: String,
 }
 
-pub async fn list_categories(
+pub async fn list_pools(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-) -> Result<Json<Vec<CategoryResponse>>, AppError> {
-    let categories = CategoryRepository::new(state.pool)
+) -> Result<Json<Vec<PoolResponse>>, AppError> {
+    let pools = PoolRepository::new(state.pool)
         .list_for_user(user.user_id)
         .await?;
 
     Ok(Json(
-        categories
+        pools
             .into_iter()
-            .map(|category| CategoryResponse {
-                id: category.id.to_string(),
-                name: category.name,
+            .map(|pool| PoolResponse {
+                id: pool.id.to_string(),
+                name: pool.name,
             })
             .collect(),
     ))
 }
 
-pub async fn create_category(
+pub async fn create_pool(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Json(request): Json<CreateCategoryRequest>,
-) -> Result<Json<CategoryResponse>, AppError> {
+    Json(request): Json<CreatePoolRequest>,
+) -> Result<Json<PoolResponse>, AppError> {
     if request.name.trim().is_empty() {
         return Err(AppError::BadRequest(
-            "category name is required".to_string(),
+            "pool name is required".to_string(),
         ));
     }
 
-    let category = match CategoryRepository::new(state.pool)
+    let pool = match PoolRepository::new(state.pool)
         .create(user.user_id, &request.name)
         .await
     {
-        Ok(category) => category,
+        Ok(pool) => pool,
         Err(sqlx::Error::RowNotFound) => {
-            return Err(AppError::BadRequest("category already exists".to_string()));
+            return Err(AppError::BadRequest("pool already exists".to_string()));
         }
         Err(err) => return Err(err.into()),
     };
 
-    Ok(Json(CategoryResponse {
-        id: category.id.to_string(),
-        name: category.name,
+    Ok(Json(PoolResponse {
+        id: pool.id.to_string(),
+        name: pool.name,
     }))
 }
 
-pub async fn delete_category(
+pub async fn delete_pool(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Path(category_id): Path<Uuid>,
+    Path(pool_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let deleted = CategoryRepository::new(state.pool)
-        .delete_for_user(user.user_id, category_id)
+    let deleted = PoolRepository::new(state.pool)
+        .delete_for_user(user.user_id, pool_id)
         .await?;
 
     Ok(Json(serde_json::json!({ "deleted": deleted })))

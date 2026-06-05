@@ -15,43 +15,43 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type MediaLinkItem = { id: string; url: string };
+type ImageItem = { id: string; url: string };
 
-export function MediaLinkList({ categoryId, maxHeight = 128 }: { categoryId: string; maxHeight?: number }) {
-  const [links, setLinks] = useState<MediaLinkItem[]>([]);
+export function ImageList({ poolId, maxHeight = 128 }: { poolId: string; maxHeight?: number }) {
+  const [images, setImages] = useState<ImageItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [linkToDelete, setLinkToDelete] = useState<string | null>(null);
+  const [imageToDelete, setImageToDelete] = useState<string | null>(null);
 
   async function load() {
     try {
-      setLinks(await apiGet<MediaLinkItem[]>(`/api/categories/${categoryId}/links`));
+      setImages(await apiGet<ImageItem[]>(`/api/pools/${poolId}/images`));
     } catch {
-      // category might be empty or deleted
+      // pool might be empty or deleted
     }
   }
 
   useEffect(() => {
     void load();
-  }, [categoryId]);
+  }, [poolId]);
 
   async function handleDeleteConfirm() {
-    if (!linkToDelete) return;
+    if (!imageToDelete) return;
     setError(null);
     try {
-      await apiDelete(`/api/categories/${categoryId}/links/${linkToDelete}`);
-      setLinkToDelete(null);
+      await apiDelete(`/api/pools/${poolId}/images/${imageToDelete}`);
+      setImageToDelete(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete link");
+      setError(err instanceof Error ? err.message : "Could not delete image");
     }
   }
 
-  if (links.length === 0) {
+  if (images.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center animate-in fade-in-50">
         <ImageIcon className="mx-auto h-10 w-10 text-muted-foreground/50" />
-        <h2 className="mt-4 text-lg font-semibold">No links</h2>
-        <p className="mb-4 mt-2 text-sm text-muted-foreground">No links in this category yet. Add one above.</p>
+        <h2 className="mt-4 text-lg font-semibold">No images</h2>
+        <p className="mb-4 mt-2 text-sm text-muted-foreground">No images in this pool yet. Add one above.</p>
       </div>
     );
   }
@@ -62,11 +62,11 @@ export function MediaLinkList({ categoryId, maxHeight = 128 }: { categoryId: str
 
         {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
         <div className="flex flex-wrap gap-4 items-start">
-          {links.map((link) => (
-            <div key={link.id} className="group relative overflow-hidden rounded-xl hover:ring-2 hover:ring-ring transition-all flex w-max">
+          {images.map((image) => (
+            <div key={image.id} className="group relative overflow-hidden rounded-xl hover:ring-2 hover:ring-ring transition-all flex w-max">
               <img 
-                src={link.url} 
-                alt="Media preview" 
+                src={image.url} 
+                alt="Image preview" 
                 style={{ maxHeight: `${maxHeight}px` }}
                 className="w-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
                 onError={(e) => {
@@ -79,7 +79,7 @@ export function MediaLinkList({ categoryId, maxHeight = 128 }: { categoryId: str
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10" />
               
               <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
-                <Button variant="destructive" size="icon" className="h-8 w-8" onClick={(e) => { e.preventDefault(); setLinkToDelete(link.id); }}>
+                <Button variant="destructive" size="icon" className="h-8 w-8" onClick={(e) => { e.preventDefault(); setImageToDelete(image.id); }}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
               </div>
@@ -88,12 +88,12 @@ export function MediaLinkList({ categoryId, maxHeight = 128 }: { categoryId: str
         </div>
       </div>
 
-      <AlertDialog open={!!linkToDelete} onOpenChange={(open) => !open && setLinkToDelete(null)}>
+      <AlertDialog open={!!imageToDelete} onOpenChange={(open) => !open && setImageToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete this link from your category. This action cannot be undone.
+              This will permanently delete this image from your pool. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

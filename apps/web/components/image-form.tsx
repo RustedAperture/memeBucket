@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { apiPost } from "@/lib/api";
 import { Plus } from "lucide-react";
 
-export function MediaLinkForm({ categoryId, onCreated }: { categoryId: string; onCreated: () => void }) {
+export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: () => void }) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -15,11 +15,11 @@ export function MediaLinkForm({ categoryId, onCreated }: { categoryId: string; o
     if (!url.trim()) return;
     setError(null);
     try {
-      await apiPost(`/api/categories/${categoryId}/links`, { url });
+      await apiPost(`/api/pools/${poolId}/images`, { url });
       setUrl("");
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add link");
+      setError(err instanceof Error ? err.message : "Could not add image");
     }
   }
 
@@ -34,7 +34,7 @@ export function MediaLinkForm({ categoryId, onCreated }: { categoryId: string; o
       <div className="flex justify-end">
         <Button type="submit">
           <Plus className="w-4 h-4 mr-2" />
-          Add Link
+          Add Image
         </Button>
       </div>
       {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}

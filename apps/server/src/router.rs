@@ -6,8 +6,8 @@ use axum::{
 use crate::{
     api::{
         account::{delete_account, export_account},
-        categories::{create_category, delete_category, list_categories},
-        media_links::{create_link, delete_link, list_links},
+        pools::{create_pool, delete_pool, list_pools},
+        images::{create_image, delete_image, list_images},
     },
     app_state::AppState,
     auth::discord_oauth::{handle_discord_oauth_callback, start_discord_oauth},
@@ -21,18 +21,18 @@ pub fn build_router(state: AppState) -> Router {
         .route("/auth/discord/start", get(start_discord_oauth))
         .route("/auth/discord/callback", get(handle_discord_oauth_callback))
         .route(
-            "/api/categories",
-            get(list_categories).post(create_category),
+            "/api/pools",
+            get(list_pools).post(create_pool),
         )
         .route(
-            "/api/categories/{category_id}/links",
-            get(list_links).post(create_link),
+            "/api/pools/{pool_id}/images",
+            get(list_images).post(create_image),
         )
         .route(
-            "/api/categories/{category_id}/links/{link_id}",
-            delete(delete_link),
+            "/api/pools/{pool_id}/images/{image_id}",
+            delete(delete_image),
         )
-        .route("/api/categories/{category_id}", delete(delete_category))
+        .route("/api/pools/{pool_id}", delete(delete_pool))
         .route("/api/account/export", get(export_account))
         .route("/api/account", delete(delete_account))
         .route("/discord/interactions", post(handle_interaction))

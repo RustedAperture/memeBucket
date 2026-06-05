@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { apiPost } from "@/lib/api";
 import { Plus } from "lucide-react";
 
-export function CategoryForm({ onCreated }: { onCreated: () => void }) {
+export function PoolForm({ onCreated }: { onCreated: () => void }) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -15,11 +15,11 @@ export function CategoryForm({ onCreated }: { onCreated: () => void }) {
     if (!name.trim()) return;
     setError(null);
     try {
-      await apiPost("/api/categories", { name });
+      await apiPost("/api/pools", { name });
       setName("");
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create category");
+      setError(err instanceof Error ? err.message : "Could not create pool");
     }
   }
 
@@ -29,7 +29,7 @@ export function CategoryForm({ onCreated }: { onCreated: () => void }) {
         <Input 
           value={name} 
           onChange={(event) => setName(event.target.value)} 
-          placeholder="New category name..." 
+          placeholder="New pool name..." 
           className="w-full"
           autoFocus
         />
@@ -38,7 +38,7 @@ export function CategoryForm({ onCreated }: { onCreated: () => void }) {
       <div className="flex justify-end">
         <Button type="submit">
           <Plus className="w-4 h-4 mr-2" />
-          Add Category
+          Add Pool
         </Button>
       </div>
     </form>

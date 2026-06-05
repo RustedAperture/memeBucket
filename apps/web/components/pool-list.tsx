@@ -7,41 +7,41 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { apiDelete, apiGet } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { CategoryForm } from "@/components/category-form";
+import { PoolForm } from "@/components/pool-form";
 import { SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-type Category = { id: string; name: string };
+type Pool = { id: string; name: string };
 
-export function CategoryList({ isMobile }: { isMobile?: boolean }) {
-  const [categories, setCategories] = useState<Category[]>([]);
+export function PoolList({ isMobile }: { isMobile?: boolean }) {
+  const [pools, setPools] = useState<Pool[]>([]);
   const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const activeId = searchParams.get("id");
   const [dialogOpen, setDialogOpen] = useState(false);
 
   async function load() {
-    setCategories(await apiGet<Category[]>("/api/categories"));
+    setPools(await apiGet<Pool[]>("/api/pools"));
   }
 
   useEffect(() => {
     void load();
   }, []);
 
-  async function handleDelete(categoryId: string) {
+  async function handleDelete(poolId: string) {
     setError(null);
     try {
-      await apiDelete(`/api/categories/${categoryId}`);
+      await apiDelete(`/api/pools/${poolId}`);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete category");
+      setError(err instanceof Error ? err.message : "Could not delete pool");
     }
   }
 
   return (
     <div className="flex flex-col h-full bg-sidebar/50 text-sidebar-foreground">
       <div className="flex h-14 items-center justify-between pl-4 pr-2">
-        <span className="font-semibold text-lg">Folders</span>
+        <span className="font-semibold text-lg">Pools</span>
         
         <div className={cn("flex items-center", isMobile && "-space-x-px")}>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -50,9 +50,9 @@ export function CategoryList({ isMobile }: { isMobile?: boolean }) {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add New Category</DialogTitle>
+                <DialogTitle>Add New Pool</DialogTitle>
               </DialogHeader>
-              <CategoryForm onCreated={() => { setDialogOpen(false); void load(); }} />
+              <PoolForm onCreated={() => { setDialogOpen(false); void load(); }} />
             </DialogContent>
           </Dialog>
           {isMobile && (
@@ -63,19 +63,19 @@ export function CategoryList({ isMobile }: { isMobile?: boolean }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 pb-4">
-        <div className="mb-2 px-2 text-xs font-medium text-sidebar-foreground/70">Your Collections</div>
+      <div className="flex-1 overflow-y-auto px-2 pb-4 pt-2">
+        <div className="mb-4 h-px bg-border" />
         {error ? <p className="text-sm font-medium text-destructive px-2 pb-2">{error}</p> : null}
-        {categories.length === 0 ? (
-          <p className="text-sm text-muted-foreground p-4 text-center">No categories yet.</p>
+        {pools.length === 0 ? (
+          <p className="text-sm text-muted-foreground p-4 text-center">No pools yet.</p>
         ) : (
           <div className="space-y-1">
-            {categories.map((category) => {
-              const isActive = category.id === activeId;
+            {pools.map((pool) => {
+              const isActive = pool.id === activeId;
               return (
-                <div key={category.id} className="group relative">
+                <div key={pool.id} className="group relative">
                   <Link 
-                    href={`/categories?id=${category.id}`} 
+                    href={`/pools?id=${pool.id}`} 
                     className={`flex h-8 items-center gap-2 overflow-hidden rounded-md px-2 text-sm ring-sidebar-ring outline-hidden transition-all ${
                       isActive 
                         ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" 
@@ -83,7 +83,7 @@ export function CategoryList({ isMobile }: { isMobile?: boolean }) {
                     }`}
                   >
                     <Folder className="h-4 w-4 shrink-0" />
-                    <span className="truncate flex-1">{category.name}</span>
+                    <span className="truncate flex-1">{pool.name}</span>
                   </Link>
                   <Button 
                     variant="ghost" 
@@ -91,7 +91,7 @@ export function CategoryList({ isMobile }: { isMobile?: boolean }) {
                     className={`absolute right-1 top-1 h-6 w-6 rounded-md p-0 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 ${
                       isActive ? "text-sidebar-accent-foreground" : "text-muted-foreground"
                     }`}
-                    onClick={(e) => { e.preventDefault(); handleDelete(category.id); }}
+                    onClick={(e) => { e.preventDefault(); handleDelete(pool.id); }}
                   >
                     <Trash2 className="w-3 h-3 text-destructive" />
                   </Button>

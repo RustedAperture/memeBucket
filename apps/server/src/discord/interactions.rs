@@ -14,11 +14,11 @@ use crate::{
     discord::signatures::verify_interaction_signature,
     domain::user_key::DiscordUserKey,
     repositories::{
-        categories::CategoryRepository, media_links::MediaLinkRepository,
+        pools::PoolRepository, images::ImageRepository,
         send_history::SendHistoryRepository, users::UserRepository,
     },
     services::{
-        media_links::validate_http_url,
+        images::validate_http_url,
         random::{RandomService, RandomVisibility},
     },
 };
@@ -237,10 +237,10 @@ async fn dispatch_autocomplete(state: &AppState, payload: &InteractionPayload) -
         Err(_) => return autocomplete_choices(Vec::new()),
     };
 
-    let Some(focused) = find_focused_option(data, "category") else {
+    let Some(focused) = find_focused_option(data, "pool") else {
         return autocomplete_choices(Vec::new());
     };
-    if !supports_category_autocomplete(data) {
+    if !supports_pool_autocomplete(data) {
         return autocomplete_choices(Vec::new());
     }
 
@@ -249,19 +249,19 @@ async fn dispatch_autocomplete(state: &AppState, payload: &InteractionPayload) -
         .unwrap_or_default()
         .trim()
         .to_lowercase();
-    let categories = CategoryRepository::new(state.pool.clone())
+    let pools = PoolRepository::new(state.pool.clone())
         .list_for_user(user.id)
         .await
         .unwrap_or_default();
 
-    let choices = categories
+    let choices = pools
         .into_iter()
-        .filter(|category| {
-            query.is_empty() || category.name.to_lowercase().contains(query.as_str())
+        .filter(|pool| {
+            query.is_empty() || pool.name.to_lowercase().contains(query.as_str())
         })
         .take(25)
-        .map(|category| {
-            let name = category.name;
+        .map(|pool| {
+            let name = pool.name;
             (name.clone(), name)
         })
         .collect();
@@ -269,7 +269,7 @@ async fn dispatch_autocomplete(state: &AppState, payload: &InteractionPayload) -
     autocomplete_choices(choices)
 }
 
-fn supports_category_autocomplete(data: &InteractionData) -> bool {
+fn supports_pool_autocomplete(data: &InteractionData) -> bool {
     match data.name.as_str() {
         "ez" => true,
         "pool" => data
@@ -287,13 +287,13 @@ fn find_focused_option<'a>(data: &'a InteractionData, name: &str) -> Option<&'a 
 }
 
 async fn handle_random_command(state: &AppState, user_id: Uuid, data: &InteractionData) -> Value {
-    let Some(category) = data
-        .option("category")
+    let Some(pool_name) = data
+        .option("pool")
         .and_then(InteractionOption::string_value)
         .map(str::trim)
         .filter(|value| !value.is_empty())
     else {
-        return ephemeral_message("Category is required.");
+        return ephemeral_message("Pool is required.");
     };
 
     let private = data
@@ -302,15 +302,15 @@ async fn handle_random_command(state: &AppState, user_id: Uuid, data: &Interacti
         .unwrap_or(false);
 
     let service = RandomService::new(
-        CategoryRepository::new(state.pool.clone()),
-        MediaLinkRepository::new(state.pool.clone()),
+        PoolRepository::new(state.pool.clone()),
+        ImageRepository::new(state.pool.clone()),
         SendHistoryRepository::new(state.pool.clone()),
     );
 
     match service
         .select_random(
             user_id,
-            category,
+            pool_name,
             if private {
                 RandomVisibility::Private
             } else {
@@ -348,29 +348,29 @@ async fn handle_pool_create(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     else {
-        return ephemeral_message("Category name cannot be blank.");
+        return ephemeral_message("Pool name cannot be blank.");
     };
 
-    match CategoryRepository::new(state.pool.clone())
+    match PoolRepository::new(state.pool.clone())
         .create(user_id, name)
         .await
     {
-        Ok(category) => ephemeral_message(&format!("Created category \"{}\".", category.name)),
+        Ok(pool) => ephemeral_message(&format!("Created pool \"{}\".", pool.name)),
         Err(sqlx::Error::RowNotFound) => {
-            ephemeral_message("You already have a category with that name.")
+            ephemeral_message("You already have a pool with that name.")
         }
-        Err(_) => ephemeral_message("I hit a storage error while creating category."),
+        Err(_) => ephemeral_message("I hit a storage error while creating pool."),
     }
 }
 
 async fn handle_pool_add(state: &AppState, user_id: Uuid, subcommand: &InteractionOption) -> Value {
-    let Some(category_name) = subcommand
-        .option("category")
+    let Some(pool_name) = subcommand
+        .option("pool")
         .and_then(InteractionOption::string_value)
         .map(str::trim)
         .filter(|value| !value.is_empty())
     else {
-        return ephemeral_message("Category is required.");
+        return ephemeral_message("Pool is required.");
     };
 
     let Some(url) = subcommand
@@ -379,47 +379,47 @@ async fn handle_pool_add(state: &AppState, user_id: Uuid, subcommand: &Interacti
         .map(str::trim)
         .filter(|value| !value.is_empty())
     else {
-        return ephemeral_message("URL is required.");
+        return ephemeral_message("Image URL is required.");
     };
 
     if !validate_http_url(url) {
         return ephemeral_message("URL must be a valid http or https URL.");
     }
 
-    let categories = CategoryRepository::new(state.pool.clone());
-    let links = MediaLinkRepository::new(state.pool.clone());
-    let Some(category) = (match categories.find_by_name_folded(user_id, category_name).await {
-        Ok(category) => category,
-        Err(_) => return ephemeral_message("I hit a storage error while finding category."),
+    let pools = PoolRepository::new(state.pool.clone());
+    let images = ImageRepository::new(state.pool.clone());
+    let Some(pool) = (match pools.find_by_name_folded(user_id, pool_name).await {
+        Ok(pool) => pool,
+        Err(_) => return ephemeral_message("I hit a storage error while finding pool."),
     }) else {
-        return ephemeral_message("I could not find that category.");
+        return ephemeral_message("I could not find that pool.");
     };
 
-    match links.create(user_id, category.id, url).await {
-        Ok(_) => ephemeral_message(&format!("Added link to \"{}\".", category.name)),
-        Err(sqlx::Error::RowNotFound) => ephemeral_message("I could not find that category."),
-        Err(_) => ephemeral_message("I hit a storage error while saving link."),
+    match images.create(user_id, pool.id, url).await {
+        Ok(_) => ephemeral_message(&format!("Added image to \"{}\".", pool.name)),
+        Err(sqlx::Error::RowNotFound) => ephemeral_message("I could not find that pool."),
+        Err(_) => ephemeral_message("I hit a storage error while saving image."),
     }
 }
 
 async fn handle_pool_list(state: &AppState, user_id: Uuid) -> Value {
-    match CategoryRepository::new(state.pool.clone())
+    match PoolRepository::new(state.pool.clone())
         .list_for_user(user_id)
         .await
     {
-        Ok(categories) if categories.is_empty() => ephemeral_message("You have no categories yet."),
-        Ok(categories) => {
+        Ok(pools) if pools.is_empty() => ephemeral_message("You have no pools yet."),
+        Ok(pools) => {
             let content = format!(
-                "Your categories:\n{}",
-                categories
+                "Your pools:\n{}",
+                pools
                     .into_iter()
-                    .map(|category| format!("- {}", category.name))
+                    .map(|pool| format!("- {}", pool.name))
                     .collect::<Vec<_>>()
                     .join("\n")
             );
             ephemeral_message(&content)
         }
-        Err(_) => ephemeral_message("I hit a storage error while listing categories."),
+        Err(_) => ephemeral_message("I hit a storage error while listing pools."),
     }
 }
 
@@ -431,7 +431,7 @@ async fn handle_manage_command() -> Value {
         base_url
     };
     ephemeral_message(&format!(
-        "Manage your categories at: {}/categories",
+        "Manage your pools at: {}/pools",
         url.trim_end_matches('/')
     ))
 }

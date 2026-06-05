@@ -14,9 +14,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <LayoutDashboard className="w-4 h-4" />
               <span className="hidden sm:inline">Dashboard</span>
             </Link>
-            <Link href="/categories" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/pools" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <FolderOpen className="w-4 h-4" />
-              <span className="hidden sm:inline">Categories</span>
+              <span className="hidden sm:inline">Pools</span>
             </Link>
             <Link href="/account" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <User className="w-4 h-4" />

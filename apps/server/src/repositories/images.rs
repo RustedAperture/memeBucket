@@ -2,19 +2,19 @@ use sqlx::SqlitePool;
 use uuid::Uuid;
 
 #[derive(Clone)]
-pub struct MediaLinkRepository {
+pub struct ImageRepository {
     pool: SqlitePool,
 }
 
 #[derive(Clone, Debug)]
-pub struct StoredMediaLink {
+pub struct StoredImage {
     pub id: Uuid,
     pub owner_user_id: Uuid,
-    pub category_id: Uuid,
+    pub pool_id: Uuid,
     pub url: String,
 }
 
-impl MediaLinkRepository {
+impl ImageRepository {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
@@ -22,58 +22,58 @@ impl MediaLinkRepository {
     pub async fn create(
         &self,
         owner_user_id: Uuid,
-        category_id: Uuid,
+        pool_id: Uuid,
         url: &str,
-    ) -> Result<StoredMediaLink, sqlx::Error> {
+    ) -> Result<StoredImage, sqlx::Error> {
         let id = Uuid::new_v4();
-        let (stored_id, stored_owner_user_id, stored_category_id, stored_url) =
+        let (stored_id, stored_owner_user_id, stored_pool_id, stored_url) =
             sqlx::query_as::<_, (String, String, String, String)>(
                 r#"
-                INSERT INTO media_links (id, owner_user_id, category_id, url)
+                INSERT INTO images (id, owner_user_id, pool_id, url)
                 SELECT ?, ?, id, ?
-                FROM categories
+                FROM pools
                 WHERE id = ? AND owner_user_id = ?
-                RETURNING id, owner_user_id, category_id, url
+                RETURNING id, owner_user_id, pool_id, url
                 "#,
             )
             .bind(id.to_string())
             .bind(owner_user_id.to_string())
             .bind(url)
-            .bind(category_id.to_string())
+            .bind(pool_id.to_string())
             .bind(owner_user_id.to_string())
             .fetch_one(&self.pool)
             .await?;
 
-        Ok(StoredMediaLink {
+        Ok(StoredImage {
             id: Uuid::parse_str(&stored_id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
             owner_user_id: Uuid::parse_str(&stored_owner_user_id)
                 .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-            category_id: Uuid::parse_str(&stored_category_id)
+            pool_id: Uuid::parse_str(&stored_pool_id)
                 .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
             url: stored_url,
         })
     }
 
-    pub async fn list_for_category(
+    pub async fn list_for_pool(
         &self,
         owner_user_id: Uuid,
-        category_id: Uuid,
-    ) -> Result<Vec<StoredMediaLink>, sqlx::Error> {
+        pool_id: Uuid,
+    ) -> Result<Vec<StoredImage>, sqlx::Error> {
         let rows = sqlx::query_as::<_, (String, String, String, String)>(
-            "SELECT id, owner_user_id, category_id, url FROM media_links WHERE owner_user_id = ? AND category_id = ? ORDER BY created_at",
+            "SELECT id, owner_user_id, pool_id, url FROM images WHERE owner_user_id = ? AND pool_id = ? ORDER BY created_at",
         )
         .bind(owner_user_id.to_string())
-        .bind(category_id.to_string())
+        .bind(pool_id.to_string())
         .fetch_all(&self.pool)
         .await?;
 
         rows.into_iter()
-            .map(|(id, owner, category, url)| {
-                Ok(StoredMediaLink {
+            .map(|(id, owner, pool, url)| {
+                Ok(StoredImage {
                     id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
                     owner_user_id: Uuid::parse_str(&owner)
                         .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-                    category_id: Uuid::parse_str(&category)
+                    pool_id: Uuid::parse_str(&pool)
                         .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
                     url,
                 })
@@ -84,13 +84,13 @@ impl MediaLinkRepository {
     pub async fn delete_for_user(
         &self,
         owner_user_id: Uuid,
-        link_id: Uuid,
+        image_id: Uuid,
     ) -> Result<bool, sqlx::Error> {
         let result = sqlx::query(
-            "DELETE FROM media_links WHERE owner_user_id = ? AND id = ?",
+            "DELETE FROM images WHERE owner_user_id = ? AND id = ?",
         )
         .bind(owner_user_id.to_string())
-        .bind(link_id.to_string())
+        .bind(image_id.to_string())
         .execute(&self.pool)
         .await?;
 

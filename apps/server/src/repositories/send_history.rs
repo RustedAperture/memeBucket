@@ -1,7 +1,7 @@
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use crate::repositories::{categories::StoredCategory, media_links::StoredMediaLink};
+use crate::repositories::{pools::StoredPool, images::StoredImage};
 
 #[derive(Clone)]
 pub struct SendHistoryRepository {
@@ -16,27 +16,27 @@ impl SendHistoryRepository {
     pub async fn record(
         &self,
         owner_user_id: Uuid,
-        category: &StoredCategory,
-        media_link: &StoredMediaLink,
+        pool: &StoredPool,
+        image: &StoredImage,
         visibility: &str,
     ) -> Result<(), sqlx::Error> {
         let result = sqlx::query(
             r#"
             INSERT INTO send_history
-                (id, owner_user_id, category_id, media_link_id, category_name, url, response_visibility)
-            SELECT ?, categories.owner_user_id, categories.id, media_links.id, categories.name, media_links.url, ?
-            FROM categories
-            INNER JOIN media_links
-                ON media_links.id = ?
-               AND media_links.category_id = categories.id
-               AND media_links.owner_user_id = categories.owner_user_id
-            WHERE categories.id = ? AND categories.owner_user_id = ?
+                (id, owner_user_id, pool_id, image_id, pool_name, url, response_visibility)
+            SELECT ?, pools.owner_user_id, pools.id, images.id, pools.name, images.url, ?
+            FROM pools
+            INNER JOIN images
+                ON images.id = ?
+               AND images.pool_id = pools.id
+               AND images.owner_user_id = pools.owner_user_id
+            WHERE pools.id = ? AND pools.owner_user_id = ?
             "#,
         )
         .bind(Uuid::new_v4().to_string())
         .bind(visibility)
-        .bind(media_link.id.to_string())
-        .bind(category.id.to_string())
+        .bind(image.id.to_string())
+        .bind(pool.id.to_string())
         .bind(owner_user_id.to_string())
         .execute(&self.pool)
         .await?;

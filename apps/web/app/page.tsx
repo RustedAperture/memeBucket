@@ -15,23 +15,23 @@ export default function HomePage() {
             <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           </div>
           <p className="text-muted-foreground">
-            Welcome to ezGif. Manage your personal Discord media categories.
+            Welcome to ezGif. Manage your personal Discord media pools.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Link href="/categories" className="block">
+          <Link href="/pools" className="block">
             <Card className="h-full hover:bg-muted/50 transition-colors">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Categories</CardTitle>
+                  <CardTitle>Pools</CardTitle>
                   <ImageIcon className="w-5 h-5 text-muted-foreground" />
                 </div>
                 <CardDescription>Organize your media</CardDescription>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  View and manage all your saved media categories.
+                  View and manage all your saved media pools.
                 </p>
               </CardContent>
             </Card>

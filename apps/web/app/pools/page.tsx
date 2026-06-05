@@ -3,17 +3,17 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { CategoryList } from "@/components/category-list";
-import { MediaLinkForm } from "@/components/media-link-form";
-import { MediaLinkList } from "@/components/media-link-list";
+import { PoolList } from "@/components/pool-list";
+import { ImageForm } from "@/components/image-form";
+import { ImageList } from "@/components/image-list";
 import { Folder, Plus, PanelLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
-function CategoriesContent() {
+function PoolsContent() {
   const searchParams = useSearchParams();
-  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [poolId, setPoolId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [sizeIndex, setSizeIndex] = useState(2);
@@ -23,14 +23,14 @@ function CategoriesContent() {
   const maxHeight = SIZES[sizeIndex] || 128;
 
   useEffect(() => {
-    setCategoryId(searchParams.get("id"));
+    setPoolId(searchParams.get("id"));
   }, [searchParams]);
 
   return (
     <div className="flex flex-1 min-h-0 w-full overflow-hidden rounded-xl bg-muted/30 border">
       {/* Sidebar Area */}
       <div className="w-64 shrink-0 hidden md:block">
-        <CategoryList />
+        <PoolList />
       </div>
       
       {/* Inset Main Content Area */}
@@ -42,22 +42,22 @@ function CategoriesContent() {
                 <SheetTrigger render={<Button variant="ghost" size="icon" className="md:hidden h-8 w-8 -ml-2 text-muted-foreground"><PanelLeft className="h-5 w-5" /></Button>} />
                 <SheetContent side="left" className="w-72 p-0 flex flex-col gap-0 border-r-0" showCloseButton={false}>
                   <SheetHeader className="sr-only">
-                    <SheetTitle>Categories</SheetTitle>
+                    <SheetTitle>Pools</SheetTitle>
                   </SheetHeader>
-                  <CategoryList isMobile />
+                  <PoolList isMobile />
                 </SheetContent>
               </Sheet>
-              <h1 className="text-base font-medium">Media Links</h1>
+              <h1 className="text-base font-medium">Images</h1>
             </div>
-            {categoryId && (
+            {poolId && (
               <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
                 <DialogTrigger render={<Button size="sm" className="h-8 gap-1"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Add Image</span></Button>} />
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Add New Image</DialogTitle>
                   </DialogHeader>
-                  <MediaLinkForm 
-                    categoryId={categoryId} 
+                  <ImageForm 
+                    poolId={poolId} 
                     onCreated={() => { setRefreshKey((k) => k + 1); setLinkDialogOpen(false); }} 
                   />
                 </DialogContent>
@@ -66,7 +66,7 @@ function CategoriesContent() {
           </div>
         </header>
         {/* Size toolbar */}
-        {categoryId && (
+        {poolId && (
           <div className="flex items-center gap-3 px-4 lg:px-6 h-10 shrink-0 border-b bg-muted/30">
             <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
               Size
@@ -99,18 +99,18 @@ function CategoriesContent() {
           </div>
         )}
         <div className="flex-1 flex flex-col overflow-y-auto">
-          {categoryId ? (
+          {poolId ? (
             <div className="p-6 space-y-6 max-w-7xl mx-auto w-full">
-              <MediaLinkList key={refreshKey} categoryId={categoryId} maxHeight={maxHeight} />
+              <ImageList key={refreshKey} poolId={poolId} maxHeight={maxHeight} />
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in-50">
               <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
                 <Folder className="h-8 w-8 text-muted-foreground/50" />
               </div>
-              <h2 className="text-xl font-semibold">Select a category</h2>
+              <h2 className="text-xl font-semibold">Select a pool</h2>
               <p className="text-muted-foreground mt-2 max-w-sm">
-                Choose a category from the sidebar to view and manage its media links.
+                Choose a pool from the sidebar to view and manage its images.
               </p>
             </div>
           )}
@@ -120,11 +120,11 @@ function CategoriesContent() {
   );
 }
 
-export default function CategoriesPage() {
+export default function PoolsPage() {
   return (
     <AppShell>
       <Suspense fallback={<div className="flex items-center justify-center h-full min-h-screen">Loading...</div>}>
-        <CategoriesContent />
+        <PoolsContent />
       </Suspense>
     </AppShell>
   );

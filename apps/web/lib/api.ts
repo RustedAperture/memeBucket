@@ -24,6 +24,11 @@ export async function apiPost<TRequest, TResponse>(path: string, body: TRequest)
     body: JSON.stringify(body),
   });
 
+  if (response.status === 401) {
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+
   if (!response.ok) {
     throw new Error(await response.text());
   }
@@ -37,6 +42,11 @@ export async function apiDelete<TResponse>(path: string): Promise<TResponse> {
     credentials: "include",
     headers: { accept: "application/json" },
   });
+
+  if (response.status === 401) {
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
 
   if (!response.ok) {
     throw new Error(await response.text());

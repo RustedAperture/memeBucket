@@ -220,7 +220,7 @@ async fn dispatch_command(state: &AppState, payload: &InteractionPayload) -> Val
     };
 
     match data.name.as_str() {
-        "random" => handle_random_command(state, user.id, data).await,
+        "ez" => handle_random_command(state, user.id, data).await,
         "pool" => handle_pool_command(state, user.id, data).await,
         "manage" => handle_manage_command().await,
         _ => ephemeral_message("Unsupported command."),
@@ -271,7 +271,7 @@ async fn dispatch_autocomplete(state: &AppState, payload: &InteractionPayload) -
 
 fn supports_category_autocomplete(data: &InteractionData) -> bool {
     match data.name.as_str() {
-        "random" => true,
+        "ez" => true,
         "pool" => data
             .subcommand()
             .map(|subcommand| subcommand.name == "add")

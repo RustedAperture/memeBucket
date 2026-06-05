@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiPost } from "@/lib/api";
+import { Plus } from "lucide-react";
 
 export function MediaLinkForm({ categoryId, onCreated }: { categoryId: string; onCreated: () => void }) {
   const [url, setUrl] = useState("");
@@ -11,6 +12,7 @@ export function MediaLinkForm({ categoryId, onCreated }: { categoryId: string; o
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (!url.trim()) return;
     setError(null);
     try {
       await apiPost(`/api/categories/${categoryId}/links`, { url });
@@ -22,10 +24,20 @@ export function MediaLinkForm({ categoryId, onCreated }: { categoryId: string; o
   }
 
   return (
-    <form onSubmit={submit} className="flex gap-2">
-      <Input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/image.gif" />
-      <Button type="submit">Add</Button>
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+    <form onSubmit={submit} className="flex flex-col gap-4">
+      <Input 
+        value={url} 
+        onChange={(event) => setUrl(event.target.value)} 
+        placeholder="https://example.com/image.gif" 
+        className="w-full"
+      />
+      <div className="flex justify-end">
+        <Button type="submit">
+          <Plus className="w-4 h-4 mr-2" />
+          Add Link
+        </Button>
+      </div>
+      {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
     </form>
   );
 }

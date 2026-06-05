@@ -1,18 +1,33 @@
 import Link from "next/link";
+import { LayoutDashboard, FolderOpen, User } from "lucide-react";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-          <Link href="/" className="font-semibold">ezGif</Link>
-          <nav className="flex items-center gap-4 text-sm">
-            <Link href="/categories">Categories</Link>
-            <Link href="/account">Account</Link>
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
+      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+          <Link href="/" className="font-semibold text-lg hover:opacity-80 transition-opacity">
+            ezGif
+          </Link>
+          <nav className="flex items-center gap-6 text-sm font-medium">
+            <Link href="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+              <LayoutDashboard className="w-4 h-4" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </Link>
+            <Link href="/categories" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+              <FolderOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Categories</span>
+            </Link>
+            <Link href="/account" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+              <User className="w-4 h-4" />
+              <span className="hidden sm:inline">Account</span>
+            </Link>
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main className="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-5xl px-4 pt-8 pb-4">
+        {children}
+      </main>
     </div>
   );
 }

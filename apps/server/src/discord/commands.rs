@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 pub fn command_definitions() -> Vec<Value> {
     vec![
         json!({
-            "name": "random",
+            "name": "ez",
             "description": "Send a random media link from one of your categories",
             "integration_types": [1],
             "contexts": [0, 1, 2],

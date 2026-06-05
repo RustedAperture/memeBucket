@@ -22,6 +22,11 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env()?;
     let pool = connect_sqlite_pool(&config.database_url).await?;
 
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .expect("database migration failed");
+
     // Register Discord slash commands if credentials are configured
     if !config.discord_application_id.is_empty() && !config.discord_bot_token.is_empty() {
         register_discord_commands(&config.discord_application_id, &config.discord_bot_token)

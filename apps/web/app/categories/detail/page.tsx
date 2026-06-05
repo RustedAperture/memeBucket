@@ -1,14 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { MediaLinkForm } from "@/components/media-link-form";
 import { MediaLinkList } from "@/components/media-link-list";
 
 export default function CategoryDetailPage() {
-  const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
-  const categoryId = params.get("id") ?? "";
+  const [categoryId, setCategoryId] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setCategoryId(params.get("id") ?? "");
+  }, []);
 
   return (
     <AppShell>

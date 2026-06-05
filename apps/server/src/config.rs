@@ -8,6 +8,8 @@ use sqlx::sqlite::SqliteConnectOptions;
 pub struct Config {
     pub bind_addr: SocketAddr,
     pub database_url: String,
+    pub discord_application_id: String,
+    pub discord_bot_token: String,
     pub discord_public_key: String,
     pub static_dir: PathBuf,
 }
@@ -19,6 +21,8 @@ impl Config {
             .parse()?;
         let database_url =
             env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://data/app.db".to_string());
+        let discord_application_id = env::var("DISCORD_APPLICATION_ID").unwrap_or_default();
+        let discord_bot_token = env::var("DISCORD_BOT_TOKEN").unwrap_or_default();
         let discord_public_key = env::var("DISCORD_PUBLIC_KEY").unwrap_or_default();
         let static_dir = env::var("STATIC_DIR")
             .map(PathBuf::from)
@@ -27,6 +31,8 @@ impl Config {
         Ok(Self {
             bind_addr,
             database_url,
+            discord_application_id,
+            discord_bot_token,
             discord_public_key,
             static_dir,
         })

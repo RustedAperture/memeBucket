@@ -8,7 +8,8 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 pub struct OAuthCallbackQuery {
     pub code: String,
-    pub state: String,
+    #[serde(default)]
+    pub state: Option<String>,
 }
 
 pub async fn start_discord_oauth() -> impl IntoResponse {
@@ -28,7 +29,7 @@ pub async fn start_discord_oauth() -> impl IntoResponse {
 pub async fn handle_discord_oauth_callback(
     Query(query): Query<OAuthCallbackQuery>,
 ) -> impl IntoResponse {
-    if query.code.trim().is_empty() || query.state.trim().is_empty() {
+    if query.code.trim().is_empty() {
         return StatusCode::BAD_REQUEST.into_response();
     }
 

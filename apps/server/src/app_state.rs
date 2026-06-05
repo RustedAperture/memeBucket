@@ -5,6 +5,7 @@ use std::path::PathBuf;
 pub struct AppState {
     pub pool: SqlitePool,
     pub static_dir: PathBuf,
+    pub session_secret: String,
     discord_public_key: String,
 }
 
@@ -13,6 +14,7 @@ impl AppState {
         Self {
             pool,
             static_dir: PathBuf::from("apps/web/out"),
+            session_secret: String::new(),
             discord_public_key: String::new(),
         }
     }
@@ -23,6 +25,11 @@ impl AppState {
 
     pub fn with_static_dir(mut self, dir: PathBuf) -> Self {
         self.static_dir = dir;
+        self
+    }
+
+    pub fn with_session_secret(mut self, secret: String) -> Self {
+        self.session_secret = secret;
         self
     }
 

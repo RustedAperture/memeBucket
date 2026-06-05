@@ -11,6 +11,7 @@ use crate::{
     app_state::AppState,
     auth::discord_oauth::{handle_discord_oauth_callback, start_discord_oauth},
     discord::interactions::handle_interaction,
+    static_files::static_fallback,
 };
 
 pub fn build_router(state: AppState) -> Router {
@@ -26,6 +27,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/account/export", get(export_account))
         .route("/api/account", delete(delete_account))
         .route("/discord/interactions", post(handle_interaction))
+        .fallback(static_fallback)
         .with_state(state)
 }
 

@@ -7,6 +7,7 @@ use crate::{
     api::{
         account::{delete_account, export_account},
         categories::{create_category, delete_category, list_categories},
+        media_links::{create_link, delete_link, list_links},
     },
     app_state::AppState,
     auth::discord_oauth::{handle_discord_oauth_callback, start_discord_oauth},
@@ -22,6 +23,14 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/api/categories",
             get(list_categories).post(create_category),
+        )
+        .route(
+            "/api/categories/{category_id}/links",
+            get(list_links).post(create_link),
+        )
+        .route(
+            "/api/categories/{category_id}/links/{link_id}",
+            delete(delete_link),
         )
         .route("/api/categories/{category_id}", delete(delete_category))
         .route("/api/account/export", get(export_account))

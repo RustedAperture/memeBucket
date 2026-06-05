@@ -80,4 +80,20 @@ impl MediaLinkRepository {
             })
             .collect()
     }
+
+    pub async fn delete_for_user(
+        &self,
+        owner_user_id: Uuid,
+        link_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query(
+            "DELETE FROM media_links WHERE owner_user_id = ? AND id = ?",
+        )
+        .bind(owner_user_id.to_string())
+        .bind(link_id.to_string())
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() == 1)
+    }
 }

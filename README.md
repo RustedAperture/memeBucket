@@ -1,4 +1,4 @@
-# Random Media Bot
+# ezGif
 
 Discord user app for personal random image/GIF categories.
 
@@ -26,8 +26,8 @@ npm run build
 ## Docker
 
 ```bash
-docker build -t random-media-bot .
-docker run --env-file .env -p 8080:8080 -v "$PWD/data:/app/data" random-media-bot
+docker build -t ezgif .
+docker run --env-file .env -p 8080:8080 -v "$PWD/data:/app/data" ezgif
 ```
 
 ## Discord Endpoint

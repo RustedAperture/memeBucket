@@ -222,6 +222,7 @@ async fn dispatch_command(state: &AppState, payload: &InteractionPayload) -> Val
     match data.name.as_str() {
         "random" => handle_random_command(state, user.id, data).await,
         "pool" => handle_pool_command(state, user.id, data).await,
+        "manage" => handle_manage_command().await,
         _ => ephemeral_message("Unsupported command."),
     }
 }
@@ -420,6 +421,19 @@ async fn handle_pool_list(state: &AppState, user_id: Uuid) -> Value {
         }
         Err(_) => ephemeral_message("I hit a storage error while listing categories."),
     }
+}
+
+async fn handle_manage_command() -> Value {
+    let base_url = std::env::var("PUBLIC_BASE_URL").unwrap_or_default();
+    let url = if base_url.is_empty() {
+        "https://example.com".to_string()
+    } else {
+        base_url
+    };
+    ephemeral_message(&format!(
+        "Manage your categories at: {}/categories",
+        url.trim_end_matches('/')
+    ))
 }
 
 async fn resolve_user(

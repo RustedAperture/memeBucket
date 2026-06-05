@@ -53,5 +53,11 @@ pub fn command_definitions() -> Vec<Value> {
                 }
             ]
         }),
+        json!({
+            "name": "manage",
+            "description": "Open the web dashboard to manage your categories",
+            "integration_types": [1],
+            "contexts": [0, 1, 2]
+        }),
     ]
 }

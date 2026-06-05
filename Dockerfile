@@ -9,17 +9,17 @@ FROM rust:1-bookworm AS server-build
 WORKDIR /repo
 COPY Cargo.toml Cargo.lock ./
 COPY apps/server ./apps/server
-RUN cargo build --release -p random-media-bot-server
+RUN cargo build --release -p ezgif-server
 
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=server-build /repo/target/release/random-media-bot-server /app/random-media-bot-server
+COPY --from=server-build /repo/target/release/ezgif-server /app/ezgif-server
 COPY --from=web-build /repo/apps/web/out /app/web
 ENV STATIC_DIR=/app/web
 ENV BIND_ADDR=0.0.0.0:8080
 VOLUME ["/app/data"]
 EXPOSE 8080
-CMD ["/app/random-media-bot-server"]
+CMD ["/app/ezgif-server"]

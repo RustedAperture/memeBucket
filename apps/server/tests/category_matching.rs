@@ -1,8 +1,8 @@
-use random_media_bot_server::repositories::{
+use ezgif_server::repositories::{
     categories::CategoryRepository, media_links::MediaLinkRepository,
     send_history::SendHistoryRepository, users::UserRepository,
 };
-use random_media_bot_server::services::{
+use ezgif_server::services::{
     media_links::validate_http_url,
     random::{RandomError, RandomService, RandomVisibility},
 };

@@ -1,4 +1,4 @@
-use random_media_bot_server::auth::sessions::{hash_csrf_token, verify_csrf_token};
+use ezgif_server::auth::sessions::{hash_csrf_token, verify_csrf_token};
 
 #[test]
 fn csrf_hash_verifies_original_token() {

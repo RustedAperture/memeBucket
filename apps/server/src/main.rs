@@ -1,4 +1,4 @@
-use random_media_bot_server::{
+use ezgif_server::{
     app_state::AppState,
     config::{Config, connect_sqlite_pool},
     discord::commands::command_definitions,

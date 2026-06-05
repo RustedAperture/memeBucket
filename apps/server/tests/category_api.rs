@@ -3,7 +3,7 @@ use axum::{
     http::{Request, StatusCode},
 };
 use http_body_util::BodyExt;
-use random_media_bot_server::{
+use ezgif_server::{
     app_state::AppState,
     auth::sessions::AuthenticatedUser,
     repositories::{categories::CategoryRepository, users::UserRepository},

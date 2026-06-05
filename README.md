@@ -12,7 +12,7 @@ Discord user app for personal random image/GIF categories.
 
 ```bash
 cargo test
-cargo run -p random-media-bot-server
+cargo run -p ezgif-server
 ```
 
 ## Web Build

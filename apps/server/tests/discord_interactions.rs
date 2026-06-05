@@ -5,7 +5,7 @@ use axum::{
 };
 use ed25519_dalek::Signer;
 use http_body_util::BodyExt;
-use random_media_bot_server::{app_state::AppState, router::build_router};
+use ezgif_server::{app_state::AppState, router::build_router};
 use sqlx::SqlitePool;
 use tower::ServiceExt;
 

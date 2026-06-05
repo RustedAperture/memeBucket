@@ -1,4 +1,4 @@
-use random_media_bot_server::domain::user_key::DiscordUserKey;
+use ezgif_server::domain::user_key::DiscordUserKey;
 
 #[test]
 fn same_secret_and_discord_id_produce_same_key() {

@@ -1,4 +1,4 @@
-use random_media_bot_server::discord::interactions::{
+use ezgif_server::discord::interactions::{
     autocomplete_choices, ephemeral_message, plain_message,
 };
 

@@ -1,8 +1,8 @@
-use random_media_bot_server::repositories::{
+use ezgif_server::repositories::{
     categories::CategoryRepository, media_links::MediaLinkRepository,
     send_history::SendHistoryRepository, users::UserRepository,
 };
-use random_media_bot_server::services::account::AccountService;
+use ezgif_server::services::account::AccountService;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 

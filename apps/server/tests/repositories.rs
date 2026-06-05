@@ -1,4 +1,4 @@
-use random_media_bot_server::repositories::{
+use ezgif_server::repositories::{
     categories::CategoryRepository, media_links::MediaLinkRepository, users::UserRepository,
 };
 use sqlx::SqlitePool;

@@ -37,7 +37,7 @@ pub async fn start_discord_oauth() -> impl IntoResponse {
         std::env::var("DISCORD_OAUTH_REDIRECT_URL").unwrap_or_default();
 
     let url = format!(
-        "https://discord.com/oauth2/authorize?client_id={}&redirect_uri={}&response_type=code&scope=identify",
+        "https://discord.com/oauth2/authorize?client_id={}&redirect_uri={}&response_type=code&scope=identify%20applications.commands",
         urlencoding(&client_id),
         urlencoding(&redirect_uri),
     );

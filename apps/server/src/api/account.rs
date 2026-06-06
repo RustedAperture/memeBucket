@@ -31,18 +31,23 @@ pub struct UpdateUsernameRequest {
 
 pub async fn logout(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    headers: axum::http::HeaderMap,
 ) -> Result<impl IntoResponse, crate::error::AppError> {
-    if let Some(session_id) = read_session_cookie(&headers) {
-        let _ = delete_session(&state.pool, &session_id).await;
+    if let Some(session_id) = crate::auth::sessions::read_session_cookie(&headers) {
+        let _ = crate::auth::sessions::delete_session(&state.pool, &session_id).await;
+    }
+
+    let mut response_headers = axum::http::HeaderMap::new();
+    if let Ok(c) = crate::auth::sessions::expired_session_cookie().parse() {
+        response_headers.append(axum::http::header::SET_COOKIE, c);
+    }
+    if let Ok(c) = crate::auth::sessions::expired_csrf_cookie().parse() {
+        response_headers.append(axum::http::header::SET_COOKIE, c);
     }
 
     Ok((
         StatusCode::OK,
-        [
-            (axum::http::header::SET_COOKIE, expired_session_cookie()),
-            (axum::http::header::SET_COOKIE, expired_csrf_cookie()),
-        ],
+        response_headers,
         Json(serde_json::json!({ "logged_out": true })),
     ))
 }

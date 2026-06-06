@@ -56,12 +56,16 @@ pub async fn handle_discord_oauth_callback(
         Ok((session_id, csrf_token)) => {
             let cookie = session_cookie(&session_id.to_string());
             let csrf_cookie_str = crate::auth::sessions::csrf_cookie(&csrf_token);
+            let mut headers = axum::http::HeaderMap::new();
+            if let Ok(c) = cookie.parse() {
+                headers.append(axum::http::header::SET_COOKIE, c);
+            }
+            if let Ok(c) = csrf_cookie_str.parse() {
+                headers.append(axum::http::header::SET_COOKIE, c);
+            }
             (
                 StatusCode::TEMPORARY_REDIRECT,
-                [
-                    (axum::http::header::SET_COOKIE, cookie),
-                    (axum::http::header::SET_COOKIE, csrf_cookie_str),
-                ],
+                headers,
                 Redirect::temporary("/"),
             )
                 .into_response()

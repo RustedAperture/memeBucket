@@ -1,5 +1,5 @@
 use ezgif_server::repositories::{
-    categories::CategoryRepository, media_links::MediaLinkRepository, users::UserRepository,
+    images::ImageRepository, pools::PoolRepository, users::UserRepository,
 };
 use sqlx::SqlitePool;
 
@@ -13,8 +13,8 @@ async fn test_pool() -> SqlitePool {
 async fn user_category_and_media_link_are_scoped_to_owner() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let categories = CategoryRepository::new(pool.clone());
-    let links = MediaLinkRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
 
     let alice = users
         .upsert_by_discord_key("alice-key", Some("Alice"), None)
@@ -25,32 +25,32 @@ async fn user_category_and_media_link_are_scoped_to_owner() {
         .await
         .unwrap();
 
-    let cats = categories.create(alice.id, "cats").await.unwrap();
-    links
+    let cats = pools.create(alice.id, "cats").await.unwrap();
+    images
         .create(alice.id, cats.id, "https://example.com/cat.gif")
         .await
         .unwrap();
 
-    let alice_categories = categories.list_for_user(alice.id).await.unwrap();
-    let bob_categories = categories.list_for_user(bob.id).await.unwrap();
+    let alice_pools = pools.list_for_user(alice.id).await.unwrap();
+    let bob_pools = pools.list_for_user(bob.id).await.unwrap();
 
-    assert_eq!(alice_categories.len(), 1);
-    assert_eq!(alice_categories[0].name, "cats");
-    assert!(bob_categories.is_empty());
+    assert_eq!(alice_pools.len(), 1);
+    assert_eq!(alice_pools[0].name, "cats");
+    assert!(bob_pools.is_empty());
 }
 
 #[tokio::test]
 async fn category_names_are_unique_per_user_case_insensitive() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let categories = CategoryRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
     let user = users
         .upsert_by_discord_key("user-key", None, None)
         .await
         .unwrap();
 
-    categories.create(user.id, "cats").await.unwrap();
-    let duplicate = categories.create(user.id, "Cats").await;
+    pools.create(user.id, "cats").await.unwrap();
+    let duplicate = pools.create(user.id, "Cats").await;
 
     assert!(matches!(duplicate, Err(sqlx::Error::RowNotFound)));
 }
@@ -59,8 +59,8 @@ async fn category_names_are_unique_per_user_case_insensitive() {
 async fn media_link_rejects_category_owned_by_different_user() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let categories = CategoryRepository::new(pool.clone());
-    let links = MediaLinkRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
 
     let alice = users
         .upsert_by_discord_key("alice-scope-key", Some("Alice"), None)
@@ -71,13 +71,9 @@ async fn media_link_rejects_category_owned_by_different_user() {
         .await
         .unwrap();
 
-    let alice_category = categories.create(alice.id, "cats").await.unwrap();
-    let result = links
-        .create(
-            bob.id,
-            alice_category.id,
-            "https://example.com/not-allowed.gif",
-        )
+    let alice_pool = pools.create(alice.id, "cats").await.unwrap();
+    let result = images
+        .create(bob.id, alice_pool.id, "https://example.com/not-allowed.gif")
         .await;
 
     assert!(result.is_err());
@@ -87,14 +83,14 @@ async fn media_link_rejects_category_owned_by_different_user() {
 async fn media_link_rejects_orphan_category_id() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let links = MediaLinkRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
 
     let user = users
         .upsert_by_discord_key("orphan-key", Some("Owner"), None)
         .await
         .unwrap();
 
-    let result = links
+    let result = images
         .create(
             user.id,
             uuid::Uuid::new_v4(),

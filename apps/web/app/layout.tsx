@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
+import { UserProvider } from "@/components/user-provider";
+import { UsernameModal } from "@/components/username-modal";
 import "./globals.css";
-import { Inter } from "next/font/google";
-import { cn } from "@/lib/utils";
-
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: "ezGif",
@@ -17,9 +16,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cn("font-sans", inter.variable)}>
+    <html lang="en" className="font-sans">
       <body className="antialiased min-h-screen bg-background selection:bg-primary/30">
-        <TooltipProvider>{children}</TooltipProvider>
+        <UserProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+          <UsernameModal />
+        </UserProvider>
+        <Toaster position="bottom-center" />
       </body>
     </html>
   );

@@ -9,10 +9,7 @@ use tower_http::services::ServeDir;
 
 use crate::app_state::AppState;
 
-pub async fn static_fallback(
-    State(state): State<AppState>,
-    uri: Uri,
-) -> Response {
+pub async fn static_fallback(State(state): State<AppState>, uri: Uri) -> Response {
     let path = uri.path();
     let serve = ServeDir::new(&state.static_dir).append_index_html_on_directories(true);
 
@@ -22,7 +19,11 @@ pub async fn static_fallback(
     if !clean.is_empty() {
         if let Ok(html_uri) = format!("{}.html", clean).parse::<Uri>() {
             if let Ok(req) = Request::builder().uri(html_uri).body(Body::empty()) {
-                let resp = serve.clone().oneshot(req).await.expect("ServeDir is infallible");
+                let resp = serve
+                    .clone()
+                    .oneshot(req)
+                    .await
+                    .expect("ServeDir is infallible");
                 if resp.status() != StatusCode::NOT_FOUND {
                     return resp.into_response();
                 }

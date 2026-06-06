@@ -1,6 +1,4 @@
-use ezgif_server::discord::interactions::{
-    autocomplete_choices, ephemeral_message, plain_message,
-};
+use ezgif_server::discord::interactions::{autocomplete_choices, ephemeral_message, plain_message};
 
 #[test]
 fn plain_message_can_be_public_or_private() {

@@ -10,7 +10,7 @@ pub fn command_definitions() -> Vec<Value> {
             "options": [
                 {
                     "name": "pool",
-                    "description": "Your pool",
+                    "description": "Your pool, or comma-separated pools",
                     "type": 3,
                     "required": true,
                     "autocomplete": true

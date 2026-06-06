@@ -2,9 +2,7 @@ use rand::seq::IndexedRandom;
 use uuid::Uuid;
 
 use crate::repositories::{
-    pools::PoolRepository,
-    images::{ImageRepository, StoredImage},
-    send_history::SendHistoryRepository,
+    images::ImageRepository, pools::PoolRepository, send_history::SendHistoryRepository,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -78,34 +76,50 @@ impl RandomService {
         pool_name: &str,
         visibility: RandomVisibility,
     ) -> Result<RandomSelection, RandomError> {
-        let pool = self
-            .pools
-            .find_by_name_folded(owner_user_id, pool_name)
+        self.select_random_from_pools(owner_user_id, &[pool_name], visibility)
             .await
-            .map_err(RandomError::Storage)?
-            .ok_or(RandomError::MissingPool)?;
+    }
 
-        let images = self
-            .images
-            .list_for_pool(owner_user_id, pool.id)
-            .await
-            .map_err(RandomError::Storage)?;
+    pub async fn select_random_from_pools(
+        &self,
+        owner_user_id: Uuid,
+        pool_names: &[&str],
+        visibility: RandomVisibility,
+    ) -> Result<RandomSelection, RandomError> {
+        let mut choices = Vec::new();
 
-        let selected = choose_image(&images).ok_or(RandomError::EmptyPool)?;
+        for pool_name in pool_names {
+            let pool = self
+                .pools
+                .find_accessible_by_name_folded(owner_user_id, pool_name)
+                .await
+                .map_err(RandomError::Storage)?
+                .ok_or(RandomError::MissingPool)?;
+
+            let images = self
+                .images
+                .list_for_pool(pool.owner_user_id, pool.id)
+                .await
+                .map_err(RandomError::Storage)?;
+
+            choices.extend(images.into_iter().map(|image| (pool.clone(), image)));
+        }
+
+        let (pool, selected) = choose_image(&choices).ok_or(RandomError::EmptyPool)?;
 
         self.history
-            .record(owner_user_id, &pool, selected, visibility.as_str())
+            .record(owner_user_id, pool, selected, visibility.as_str())
             .await
             .map_err(RandomError::Storage)?;
 
         Ok(RandomSelection {
-            pool_name: pool.name,
+            pool_name: pool.name.clone(),
             url: selected.url.clone(),
         })
     }
 }
 
-fn choose_image(images: &[StoredImage]) -> Option<&StoredImage> {
+fn choose_image<T>(choices: &[T]) -> Option<&T> {
     let mut rng = rand::rng();
-    images.choose(&mut rng)
+    choices.choose(&mut rng)
 }

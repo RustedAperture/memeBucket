@@ -33,8 +33,7 @@ struct DiscordUser {
 
 pub async fn start_discord_oauth() -> impl IntoResponse {
     let client_id = std::env::var("DISCORD_CLIENT_ID").unwrap_or_default();
-    let redirect_uri =
-        std::env::var("DISCORD_OAUTH_REDIRECT_URL").unwrap_or_default();
+    let redirect_uri = std::env::var("DISCORD_OAUTH_REDIRECT_URL").unwrap_or_default();
 
     let url = format!(
         "https://discord.com/oauth2/authorize?client_id={}&redirect_uri={}&response_type=code&scope=identify%20applications.commands&integration_type=1",
@@ -73,8 +72,7 @@ pub async fn handle_discord_oauth_callback(
 async fn complete_oauth_flow(state: &AppState, code: &str) -> anyhow::Result<Uuid> {
     let client_id = std::env::var("DISCORD_CLIENT_ID").unwrap_or_default();
     let client_secret = std::env::var("DISCORD_CLIENT_SECRET").unwrap_or_default();
-    let redirect_uri =
-        std::env::var("DISCORD_OAUTH_REDIRECT_URL").unwrap_or_default();
+    let redirect_uri = std::env::var("DISCORD_OAUTH_REDIRECT_URL").unwrap_or_default();
 
     // Exchange code for access token
     let http = reqwest::Client::new();

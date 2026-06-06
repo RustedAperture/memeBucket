@@ -6,4 +6,5 @@ pub struct Image {
     pub owner_user_id: Uuid,
     pub pool_id: Uuid,
     pub url: String,
+    pub created_at: String,
 }

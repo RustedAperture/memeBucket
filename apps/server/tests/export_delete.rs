@@ -1,6 +1,6 @@
 use ezgif_server::repositories::{
-    categories::CategoryRepository, media_links::MediaLinkRepository,
-    send_history::SendHistoryRepository, users::UserRepository,
+    images::ImageRepository, pools::PoolRepository, send_history::SendHistoryRepository,
+    users::UserRepository,
 };
 use ezgif_server::services::account::AccountService;
 use sqlx::SqlitePool;
@@ -16,51 +16,38 @@ async fn test_pool() -> SqlitePool {
 async fn export_contains_user_owned_categories_and_links() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let categories = CategoryRepository::new(pool.clone());
-    let links = MediaLinkRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
     let service = AccountService::new(pool.clone());
     let user = users
         .upsert_by_discord_key("user-key", Some("Alice"), None)
         .await
         .unwrap();
-    let category = categories.create(user.id, "cats").await.unwrap();
-    links
-        .create(user.id, category.id, "https://example.com/cat.gif")
+    let saved_pool = pools.create(user.id, "cats").await.unwrap();
+    images
+        .create(user.id, saved_pool.id, "https://example.com/cat.gif")
         .await
         .unwrap();
     let other_user = users
         .upsert_by_discord_key("other-user-key", Some("Bob"), None)
         .await
         .unwrap();
-    let other_category = categories.create(other_user.id, "dogs").await.unwrap();
-    links
-        .create(
-            other_user.id,
-            other_category.id,
-            "https://example.com/dog.gif",
-        )
+    let other_pool = pools.create(other_user.id, "dogs").await.unwrap();
+    images
+        .create(other_user.id, other_pool.id, "https://example.com/dog.gif")
         .await
         .unwrap();
 
     let export = service.export_user_data(user.id).await.unwrap();
 
-    assert_eq!(export.categories.len(), 1);
-    assert_eq!(export.categories[0].name, "cats");
-    assert_eq!(
-        export.categories[0].links[0].url,
-        "https://example.com/cat.gif"
-    );
-    assert!(
-        export
-            .categories
+    assert_eq!(export.pools.len(), 1);
+    assert_eq!(export.pools[0].name, "cats");
+    assert_eq!(export.pools[0].images[0].url, "https://example.com/cat.gif");
+    assert!(export.pools.iter().all(|pool| pool.name != "dogs"));
+    assert!(export.pools.iter().all(|pool| {
+        pool.images
             .iter()
-            .all(|category| category.name != "dogs")
-    );
-    assert!(export.categories.iter().all(|category| {
-        category
-            .links
-            .iter()
-            .all(|link| link.url != "https://example.com/dog.gif")
+            .all(|image| image.url != "https://example.com/dog.gif")
     }));
 }
 
@@ -68,28 +55,28 @@ async fn export_contains_user_owned_categories_and_links() {
 async fn delete_account_removes_owned_data() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let categories = CategoryRepository::new(pool.clone());
-    let links = MediaLinkRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
     let send_history = SendHistoryRepository::new(pool.clone());
     let service = AccountService::new(pool.clone());
     let user = users
         .upsert_by_discord_key("user-key", None, None)
         .await
         .unwrap();
-    let category = categories.create(user.id, "cats").await.unwrap();
-    links
-        .create(user.id, category.id, "https://example.com/cat.gif")
+    let saved_pool = pools.create(user.id, "cats").await.unwrap();
+    images
+        .create(user.id, saved_pool.id, "https://example.com/cat.gif")
         .await
         .unwrap();
-    let media_link = links
-        .list_for_category(user.id, category.id)
+    let image = images
+        .list_for_pool(user.id, saved_pool.id)
         .await
         .unwrap()
         .into_iter()
         .next()
         .unwrap();
     send_history
-        .record(user.id, &category, &media_link, "public")
+        .record(user.id, &saved_pool, &image, "public")
         .await
         .unwrap();
     sqlx::query(
@@ -107,24 +94,20 @@ async fn delete_account_removes_owned_data() {
         .upsert_by_discord_key("other-user-key", Some("Bob"), None)
         .await
         .unwrap();
-    let other_category = categories.create(other_user.id, "dogs").await.unwrap();
-    links
-        .create(
-            other_user.id,
-            other_category.id,
-            "https://example.com/dog.gif",
-        )
+    let other_pool = pools.create(other_user.id, "dogs").await.unwrap();
+    images
+        .create(other_user.id, other_pool.id, "https://example.com/dog.gif")
         .await
         .unwrap();
-    let other_media_link = links
-        .list_for_category(other_user.id, other_category.id)
+    let other_image = images
+        .list_for_pool(other_user.id, other_pool.id)
         .await
         .unwrap()
         .into_iter()
         .next()
         .unwrap();
     send_history
-        .record(other_user.id, &other_category, &other_media_link, "private")
+        .record(other_user.id, &other_pool, &other_image, "private")
         .await
         .unwrap();
     sqlx::query(
@@ -151,14 +134,14 @@ async fn delete_account_removes_owned_data() {
             .fetch_one(&pool)
             .await
             .unwrap();
-    let deleted_category_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM categories WHERE owner_user_id = ?")
+    let deleted_pool_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM pools WHERE owner_user_id = ?")
             .bind(user.id.to_string())
             .fetch_one(&pool)
             .await
             .unwrap();
-    let deleted_media_link_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM media_links WHERE owner_user_id = ?")
+    let deleted_image_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM images WHERE owner_user_id = ?")
             .bind(user.id.to_string())
             .fetch_one(&pool)
             .await
@@ -190,13 +173,13 @@ async fn delete_account_removes_owned_data() {
 
     assert_eq!(deleted_user_count, 0);
     assert_eq!(deleted_session_count, 0);
-    assert_eq!(deleted_category_count, 0);
-    assert_eq!(deleted_media_link_count, 0);
+    assert_eq!(deleted_pool_count, 0);
+    assert_eq!(deleted_image_count, 0);
     assert_eq!(deleted_send_history_count, 0);
-    assert!(categories.list_for_user(user.id).await.unwrap().is_empty());
+    assert!(pools.list_for_user(user.id).await.unwrap().is_empty());
     assert!(
-        links
-            .list_for_category(user.id, category.id)
+        images
+            .list_for_pool(user.id, saved_pool.id)
             .await
             .unwrap()
             .is_empty()
@@ -205,13 +188,10 @@ async fn delete_account_removes_owned_data() {
     assert_eq!(surviving_user_count, 1);
     assert_eq!(surviving_session_count, 1);
     assert_eq!(surviving_send_history_count, 1);
+    assert_eq!(pools.list_for_user(other_user.id).await.unwrap().len(), 1);
     assert_eq!(
-        categories.list_for_user(other_user.id).await.unwrap().len(),
-        1
-    );
-    assert_eq!(
-        links
-            .list_for_category(other_user.id, other_category.id)
+        images
+            .list_for_pool(other_user.id, other_pool.id)
             .await
             .unwrap()
             .len(),

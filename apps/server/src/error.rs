@@ -6,6 +6,8 @@ pub enum AppError {
     NotFound,
     #[error("unauthorized")]
     Unauthorized,
+    #[error("This is a private whitelisted pool. You do not have permission to view it.")]
+    Forbidden,
     #[error("bad request: {0}")]
     BadRequest(String),
     #[error(transparent)]
@@ -17,6 +19,7 @@ impl IntoResponse for AppError {
         let status = match self {
             AppError::NotFound => StatusCode::NOT_FOUND,
             AppError::Unauthorized => StatusCode::UNAUTHORIZED,
+            AppError::Forbidden => StatusCode::FORBIDDEN,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AppError::Sqlx(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

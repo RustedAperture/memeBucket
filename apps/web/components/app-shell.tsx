@@ -1,7 +1,13 @@
+"use client";
+
 import Link from "next/link";
-import { LayoutDashboard, FolderOpen, User } from "lucide-react";
+import { LayoutDashboard, FolderOpen } from "lucide-react";
+import { AccountModal } from "./account-modal";
+import { useUser } from "./user-provider";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { user } = useUser();
+  
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -18,10 +24,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <FolderOpen className="w-4 h-4" />
               <span className="hidden sm:inline">Pools</span>
             </Link>
-            <Link href="/account" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
-              <User className="w-4 h-4" />
-              <span className="hidden sm:inline">Account</span>
-            </Link>
+            {user && <AccountModal />}
           </nav>
         </div>
       </header>

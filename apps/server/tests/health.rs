@@ -1,6 +1,6 @@
 use axum::{body::Body, http::Request};
-use http_body_util::BodyExt;
 use ezgif_server::{app_state::AppState, router::build_router};
+use http_body_util::BodyExt;
 use sqlx::SqlitePool;
 use tower::ServiceExt;
 

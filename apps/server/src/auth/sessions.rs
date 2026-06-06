@@ -40,10 +40,7 @@ pub fn expired_session_cookie() -> String {
     "session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0".to_string()
 }
 
-pub async fn create_session(
-    pool: &SqlitePool,
-    user_id: Uuid,
-) -> Result<Uuid, sqlx::Error> {
+pub async fn create_session(pool: &SqlitePool, user_id: Uuid) -> Result<Uuid, sqlx::Error> {
     let session_id = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO sessions (id, user_id, csrf_token_hash, expires_at) VALUES (?, ?, '', datetime('now', '+24 hours'))",
@@ -55,10 +52,7 @@ pub async fn create_session(
     Ok(session_id)
 }
 
-pub async fn lookup_session(
-    pool: &SqlitePool,
-    session_id: &str,
-) -> Option<AuthenticatedUser> {
+pub async fn lookup_session(pool: &SqlitePool, session_id: &str) -> Option<AuthenticatedUser> {
     let row = sqlx::query_as::<_, (String,)>(
         "SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')",
     )
@@ -70,6 +64,14 @@ pub async fn lookup_session(
     Uuid::parse_str(&row.0)
         .ok()
         .map(|user_id| AuthenticatedUser { user_id })
+}
+
+pub async fn delete_session(pool: &SqlitePool, session_id: &str) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM sessions WHERE id = ?")
+        .bind(session_id)
+        .execute(pool)
+        .await?;
+    Ok(())
 }
 
 pub fn read_session_cookie(headers: &HeaderMap) -> Option<String> {

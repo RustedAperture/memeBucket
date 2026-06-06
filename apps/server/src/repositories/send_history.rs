@@ -1,7 +1,7 @@
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use crate::repositories::{pools::StoredPool, images::StoredImage};
+use crate::repositories::{images::StoredImage, pools::StoredPool};
 
 #[derive(Clone)]
 pub struct SendHistoryRepository {

@@ -1,19 +1,19 @@
 "use client";
 
-import { Folder, Plus, Trash2, X } from "lucide-react";
+import { Folder, Plus, Trash2, X, Users, Globe } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { apiDelete, apiGet } from "@/lib/api";
+import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PoolForm } from "@/components/pool-form";
 import { SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-type Pool = { id: string; name: string };
+import { Pool } from "@/lib/types";
 
-export function PoolList({ isMobile }: { isMobile?: boolean }) {
+export function PoolList({ isMobile, onPoolsChange }: { isMobile?: boolean, onPoolsChange?: (pools: Pool[]) => void }) {
   const [pools, setPools] = useState<Pool[]>([]);
   const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
@@ -21,20 +21,26 @@ export function PoolList({ isMobile }: { isMobile?: boolean }) {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   async function load() {
-    setPools(await apiGet<Pool[]>("/api/pools"));
+    const loaded = await apiGet<Pool[]>("/api/pools");
+    setPools(loaded);
+    if (onPoolsChange) onPoolsChange(loaded);
   }
 
   useEffect(() => {
     void load();
   }, []);
 
-  async function handleDelete(poolId: string) {
+  async function handleDelete(pool: Pool) {
     setError(null);
     try {
-      await apiDelete(`/api/pools/${poolId}`);
+      if (pool.is_subscribed) {
+        await apiPost(`/api/pools/${pool.id}/unsubscribe`, {});
+      } else {
+        await apiDelete(`/api/pools/${pool.id}`);
+      }
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete pool");
+      setError(err instanceof Error ? err.message : "Could not remove pool");
     }
   }
 
@@ -82,18 +88,33 @@ export function PoolList({ isMobile }: { isMobile?: boolean }) {
                         : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                     }`}
                   >
-                    <Folder className="h-4 w-4 shrink-0" />
+                    {pool.is_subscribed ? (
+                      <Globe className="h-4 w-4 shrink-0" />
+                    ) : (
+                      <Folder className="h-4 w-4 shrink-0" />
+                    )}
                     <span className="truncate flex-1">{pool.name}</span>
+                    {!pool.is_subscribed && pool.share_token && pool.subscriber_count > 0 && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded-sm mr-6">
+                        <Users className="w-3 h-3" />
+                        <span>{pool.subscriber_count}</span>
+                      </div>
+                    )}
                   </Link>
                   <Button 
                     variant="ghost" 
                     size="icon" 
+                    title={pool.is_subscribed ? "Unsubscribe" : "Delete"}
                     className={`absolute right-1 top-1 h-6 w-6 rounded-md p-0 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 ${
                       isActive ? "text-sidebar-accent-foreground" : "text-muted-foreground"
                     }`}
-                    onClick={(e) => { e.preventDefault(); handleDelete(pool.id); }}
+                    onClick={(e) => { e.preventDefault(); handleDelete(pool); }}
                   >
-                    <Trash2 className="w-3 h-3 text-destructive" />
+                    {pool.is_subscribed ? (
+                      <X className="w-3 h-3 text-muted-foreground" />
+                    ) : (
+                      <Trash2 className="w-3 h-3 text-destructive" />
+                    )}
                   </Button>
                 </div>
               );

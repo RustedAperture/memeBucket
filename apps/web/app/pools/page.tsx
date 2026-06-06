@@ -6,14 +6,18 @@ import { AppShell } from "@/components/app-shell";
 import { PoolList } from "@/components/pool-list";
 import { ImageForm } from "@/components/image-form";
 import { ImageList } from "@/components/image-list";
-import { Folder, Plus, PanelLeft } from "lucide-react";
+import { Folder, Plus, PanelLeft, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Pool } from "@/lib/types";
+import { ShareDialog } from "@/components/share-dialog";
+import { RequireAuth } from "@/components/require-auth";
 
 function PoolsContent() {
   const searchParams = useSearchParams();
   const [poolId, setPoolId] = useState<string | null>(null);
+  const [pools, setPools] = useState<Pool[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [sizeIndex, setSizeIndex] = useState(2);
@@ -26,11 +30,14 @@ function PoolsContent() {
     setPoolId(searchParams.get("id"));
   }, [searchParams]);
 
+  const activePool = pools.find(p => p.id === poolId);
+  const isSubscribed = activePool?.is_subscribed;
+
   return (
     <div className="flex flex-1 min-h-0 w-full overflow-hidden rounded-xl bg-muted/30 border">
       {/* Sidebar Area */}
       <div className="w-64 shrink-0 hidden md:block">
-        <PoolList />
+        <PoolList onPoolsChange={setPools} />
       </div>
       
       {/* Inset Main Content Area */}
@@ -44,24 +51,71 @@ function PoolsContent() {
                   <SheetHeader className="sr-only">
                     <SheetTitle>Pools</SheetTitle>
                   </SheetHeader>
-                  <PoolList isMobile />
+                  <PoolList isMobile onPoolsChange={setPools} />
                 </SheetContent>
               </Sheet>
-              <h1 className="text-base font-medium">Images</h1>
+              <h1 className="text-base font-medium flex items-center gap-2">
+                {activePool ? activePool.name : "Images"}
+                {activePool && (
+                  <Dialog>
+                    <DialogTrigger render={<Button variant="ghost" size="icon" className="h-6 w-6"><Info className="h-4 w-4 text-muted-foreground hover:text-foreground"/></Button>} />
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Pool Information</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 text-sm mt-4">
+                        <div className="flex justify-between border-b pb-2">
+                          <span className="text-muted-foreground">Pool Name</span>
+                          <span className="font-medium">{activePool.name}</span>
+                        </div>
+                        <div className="flex justify-between border-b pb-2">
+                          <span className="text-muted-foreground">Owner</span>
+                          <span className="font-medium">{activePool.owner_username || "Unknown"}</span>
+                        </div>
+                        <div className="flex justify-between border-b pb-2">
+                          <span className="text-muted-foreground">Subscribers</span>
+                          <span className="font-medium">{activePool.subscriber_count}</span>
+                        </div>
+                        <div className="flex justify-between border-b pb-2">
+                          <span className="text-muted-foreground">Role</span>
+                          <span className="font-medium">{activePool.is_subscribed ? "Subscriber" : "Owner"}</span>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </h1>
             </div>
-            {poolId && (
-              <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-                <DialogTrigger render={<Button size="sm" className="h-8 gap-1"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Add Image</span></Button>} />
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Add New Image</DialogTitle>
-                  </DialogHeader>
-                  <ImageForm 
-                    poolId={poolId} 
-                    onCreated={() => { setRefreshKey((k) => k + 1); setLinkDialogOpen(false); }} 
-                  />
-                </DialogContent>
-              </Dialog>
+            {poolId && !isSubscribed && activePool && (
+              <div className="flex items-center gap-2">
+                <Dialog>
+                  <DialogTrigger render={<Button variant="outline" size="sm" className="h-8 gap-1" />}>
+                    <span className="hidden sm:inline">Share Settings</span>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Share Pool</DialogTitle>
+                    </DialogHeader>
+                    <ShareDialog 
+                      pool={activePool} 
+                      onPoolChange={(updated) => setPools(pools.map(p => p.id === updated.id ? updated : p))}
+                    />
+                  </DialogContent>
+                </Dialog>
+                
+                <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+                  <DialogTrigger render={<Button size="sm" className="h-8 gap-1"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Add Image</span></Button>} />
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Image</DialogTitle>
+                    </DialogHeader>
+                    <ImageForm 
+                      poolId={poolId} 
+                      onCreated={() => { setRefreshKey((k) => k + 1); setLinkDialogOpen(false); }} 
+                    />
+                  </DialogContent>
+                </Dialog>
+              </div>
             )}
           </div>
         </header>
@@ -101,7 +155,7 @@ function PoolsContent() {
         <div className="flex-1 flex flex-col overflow-y-auto">
           {poolId ? (
             <div className="p-6 space-y-6 max-w-7xl mx-auto w-full">
-              <ImageList key={refreshKey} poolId={poolId} maxHeight={maxHeight} />
+              <ImageList key={refreshKey} poolId={poolId} maxHeight={maxHeight} readonly={isSubscribed} />
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in-50">
@@ -124,7 +178,9 @@ export default function PoolsPage() {
   return (
     <AppShell>
       <Suspense fallback={<div className="flex items-center justify-center h-full min-h-screen">Loading...</div>}>
-        <PoolsContent />
+        <RequireAuth>
+          <PoolsContent />
+        </RequireAuth>
       </Suspense>
     </AppShell>
   );

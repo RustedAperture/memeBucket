@@ -20,11 +20,24 @@ impl FromRequestParts<AppState> for AuthenticatedUser {
             return Ok(user.clone());
         }
 
-        let session_id =
-            read_session_cookie(&parts.headers).ok_or(StatusCode::UNAUTHORIZED)?;
+        let session_id = read_session_cookie(&parts.headers).ok_or(StatusCode::UNAUTHORIZED)?;
 
         lookup_session(&state.pool, &session_id)
             .await
             .ok_or(StatusCode::UNAUTHORIZED)
+    }
+}
+
+pub struct OptionalUser(pub Option<AuthenticatedUser>);
+
+impl FromRequestParts<AppState> for OptionalUser {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let user = AuthenticatedUser::from_request_parts(parts, state).await.ok();
+        Ok(Self(user))
     }
 }

@@ -14,11 +14,11 @@ use crate::{
     discord::signatures::verify_interaction_signature,
     domain::user_key::DiscordUserKey,
     repositories::{
-        pools::PoolRepository, images::ImageRepository,
-        send_history::SendHistoryRepository, users::UserRepository,
+        images::ImageRepository, pools::PoolRepository, send_history::SendHistoryRepository,
+        users::UserRepository,
     },
     services::{
-        images::validate_http_url,
+        images::resolve_image_url,
         random::{RandomService, RandomVisibility},
     },
 };
@@ -29,6 +29,7 @@ const APPLICATION_COMMAND_AUTOCOMPLETE: u8 = 4;
 const CHANNEL_MESSAGE_WITH_SOURCE: u8 = 4;
 const APPLICATION_COMMAND_AUTOCOMPLETE_RESULT: u8 = 8;
 const EPHEMERAL_FLAG: u64 = 64;
+const AUTOCOMPLETE_CHOICE_LIMIT: usize = 100;
 
 #[derive(Debug, Deserialize)]
 pub struct InteractionPayload {
@@ -109,6 +110,7 @@ pub fn ephemeral_message(content: &str) -> Value {
 pub fn autocomplete_choices(values: Vec<(String, String)>) -> Value {
     let choices: Vec<Value> = values
         .into_iter()
+        .filter(|(name, value)| is_valid_autocomplete_choice(name, value))
         .take(25)
         .map(|(name, value)| {
             json!({
@@ -124,6 +126,63 @@ pub fn autocomplete_choices(values: Vec<(String, String)>) -> Value {
             "choices": choices,
         }
     })
+}
+
+fn is_valid_autocomplete_choice(name: &str, value: &str) -> bool {
+    !name.is_empty()
+        && !value.is_empty()
+        && name.chars().count() <= AUTOCOMPLETE_CHOICE_LIMIT
+        && value.chars().count() <= AUTOCOMPLETE_CHOICE_LIMIT
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_pool_names_accepts_comma_separated_values_with_optional_spaces() {
+        assert_eq!(split_pool_names("cat,dog"), vec!["cat", "dog"]);
+        assert_eq!(split_pool_names("cat, dog"), vec!["cat", "dog"]);
+        assert_eq!(split_pool_names(" cat,  dog ,, "), vec!["cat", "dog"]);
+    }
+
+    #[test]
+    fn pool_autocomplete_context_completes_last_comma_separated_segment() {
+        let context = pool_autocomplete_context("cat, do");
+
+        assert_eq!(context.query, "do");
+        assert_eq!(context.value_for("Dogs"), "cat, Dogs");
+        assert_eq!(
+            context.choice_for("Dogs"),
+            ("cat, Dogs".to_string(), "cat, Dogs".to_string())
+        );
+    }
+
+    #[test]
+    fn pool_autocomplete_context_completes_first_segment_without_prefix() {
+        let context = pool_autocomplete_context("do");
+
+        assert_eq!(context.query, "do");
+        assert_eq!(context.value_for("Dogs"), "Dogs");
+        assert_eq!(
+            context.choice_for("Dogs"),
+            ("Dogs".to_string(), "Dogs".to_string())
+        );
+    }
+
+    #[test]
+    fn autocomplete_choices_omits_values_discord_would_reject() {
+        let too_long_value = "x".repeat(AUTOCOMPLETE_CHOICE_LIMIT + 1);
+        let response = autocomplete_choices(vec![
+            ("Invalid".to_string(), too_long_value),
+            ("Valid".to_string(), "valid".to_string()),
+        ]);
+        let choices = response["data"]["choices"].as_array().unwrap();
+
+        assert_eq!(choices.len(), 1);
+        assert_eq!(choices[0]["name"], "Valid");
+        assert_eq!(choices[0]["value"], "valid");
+    }
 }
 
 pub async fn handle_interaction(
@@ -244,25 +303,40 @@ async fn dispatch_autocomplete(state: &AppState, payload: &InteractionPayload) -
         return autocomplete_choices(Vec::new());
     }
 
-    let query = focused
-        .string_value()
-        .unwrap_or_default()
-        .trim()
-        .to_lowercase();
-    let pools = PoolRepository::new(state.pool.clone())
+    let focused_value = focused.string_value().unwrap_or_default();
+    let autocomplete = if data.name == "ez" {
+        pool_autocomplete_context(focused_value)
+    } else {
+        PoolAutocompleteContext::single(focused_value)
+    };
+    let mut pools = PoolRepository::new(state.pool.clone())
         .list_for_user(user.id)
         .await
         .unwrap_or_default();
 
+    if data.name == "ez" {
+        if let Ok(subscribed) = PoolRepository::new(state.pool.clone())
+            .list_subscribed_for_user(user.id)
+            .await
+        {
+            pools.extend(subscribed);
+        }
+    }
+
     let choices = pools
         .into_iter()
         .filter(|pool| {
-            query.is_empty() || pool.name.to_lowercase().contains(query.as_str())
+            autocomplete.query.is_empty()
+                || pool
+                    .name
+                    .to_lowercase()
+                    .contains(autocomplete.query.as_str())
         })
+        .filter(|pool| !autocomplete.already_completed(&pool.name))
         .take(25)
         .map(|pool| {
             let name = pool.name;
-            (name.clone(), name)
+            autocomplete.choice_for(&name)
         })
         .collect();
 
@@ -286,8 +360,66 @@ fn find_focused_option<'a>(data: &'a InteractionData, name: &str) -> Option<&'a 
         .find_map(|option| option.find_focused_option(name))
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct PoolAutocompleteContext {
+    prefix: String,
+    query: String,
+    completed_names: Vec<String>,
+}
+
+impl PoolAutocompleteContext {
+    fn single(value: &str) -> Self {
+        Self {
+            prefix: String::new(),
+            query: value.trim().to_lowercase(),
+            completed_names: Vec::new(),
+        }
+    }
+
+    fn value_for(&self, pool_name: &str) -> String {
+        if self.prefix.is_empty() {
+            pool_name.to_string()
+        } else {
+            format!("{}, {pool_name}", self.prefix)
+        }
+    }
+
+    fn choice_for(&self, pool_name: &str) -> (String, String) {
+        let value = self.value_for(pool_name);
+        (value.clone(), value)
+    }
+
+    fn already_completed(&self, pool_name: &str) -> bool {
+        self.completed_names
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(pool_name))
+    }
+}
+
+fn pool_autocomplete_context(value: &str) -> PoolAutocompleteContext {
+    let Some((prefix, query)) = value.rsplit_once(',') else {
+        return PoolAutocompleteContext::single(value);
+    };
+
+    let completed_names = split_pool_names(prefix);
+    PoolAutocompleteContext {
+        prefix: completed_names.join(", "),
+        query: query.trim().to_lowercase(),
+        completed_names,
+    }
+}
+
+fn split_pool_names(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 async fn handle_random_command(state: &AppState, user_id: Uuid, data: &InteractionData) -> Value {
-    let Some(pool_name) = data
+    let Some(pool_names_value) = data
         .option("pool")
         .and_then(InteractionOption::string_value)
         .map(str::trim)
@@ -295,6 +427,10 @@ async fn handle_random_command(state: &AppState, user_id: Uuid, data: &Interacti
     else {
         return ephemeral_message("Pool is required.");
     };
+    let pool_names = split_pool_names(pool_names_value);
+    if pool_names.is_empty() {
+        return ephemeral_message("Pool is required.");
+    }
 
     let private = data
         .option("private")
@@ -306,11 +442,12 @@ async fn handle_random_command(state: &AppState, user_id: Uuid, data: &Interacti
         ImageRepository::new(state.pool.clone()),
         SendHistoryRepository::new(state.pool.clone()),
     );
+    let pool_name_refs = pool_names.iter().map(String::as_str).collect::<Vec<_>>();
 
     match service
-        .select_random(
+        .select_random_from_pools(
             user_id,
-            pool_name,
+            &pool_name_refs,
             if private {
                 RandomVisibility::Private
             } else {
@@ -382,9 +519,10 @@ async fn handle_pool_add(state: &AppState, user_id: Uuid, subcommand: &Interacti
         return ephemeral_message("Image URL is required.");
     };
 
-    if !validate_http_url(url) {
-        return ephemeral_message("URL must be a valid http or https URL.");
-    }
+    let resolved_url = match resolve_image_url(url).await {
+        Ok(url) => url,
+        Err(err) => return ephemeral_message(err.user_message()),
+    };
 
     let pools = PoolRepository::new(state.pool.clone());
     let images = ImageRepository::new(state.pool.clone());
@@ -395,7 +533,7 @@ async fn handle_pool_add(state: &AppState, user_id: Uuid, subcommand: &Interacti
         return ephemeral_message("I could not find that pool.");
     };
 
-    match images.create(user_id, pool.id, url).await {
+    match images.create(user_id, pool.id, &resolved_url).await {
         Ok(_) => ephemeral_message(&format!("Added image to \"{}\".", pool.name)),
         Err(sqlx::Error::RowNotFound) => ephemeral_message("I could not find that pool."),
         Err(_) => ephemeral_message("I hit a storage error while saving image."),

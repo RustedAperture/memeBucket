@@ -15,7 +15,7 @@ async fn category_api_requires_session() {
     let response = app
         .oneshot(
             Request::builder()
-                .uri("/api/categories")
+                .uri("/api/pools")
                 .body(Body::empty())
                 .unwrap(),
         )

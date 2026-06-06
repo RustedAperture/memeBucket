@@ -10,10 +10,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ezgif-data:/app/data
+      - ./data:/app/data
     env_file:
       - .env
     restart: unless-stopped
-
-volumes:
-  ezgif-data:

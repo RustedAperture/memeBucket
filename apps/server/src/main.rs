@@ -40,7 +40,11 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(config.bind_addr).await?;
 
     tracing::info!("listening on {}", config.bind_addr);
-    axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }

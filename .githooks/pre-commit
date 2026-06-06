@@ -1,0 +1,13 @@
+#!/bin/sh
+
+echo "Running cargo fmt..."
+cargo fmt --all -- --check
+
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "❌ Commit failed: Rust code is not formatted correctly."
+  echo "Please run 'cargo fmt --all' to fix formatting, then try your commit again."
+  exit 1
+fi
+
+exit 0

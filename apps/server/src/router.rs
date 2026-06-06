@@ -4,7 +4,9 @@ use axum::{
     routing::{delete, get, post},
 };
 use std::sync::Arc;
-use tower_governor::{key_extractor::SmartIpKeyExtractor, GovernorLayer, governor::GovernorConfigBuilder};
+use tower_governor::{
+    GovernorLayer, governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor,
+};
 
 use crate::{
     api::{

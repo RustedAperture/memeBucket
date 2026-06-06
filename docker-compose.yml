@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  ezgif:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # If using the pre-built image from ghcr.io, uncomment the line below and replace 'USERNAME/ezgif'
+    # image: ghcr.io/USERNAME/ezgif:main
+    ports:
+      - "8080:8080"
+    volumes:
+      - ezgif-data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  ezgif-data:

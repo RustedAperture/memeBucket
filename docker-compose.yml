@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   ezgif:
+    platform: linux/amd64
     image: ghcr.io/rustedaperture/ezgif:master
     ports:
       - "8080:8080"

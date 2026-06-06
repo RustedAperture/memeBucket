@@ -314,13 +314,12 @@ async fn dispatch_autocomplete(state: &AppState, payload: &InteractionPayload) -
         .await
         .unwrap_or_default();
 
-    if data.name == "ez" {
-        if let Ok(subscribed) = PoolRepository::new(state.pool.clone())
+    if data.name == "ez"
+        && let Ok(subscribed) = PoolRepository::new(state.pool.clone())
             .list_subscribed_for_user(user.id)
             .await
-        {
-            pools.extend(subscribed);
-        }
+    {
+        pools.extend(subscribed);
     }
 
     let choices = pools

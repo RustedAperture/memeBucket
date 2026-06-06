@@ -147,13 +147,12 @@ async fn fetch_success(value: &str) -> Result<reqwest::Response, ImageUrlValidat
                     80
                 });
 
-        let addrs = tokio::net::lookup_host(format!("{}:{}", host, port))
+        let mut addrs = tokio::net::lookup_host(format!("{}:{}", host, port))
             .await
             .map_err(|_| ImageUrlValidationError::FetchFailed)?;
 
         let safe_addr = addrs
-            .filter(|addr| is_safe_ip(&addr.ip()))
-            .next()
+            .find(|addr| is_safe_ip(&addr.ip()))
             .ok_or(ImageUrlValidationError::FetchFailed)?;
 
         let client = reqwest::Client::builder()
@@ -345,9 +344,7 @@ fn extract_attr(tag: &str, attr: &str) -> Option<String> {
         }
         value = value[1..].trim_start();
 
-        let Some(quote) = value.chars().next() else {
-            return None;
-        };
+        let quote = value.chars().next()?;
 
         if quote == '"' || quote == '\'' {
             let value = &value[quote.len_utf8()..];

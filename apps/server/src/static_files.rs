@@ -16,18 +16,17 @@ pub async fn static_fallback(State(state): State<AppState>, uri: Uri) -> Respons
     // Try appending .html first for Next.js clean URLs
     // (avoids ServeDir's trailing-slash redirect when a same-name directory exists)
     let clean = path.trim_end_matches('/');
-    if !clean.is_empty() {
-        if let Ok(html_uri) = format!("{}.html", clean).parse::<Uri>() {
-            if let Ok(req) = Request::builder().uri(html_uri).body(Body::empty()) {
-                let resp = serve
-                    .clone()
-                    .oneshot(req)
-                    .await
-                    .expect("ServeDir is infallible");
-                if resp.status() != StatusCode::NOT_FOUND {
-                    return resp.into_response();
-                }
-            }
+    if !clean.is_empty()
+        && let Ok(html_uri) = format!("{}.html", clean).parse::<Uri>()
+        && let Ok(req) = Request::builder().uri(html_uri).body(Body::empty())
+    {
+        let resp = serve
+            .clone()
+            .oneshot(req)
+            .await
+            .expect("ServeDir is infallible");
+        if resp.status() != StatusCode::NOT_FOUND {
+            return resp.into_response();
         }
     }
 

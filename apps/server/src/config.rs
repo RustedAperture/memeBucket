@@ -53,10 +53,10 @@ fn ensure_sqlite_parent_dir(database_url: &str) -> anyhow::Result<()> {
         return Ok(());
     };
 
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)?;
     }
 
     Ok(())

@@ -2,11 +2,7 @@ version: '3.8'
 
 services:
   ezgif:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # If using the pre-built image from ghcr.io, uncomment the line below and replace 'USERNAME/ezgif'
-    # image: ghcr.io/USERNAME/ezgif:main
+    image: ghcr.io/rustedaperture/ezgif:master
     ports:
       - "8080:8080"
     volumes:

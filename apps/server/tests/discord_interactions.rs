@@ -4,7 +4,7 @@ use axum::{
     http::{Request, StatusCode, header::HeaderName},
 };
 use ed25519_dalek::Signer;
-use ezgif_server::{app_state::AppState, router::build_router};
+use ezgif_server::{app_state::AppState, router::build_router_for_tests};
 use http_body_util::BodyExt;
 use sqlx::SqlitePool;
 use tower::ServiceExt;
@@ -13,7 +13,7 @@ use tower::ServiceExt;
 async fn unsigned_interaction_is_rejected() {
     let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
     let state = AppState::for_tests(pool);
-    let app = build_router(state);
+    let app = build_router_for_tests(state);
 
     let response = app
         .oneshot(
@@ -42,7 +42,7 @@ async fn signed_ping_payload_returns_pong_with_configured_public_key() {
     let public_key_hex = hex::encode(signing_key.verifying_key().to_bytes());
 
     let state = AppState::for_tests(pool).with_discord_public_key(public_key_hex);
-    let app = build_router(state);
+    let app = build_router_for_tests(state);
 
     let response = app
         .oneshot(

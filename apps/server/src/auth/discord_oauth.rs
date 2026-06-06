@@ -53,11 +53,15 @@ pub async fn handle_discord_oauth_callback(
     }
 
     match complete_oauth_flow(&state, &query.code).await {
-        Ok(session_id) => {
+        Ok((session_id, csrf_token)) => {
             let cookie = session_cookie(&session_id.to_string());
+            let csrf_cookie_str = crate::auth::sessions::csrf_cookie(&csrf_token);
             (
                 StatusCode::TEMPORARY_REDIRECT,
-                [(axum::http::header::SET_COOKIE, cookie)],
+                [
+                    (axum::http::header::SET_COOKIE, cookie),
+                    (axum::http::header::SET_COOKIE, csrf_cookie_str),
+                ],
                 Redirect::temporary("/"),
             )
                 .into_response()
@@ -69,7 +73,7 @@ pub async fn handle_discord_oauth_callback(
     }
 }
 
-async fn complete_oauth_flow(state: &AppState, code: &str) -> anyhow::Result<Uuid> {
+async fn complete_oauth_flow(state: &AppState, code: &str) -> anyhow::Result<(Uuid, String)> {
     let client_id = std::env::var("DISCORD_CLIENT_ID").unwrap_or_default();
     let client_secret = std::env::var("DISCORD_CLIENT_SECRET").unwrap_or_default();
     let redirect_uri = std::env::var("DISCORD_OAUTH_REDIRECT_URL").unwrap_or_default();
@@ -126,9 +130,9 @@ async fn complete_oauth_flow(state: &AppState, code: &str) -> anyhow::Result<Uui
         .await?;
 
     // Create session
-    let session_id = create_session(&state.pool, stored_user.id).await?;
+    let (session_id, csrf_token) = create_session(&state.pool, stored_user.id).await?;
 
-    Ok(session_id)
+    Ok((session_id, csrf_token))
 }
 
 fn urlencoding(s: &str) -> String {

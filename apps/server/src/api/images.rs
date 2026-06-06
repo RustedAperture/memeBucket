@@ -76,22 +76,24 @@ pub async fn create_image(
 pub async fn delete_image(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Path((_pool_id, image_id)): Path<(Uuid, Uuid)>,
+    Path((pool_id, image_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let repo = ImageRepository::new(state.pool);
-    let deleted = repo.delete_for_user(user.user_id, image_id).await?;
+    let deleted = repo
+        .delete_for_user(user.user_id, pool_id, image_id)
+        .await?;
     Ok(Json(serde_json::json!({ "deleted": deleted })))
 }
 
 pub async fn update_image(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Path((_pool_id, image_id)): Path<(Uuid, Uuid)>,
+    Path((pool_id, image_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<UpdateImageRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let repo = ImageRepository::new(state.pool);
     let updated = repo
-        .update_notes(user.user_id, image_id, request.notes.as_deref())
+        .update_notes(user.user_id, pool_id, image_id, request.notes.as_deref())
         .await?;
 
     if !updated {

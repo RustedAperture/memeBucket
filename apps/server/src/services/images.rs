@@ -1,3 +1,6 @@
+use ipnet::IpNet;
+use std::net::IpAddr;
+use std::str::FromStr;
 use url::Url;
 
 const METADATA_READ_LIMIT_BYTES: usize = 512 * 1024;
@@ -36,8 +39,7 @@ pub async fn validate_image_url(value: &str) -> Result<(), ImageUrlValidationErr
         return Err(ImageUrlValidationError::InvalidHttpUrl);
     }
 
-    let client = image_client()?;
-    validate_image_url_with_client(&client, value).await
+    validate_image_url_internal(value).await
 }
 
 pub async fn resolve_image_url(value: &str) -> Result<String, ImageUrlValidationError> {
@@ -45,12 +47,11 @@ pub async fn resolve_image_url(value: &str) -> Result<String, ImageUrlValidation
         return Err(ImageUrlValidationError::InvalidHttpUrl);
     }
 
-    let client = image_client()?;
-    if validate_image_url_with_client(&client, value).await.is_ok() {
+    if validate_image_url_internal(value).await.is_ok() {
         return Ok(value.to_string());
     }
 
-    let response = fetch_success(&client, value).await?;
+    let response = fetch_success(value).await?;
     let Some(content_type) = response_content_type(&response) else {
         return Err(ImageUrlValidationError::UnsupportedContentType);
     };
@@ -62,16 +63,13 @@ pub async fn resolve_image_url(value: &str) -> Result<String, ImageUrlValidation
     let html = read_limited_text(response).await?;
 
     if let Some(oembed_url) = find_oembed_url(value, &html)
-        && let Some(media_url) = resolve_oembed_photo_url(&client, &oembed_url).await?
+        && let Some(media_url) = resolve_oembed_photo_url(&oembed_url).await?
     {
         return Ok(media_url);
     }
 
     for candidate in find_page_image_candidates(value, &html) {
-        if validate_image_url_with_client(&client, &candidate)
-            .await
-            .is_ok()
-        {
+        if validate_image_url_internal(&candidate).await.is_ok() {
             return Ok(candidate);
         }
     }
@@ -79,19 +77,39 @@ pub async fn resolve_image_url(value: &str) -> Result<String, ImageUrlValidation
     Err(ImageUrlValidationError::UnsupportedContentType)
 }
 
-fn image_client() -> Result<reqwest::Client, ImageUrlValidationError> {
-    reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .redirect(reqwest::redirect::Policy::limited(5))
-        .build()
-        .map_err(|_| ImageUrlValidationError::FetchFailed)
+fn is_safe_ip(ip: &IpAddr) -> bool {
+    #[cfg(test)]
+    if ip.is_loopback() {
+        return true;
+    }
+
+    if ip.is_loopback() && std::env::var("EZGIF_ALLOW_LOCAL_IPS_IN_TESTS").is_ok() {
+        return true;
+    }
+
+    let loopback = IpNet::from_str("127.0.0.0/8").unwrap();
+    let private_10 = IpNet::from_str("10.0.0.0/8").unwrap();
+    let private_172 = IpNet::from_str("172.16.0.0/12").unwrap();
+    let private_192 = IpNet::from_str("192.168.0.0/16").unwrap();
+    let aws_metadata = IpNet::from_str("169.254.169.254/32").unwrap();
+
+    if loopback.contains(ip)
+        || private_10.contains(ip)
+        || private_172.contains(ip)
+        || private_192.contains(ip)
+        || aws_metadata.contains(ip)
+    {
+        return false;
+    }
+
+    match ip {
+        IpAddr::V4(ipv4) => !ipv4.is_private() && !ipv4.is_loopback() && !ipv4.is_link_local(),
+        IpAddr::V6(ipv6) => !ipv6.is_loopback(),
+    }
 }
 
-async fn validate_image_url_with_client(
-    client: &reqwest::Client,
-    value: &str,
-) -> Result<(), ImageUrlValidationError> {
-    let response = fetch_success(client, value).await?;
+async fn validate_image_url_internal(value: &str) -> Result<(), ImageUrlValidationError> {
+    let response = fetch_success(value).await?;
 
     let Some(content_type) = response_content_type(&response) else {
         return Err(ImageUrlValidationError::UnsupportedContentType);
@@ -107,21 +125,75 @@ async fn validate_image_url_with_client(
     Err(ImageUrlValidationError::UnsupportedContentType)
 }
 
-async fn fetch_success(
-    client: &reqwest::Client,
-    value: &str,
-) -> Result<reqwest::Response, ImageUrlValidationError> {
-    let response = client
-        .get(value)
-        .send()
-        .await
-        .map_err(|_| ImageUrlValidationError::FetchFailed)?;
+async fn fetch_success(value: &str) -> Result<reqwest::Response, ImageUrlValidationError> {
+    let mut current_url_str = value.to_string();
+    let mut redirects = 0;
 
-    if !response.status().is_success() {
-        return Err(ImageUrlValidationError::FetchFailed);
+    loop {
+        if redirects > 5 {
+            return Err(ImageUrlValidationError::FetchFailed);
+        }
+        let parsed_url =
+            Url::parse(&current_url_str).map_err(|_| ImageUrlValidationError::InvalidHttpUrl)?;
+        let host = parsed_url
+            .host_str()
+            .ok_or(ImageUrlValidationError::InvalidHttpUrl)?;
+        let port =
+            parsed_url
+                .port_or_known_default()
+                .unwrap_or(if parsed_url.scheme() == "https" {
+                    443
+                } else {
+                    80
+                });
+
+        let addrs = tokio::net::lookup_host(format!("{}:{}", host, port))
+            .await
+            .map_err(|_| ImageUrlValidationError::FetchFailed)?;
+
+        let safe_addr = addrs
+            .filter(|addr| is_safe_ip(&addr.ip()))
+            .next()
+            .ok_or(ImageUrlValidationError::FetchFailed)?;
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .redirect(reqwest::redirect::Policy::none())
+            .resolve(host, safe_addr)
+            .build()
+            .map_err(|_| ImageUrlValidationError::FetchFailed)?;
+
+        let response = client
+            .get(&current_url_str)
+            .send()
+            .await
+            .map_err(|_| ImageUrlValidationError::FetchFailed)?;
+
+        if response.status().is_redirection() {
+            let loc = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .ok_or(ImageUrlValidationError::FetchFailed)?;
+            let loc_str = loc
+                .to_str()
+                .map_err(|_| ImageUrlValidationError::FetchFailed)?;
+            let next_url = parsed_url
+                .join(loc_str)
+                .map_err(|_| ImageUrlValidationError::FetchFailed)?;
+            if !matches!(next_url.scheme(), "http" | "https") {
+                return Err(ImageUrlValidationError::FetchFailed);
+            }
+            current_url_str = next_url.to_string();
+            redirects += 1;
+            continue;
+        }
+
+        if !response.status().is_success() {
+            return Err(ImageUrlValidationError::FetchFailed);
+        }
+
+        return Ok(response);
     }
-
-    Ok(response)
 }
 
 fn response_content_type(response: &reqwest::Response) -> Option<String> {
@@ -157,7 +229,6 @@ async fn read_limited_text(
 }
 
 async fn resolve_oembed_photo_url(
-    client: &reqwest::Client,
     oembed_url: &str,
 ) -> Result<Option<String>, ImageUrlValidationError> {
     #[derive(serde::Deserialize)]
@@ -167,7 +238,7 @@ async fn resolve_oembed_photo_url(
         url: Option<String>,
     }
 
-    let response = fetch_success(client, oembed_url).await?;
+    let response = fetch_success(oembed_url).await?;
     let oembed: OembedResponse = response
         .json()
         .await
@@ -183,7 +254,7 @@ async fn resolve_oembed_photo_url(
     let Some(url) = oembed.url else {
         return Ok(None);
     };
-    if validate_image_url_with_client(client, &url).await.is_ok() {
+    if validate_image_url_internal(&url).await.is_ok() {
         return Ok(Some(url));
     }
 

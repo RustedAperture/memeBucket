@@ -127,11 +127,11 @@ pub async fn share_pool(
     let updated = PoolRepository::new(state.pool)
         .set_share_token(pool_id, user.user_id, Some(&token))
         .await?;
-    
+
     if !updated {
         return Err(AppError::NotFound);
     }
-    
+
     Ok(Json(serde_json::json!({ "share_token": token })))
 }
 
@@ -143,11 +143,11 @@ pub async fn unshare_pool(
     let updated = PoolRepository::new(state.pool)
         .set_share_token(pool_id, user.user_id, None)
         .await?;
-    
+
     if !updated {
         return Err(AppError::NotFound);
     }
-    
+
     Ok(Json(serde_json::json!({ "unshared": true })))
 }
 
@@ -157,8 +157,11 @@ pub async fn subscribe_pool(
     Path(token): Path<String>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let repo = PoolRepository::new(state.pool);
-    let pool = repo.get_by_share_token(&token).await?.ok_or(AppError::NotFound)?;
-    
+    let pool = repo
+        .get_by_share_token(&token)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
     if pool.whitelist_enabled {
         let is_whitelisted = repo.is_user_whitelisted(pool.id, user.user_id).await?;
         if !is_whitelisted {
@@ -176,7 +179,9 @@ pub async fn unsubscribe_pool(
     Path(pool_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let repo = PoolRepository::new(state.pool);
-    let deleted = repo.unsubscribe_user_from_pool(user.user_id, pool_id).await?;
+    let deleted = repo
+        .unsubscribe_user_from_pool(user.user_id, pool_id)
+        .await?;
     Ok(Json(serde_json::json!({ "unsubscribed": deleted })))
 }
 
@@ -194,8 +199,11 @@ pub async fn get_shared_pool(
     Path(token): Path<String>,
 ) -> Result<Json<SharedPoolPreview>, AppError> {
     let repo = PoolRepository::new(state.pool.clone());
-    let pool = repo.get_by_share_token(&token).await?.ok_or(AppError::NotFound)?;
-    
+    let pool = repo
+        .get_by_share_token(&token)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
     if pool.whitelist_enabled {
         let is_allowed = match user {
             Some(u) => repo.is_user_whitelisted(pool.id, u.user_id).await?,
@@ -205,20 +213,25 @@ pub async fn get_shared_pool(
             return Err(AppError::Forbidden);
         }
     }
-    
+
     let image_repo = crate::repositories::images::ImageRepository::new(state.pool);
-    let images = image_repo.list_for_pool(pool.owner_user_id, pool.id).await?;
-    
+    let images = image_repo
+        .list_for_pool(pool.owner_user_id, pool.id)
+        .await?;
+
     Ok(Json(SharedPoolPreview {
         id: pool.id.to_string(),
         name: pool.name,
         subscriber_count: pool.subscriber_count,
-        images: images.into_iter().map(|img| crate::api::images::ImageResponse {
-            id: img.id.to_string(),
-            url: img.url,
-            created_at: img.created_at,
-            notes: img.notes,
-        }).collect(),
+        images: images
+            .into_iter()
+            .map(|img| crate::api::images::ImageResponse {
+                id: img.id.to_string(),
+                url: img.url,
+                created_at: img.created_at,
+                notes: img.notes,
+            })
+            .collect(),
     }))
 }
 
@@ -234,7 +247,9 @@ pub async fn set_whitelist_enabled(
     Json(req): Json<WhitelistEnabledRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let repo = PoolRepository::new(state.pool);
-    let updated = repo.set_whitelist_enabled(pool_id, user.user_id, req.enabled).await?;
+    let updated = repo
+        .set_whitelist_enabled(pool_id, user.user_id, req.enabled)
+        .await?;
     if !updated {
         return Err(AppError::NotFound);
     }
@@ -253,7 +268,9 @@ pub async fn add_whitelist_user(
     Json(req): Json<AddWhitelistUserRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let repo = PoolRepository::new(state.pool);
-    let added = repo.add_whitelist_user(pool_id, user.user_id, &req.username).await?;
+    let added = repo
+        .add_whitelist_user(pool_id, user.user_id, &req.username)
+        .await?;
     if !added {
         return Err(AppError::NotFound); // Could mean pool not found/owned or user not found
     }
@@ -266,7 +283,9 @@ pub async fn remove_whitelist_user(
     Path((pool_id, username)): Path<(Uuid, String)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let repo = PoolRepository::new(state.pool);
-    let removed = repo.remove_whitelist_user(pool_id, user.user_id, &username).await?;
+    let removed = repo
+        .remove_whitelist_user(pool_id, user.user_id, &username)
+        .await?;
     if !removed {
         return Err(AppError::NotFound);
     }
@@ -279,7 +298,9 @@ pub async fn list_whitelist_users(
     Path(pool_id): Path<Uuid>,
 ) -> Result<Json<Vec<String>>, AppError> {
     let repo = PoolRepository::new(state.pool);
-    let users = repo.list_whitelist_users(pool_id, user.user_id).await?
+    let users = repo
+        .list_whitelist_users(pool_id, user.user_id)
+        .await?
         .ok_or(AppError::NotFound)?;
     Ok(Json(users))
 }

@@ -68,18 +68,29 @@ impl PoolRepository {
         .await?;
 
         rows.into_iter()
-            .map(|(id, owner, name, share_token, subscriber_count, owner_username, whitelist_enabled)| {
-                Ok(StoredPool {
-                    id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-                    owner_user_id: Uuid::parse_str(&owner)
-                        .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+            .map(
+                |(
+                    id,
+                    owner,
                     name,
                     share_token,
                     subscriber_count,
                     owner_username,
                     whitelist_enabled,
-                })
-            })
+                )| {
+                    Ok(StoredPool {
+                        id: Uuid::parse_str(&id)
+                            .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                        owner_user_id: Uuid::parse_str(&owner)
+                            .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                        name,
+                        share_token,
+                        subscriber_count,
+                        owner_username,
+                        whitelist_enabled,
+                    })
+                },
+            )
             .collect()
     }
 
@@ -117,18 +128,28 @@ impl PoolRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        row.map(|(id, owner, name, share_token, subscriber_count, owner_username, whitelist_enabled)| {
-            Ok(StoredPool {
-                id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-                owner_user_id: Uuid::parse_str(&owner)
-                    .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+        row.map(
+            |(
+                id,
+                owner,
                 name,
                 share_token,
                 subscriber_count,
                 owner_username,
                 whitelist_enabled,
-            })
-        })
+            )| {
+                Ok(StoredPool {
+                    id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    owner_user_id: Uuid::parse_str(&owner)
+                        .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    name,
+                    share_token,
+                    subscriber_count,
+                    owner_username,
+                    whitelist_enabled,
+                })
+            },
+        )
         .transpose()
     }
 
@@ -159,18 +180,28 @@ impl PoolRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        row.map(|(id, owner, name, share_token, subscriber_count, owner_username, whitelist_enabled)| {
-            Ok(StoredPool {
-                id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-                owner_user_id: Uuid::parse_str(&owner)
-                    .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+        row.map(
+            |(
+                id,
+                owner,
                 name,
                 share_token,
                 subscriber_count,
                 owner_username,
                 whitelist_enabled,
-            })
-        })
+            )| {
+                Ok(StoredPool {
+                    id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    owner_user_id: Uuid::parse_str(&owner)
+                        .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    name,
+                    share_token,
+                    subscriber_count,
+                    owner_username,
+                    whitelist_enabled,
+                })
+            },
+        )
         .transpose()
     }
 
@@ -188,18 +219,28 @@ impl PoolRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        row.map(|(id, owner, name, share_token, subscriber_count, owner_username, whitelist_enabled)| {
-            Ok(StoredPool {
-                id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-                owner_user_id: Uuid::parse_str(&owner)
-                    .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+        row.map(
+            |(
+                id,
+                owner,
                 name,
                 share_token,
                 subscriber_count,
                 owner_username,
                 whitelist_enabled,
-            })
-        })
+            )| {
+                Ok(StoredPool {
+                    id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    owner_user_id: Uuid::parse_str(&owner)
+                        .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    name,
+                    share_token,
+                    subscriber_count,
+                    owner_username,
+                    whitelist_enabled,
+                })
+            },
+        )
         .transpose()
     }
 
@@ -217,18 +258,28 @@ impl PoolRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        row.map(|(id, owner, name, share_token, subscriber_count, owner_username, whitelist_enabled)| {
-            Ok(StoredPool {
-                id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-                owner_user_id: Uuid::parse_str(&owner)
-                    .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+        row.map(
+            |(
+                id,
+                owner,
                 name,
                 share_token,
                 subscriber_count,
                 owner_username,
                 whitelist_enabled,
-            })
-        })
+            )| {
+                Ok(StoredPool {
+                    id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    owner_user_id: Uuid::parse_str(&owner)
+                        .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    name,
+                    share_token,
+                    subscriber_count,
+                    owner_username,
+                    whitelist_enabled,
+                })
+            },
+        )
         .transpose()
     }
 
@@ -238,12 +289,13 @@ impl PoolRepository {
         owner_user_id: Uuid,
         token: Option<&str>,
     ) -> Result<bool, sqlx::Error> {
-        let result = sqlx::query("UPDATE pools SET share_token = ? WHERE id = ? AND owner_user_id = ?")
-            .bind(token)
-            .bind(pool_id.to_string())
-            .bind(owner_user_id.to_string())
-            .execute(&self.pool)
-            .await?;
+        let result =
+            sqlx::query("UPDATE pools SET share_token = ? WHERE id = ? AND owner_user_id = ?")
+                .bind(token)
+                .bind(pool_id.to_string())
+                .bind(owner_user_id.to_string())
+                .execute(&self.pool)
+                .await?;
 
         Ok(result.rows_affected() > 0)
     }
@@ -270,7 +322,7 @@ impl PoolRepository {
         pool_id: Uuid,
     ) -> Result<bool, sqlx::Error> {
         let result = sqlx::query(
-            "DELETE FROM pool_subscriptions WHERE subscriber_user_id = ? AND pool_id = ?"
+            "DELETE FROM pool_subscriptions WHERE subscriber_user_id = ? AND pool_id = ?",
         )
         .bind(subscriber_user_id.to_string())
         .bind(pool_id.to_string())
@@ -300,18 +352,29 @@ impl PoolRepository {
         .await?;
 
         rows.into_iter()
-            .map(|(id, owner, name, share_token, subscriber_count, owner_username, whitelist_enabled)| {
-                Ok(StoredPool {
-                    id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-                    owner_user_id: Uuid::parse_str(&owner)
-                        .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+            .map(
+                |(
+                    id,
+                    owner,
                     name,
                     share_token,
                     subscriber_count,
                     owner_username,
                     whitelist_enabled,
-                })
-            })
+                )| {
+                    Ok(StoredPool {
+                        id: Uuid::parse_str(&id)
+                            .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                        owner_user_id: Uuid::parse_str(&owner)
+                            .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                        name,
+                        share_token,
+                        subscriber_count,
+                        owner_username,
+                        whitelist_enabled,
+                    })
+                },
+            )
             .collect()
     }
 
@@ -321,12 +384,14 @@ impl PoolRepository {
         owner_user_id: Uuid,
         enabled: bool,
     ) -> Result<bool, sqlx::Error> {
-        let result = sqlx::query("UPDATE pools SET whitelist_enabled = ? WHERE id = ? AND owner_user_id = ?")
-            .bind(enabled)
-            .bind(pool_id.to_string())
-            .bind(owner_user_id.to_string())
-            .execute(&self.pool)
-            .await?;
+        let result = sqlx::query(
+            "UPDATE pools SET whitelist_enabled = ? WHERE id = ? AND owner_user_id = ?",
+        )
+        .bind(enabled)
+        .bind(pool_id.to_string())
+        .bind(owner_user_id.to_string())
+        .execute(&self.pool)
+        .await?;
 
         Ok(result.rows_affected() == 1)
     }
@@ -349,10 +414,12 @@ impl PoolRepository {
         }
 
         // Lookup user by username (case-insensitive)
-        let row = sqlx::query_as::<_, (String,)>("SELECT id FROM users WHERE username = ? COLLATE NOCASE")
-            .bind(username)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query_as::<_, (String,)>(
+            "SELECT id FROM users WHERE username = ? COLLATE NOCASE",
+        )
+        .bind(username)
+        .fetch_optional(&self.pool)
+        .await?;
 
         let Some((target_user_id,)) = row else {
             return Ok(false); // User not found
@@ -386,10 +453,12 @@ impl PoolRepository {
         }
 
         // Lookup user by username
-        let row = sqlx::query_as::<_, (String,)>("SELECT id FROM users WHERE username = ? COLLATE NOCASE")
-            .bind(username)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row = sqlx::query_as::<_, (String,)>(
+            "SELECT id FROM users WHERE username = ? COLLATE NOCASE",
+        )
+        .bind(username)
+        .fetch_optional(&self.pool)
+        .await?;
 
         let Some((target_user_id,)) = row else {
             return Ok(false);
@@ -404,7 +473,11 @@ impl PoolRepository {
         Ok(result.rows_affected() == 1)
     }
 
-    pub async fn list_whitelist_users(&self, pool_id: Uuid, owner_user_id: Uuid) -> Result<Option<Vec<String>>, sqlx::Error> {
+    pub async fn list_whitelist_users(
+        &self,
+        pool_id: Uuid,
+        owner_user_id: Uuid,
+    ) -> Result<Option<Vec<String>>, sqlx::Error> {
         let pool_exists = sqlx::query("SELECT 1 FROM pools WHERE id = ? AND owner_user_id = ?")
             .bind(pool_id.to_string())
             .bind(owner_user_id.to_string())
@@ -423,7 +496,11 @@ impl PoolRepository {
         Ok(Some(rows.into_iter().map(|r| r.0).collect()))
     }
 
-    pub async fn is_user_whitelisted(&self, pool_id: Uuid, user_id: Uuid) -> Result<bool, sqlx::Error> {
+    pub async fn is_user_whitelisted(
+        &self,
+        pool_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
         let row = sqlx::query("SELECT 1 FROM pool_whitelists WHERE pool_id = ? AND user_id = ?")
             .bind(pool_id.to_string())
             .bind(user_id.to_string())

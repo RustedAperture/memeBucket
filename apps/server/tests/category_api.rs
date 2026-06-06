@@ -9,7 +9,7 @@ use ezgif_server::{
     app_state::AppState,
     auth::sessions::AuthenticatedUser,
     repositories::{pools::PoolRepository, users::UserRepository},
-    router::build_router,
+    router::build_router_for_tests,
 };
 use http_body_util::BodyExt;
 use sqlx::SqlitePool;
@@ -52,7 +52,7 @@ async fn category_routes_support_owner_scoped_crud() {
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
-    let app = build_router(state);
+    let app = build_router_for_tests(state);
 
     let mut create_request = Request::builder()
         .method("POST")
@@ -126,7 +126,7 @@ async fn create_category_rejects_blank_name() {
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
-    let app = build_router(state);
+    let app = build_router_for_tests(state);
 
     let mut request = Request::builder()
         .method("POST")
@@ -153,7 +153,7 @@ async fn create_category_rejects_duplicate_name_for_same_owner() {
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
-    let app = build_router(state);
+    let app = build_router_for_tests(state);
 
     let mut first_request = Request::builder()
         .method("POST")
@@ -202,7 +202,7 @@ async fn create_category_allows_same_name_for_different_owners() {
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
-    let app = build_router(state);
+    let app = build_router_for_tests(state);
 
     let mut alice_request = Request::builder()
         .method("POST")
@@ -272,7 +272,7 @@ async fn create_image_stores_resolved_metadata_image_url() {
         .unwrap();
     let saved_pool = pools.create(user.id, "cats").await.unwrap();
     let state = AppState::for_tests(pool);
-    let app = build_router(state);
+    let app = build_router_for_tests(state);
     let page_url = format!("http://{media_address}/");
     let expected_image_url = format!("http://{media_address}/image.gif");
 

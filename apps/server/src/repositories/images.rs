@@ -95,13 +95,16 @@ impl ImageRepository {
     pub async fn delete_for_user(
         &self,
         owner_user_id: Uuid,
+        pool_id: Uuid,
         image_id: Uuid,
     ) -> Result<bool, sqlx::Error> {
-        let result = sqlx::query("DELETE FROM images WHERE owner_user_id = ? AND id = ?")
-            .bind(owner_user_id.to_string())
-            .bind(image_id.to_string())
-            .execute(&self.pool)
-            .await?;
+        let result =
+            sqlx::query("DELETE FROM images WHERE owner_user_id = ? AND pool_id = ? AND id = ?")
+                .bind(owner_user_id.to_string())
+                .bind(pool_id.to_string())
+                .bind(image_id.to_string())
+                .execute(&self.pool)
+                .await?;
 
         Ok(result.rows_affected() == 1)
     }
@@ -109,15 +112,19 @@ impl ImageRepository {
     pub async fn update_notes(
         &self,
         owner_user_id: Uuid,
+        pool_id: Uuid,
         image_id: Uuid,
         notes: Option<&str>,
     ) -> Result<bool, sqlx::Error> {
-        let result = sqlx::query("UPDATE images SET notes = ? WHERE owner_user_id = ? AND id = ?")
-            .bind(notes)
-            .bind(owner_user_id.to_string())
-            .bind(image_id.to_string())
-            .execute(&self.pool)
-            .await?;
+        let result = sqlx::query(
+            "UPDATE images SET notes = ? WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+        )
+        .bind(notes)
+        .bind(owner_user_id.to_string())
+        .bind(pool_id.to_string())
+        .bind(image_id.to_string())
+        .execute(&self.pool)
+        .await?;
 
         Ok(result.rows_affected() == 1)
     }

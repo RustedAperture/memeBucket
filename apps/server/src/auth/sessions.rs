@@ -36,34 +36,64 @@ pub fn session_cookie(value: &str) -> String {
     )
 }
 
+pub fn csrf_cookie(value: &str) -> String {
+    format!("csrf_token={}; Path=/; SameSite=Lax; Max-Age=86400", value)
+}
+
 pub fn expired_session_cookie() -> String {
     "session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0".to_string()
 }
 
-pub async fn create_session(pool: &SqlitePool, user_id: Uuid) -> Result<Uuid, sqlx::Error> {
+pub fn expired_csrf_cookie() -> String {
+    "csrf_token=; Path=/; SameSite=Lax; Max-Age=0".to_string()
+}
+
+pub async fn create_session(
+    pool: &SqlitePool,
+    user_id: Uuid,
+) -> Result<(Uuid, String), sqlx::Error> {
     let session_id = Uuid::new_v4();
+    let csrf_token = Uuid::new_v4().to_string();
+    let secret = std::env::var("APP_SESSION_SECRET").unwrap_or_default();
+    let csrf_token_hash = hash_csrf_token(&secret, &csrf_token);
+
     sqlx::query(
-        "INSERT INTO sessions (id, user_id, csrf_token_hash, expires_at) VALUES (?, ?, '', datetime('now', '+24 hours'))",
+        "INSERT INTO sessions (id, user_id, csrf_token_hash, expires_at) VALUES (?, ?, ?, datetime('now', '+24 hours'))",
     )
     .bind(session_id.to_string())
     .bind(user_id.to_string())
+    .bind(csrf_token_hash)
     .execute(pool)
     .await?;
-    Ok(session_id)
+    Ok((session_id, csrf_token))
 }
 
-pub async fn lookup_session(pool: &SqlitePool, session_id: &str) -> Option<AuthenticatedUser> {
-    let row = sqlx::query_as::<_, (String,)>(
-        "SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')",
+pub struct SessionInfo {
+    pub user_id: Uuid,
+    pub csrf_token_hash: String,
+}
+
+pub async fn lookup_session_info(pool: &SqlitePool, session_id: &str) -> Option<SessionInfo> {
+    let row = sqlx::query_as::<_, (String, String)>(
+        "SELECT user_id, csrf_token_hash FROM sessions WHERE id = ? AND expires_at > datetime('now')",
     )
     .bind(session_id)
     .fetch_optional(pool)
     .await
     .ok()??;
 
-    Uuid::parse_str(&row.0)
-        .ok()
-        .map(|user_id| AuthenticatedUser { user_id })
+    Uuid::parse_str(&row.0).ok().map(|user_id| SessionInfo {
+        user_id,
+        csrf_token_hash: row.1,
+    })
+}
+
+pub async fn lookup_session(pool: &SqlitePool, session_id: &str) -> Option<AuthenticatedUser> {
+    lookup_session_info(pool, session_id)
+        .await
+        .map(|info| AuthenticatedUser {
+            user_id: info.user_id,
+        })
 }
 
 pub async fn delete_session(pool: &SqlitePool, session_id: &str) -> Result<(), sqlx::Error> {

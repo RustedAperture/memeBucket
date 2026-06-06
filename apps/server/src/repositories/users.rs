@@ -26,9 +26,17 @@ impl UserRepository {
         display_name: Option<&str>,
         avatar_url: Option<&str>,
     ) -> Result<StoredUser, sqlx::Error> {
-        let (id, discord_user_key, display_name, avatar_url, username) =
-            sqlx::query_as::<_, (String, String, Option<String>, Option<String>, Option<String>)>(
-                r#"
+        let (id, discord_user_key, display_name, avatar_url, username) = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+            ),
+        >(
+            r#"
             INSERT INTO users (id, discord_user_key, display_name, avatar_url, updated_at)
             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(discord_user_key) DO UPDATE SET
@@ -37,13 +45,13 @@ impl UserRepository {
                 updated_at = CURRENT_TIMESTAMP
             RETURNING id, discord_user_key, display_name, avatar_url, username
             "#,
-            )
-            .bind(Uuid::new_v4().to_string())
-            .bind(discord_user_key)
-            .bind(display_name)
-            .bind(avatar_url)
-            .fetch_one(&self.pool)
-            .await?;
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(discord_user_key)
+        .bind(display_name)
+        .bind(avatar_url)
+        .fetch_one(&self.pool)
+        .await?;
 
         Ok(StoredUser {
             id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
@@ -62,15 +70,18 @@ impl UserRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        row.map(|(id, discord_user_key, display_name, avatar_url, username)| {
-            Ok(StoredUser {
-                id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-                discord_user_key,
-                display_name,
-                avatar_url,
-                username,
-            })
-        }).transpose()
+        row.map(
+            |(id, discord_user_key, display_name, avatar_url, username)| {
+                Ok(StoredUser {
+                    id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                    discord_user_key,
+                    display_name,
+                    avatar_url,
+                    username,
+                })
+            },
+        )
+        .transpose()
     }
 
     pub async fn update_username(&self, id: Uuid, username: &str) -> Result<bool, sqlx::Error> {

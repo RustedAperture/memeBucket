@@ -5,7 +5,10 @@ use axum::{
 
 use crate::{
     app_state::AppState,
-    auth::sessions::{AuthenticatedUser, lookup_session, read_session_cookie},
+    auth::sessions::{
+        AuthenticatedUser, lookup_session, lookup_session_info, read_session_cookie,
+        verify_csrf_token,
+    },
 };
 
 impl FromRequestParts<AppState> for AuthenticatedUser {
@@ -37,7 +40,39 @@ impl FromRequestParts<AppState> for OptionalUser {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let user = AuthenticatedUser::from_request_parts(parts, state).await.ok();
+        let user = AuthenticatedUser::from_request_parts(parts, state)
+            .await
+            .ok();
         Ok(Self(user))
+    }
+}
+
+pub struct RequireCsrf;
+
+impl FromRequestParts<AppState> for RequireCsrf {
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let session_id = read_session_cookie(&parts.headers).ok_or(StatusCode::UNAUTHORIZED)?;
+
+        let session = lookup_session_info(&state.pool, &session_id)
+            .await
+            .ok_or(StatusCode::UNAUTHORIZED)?;
+
+        let csrf_token = parts
+            .headers
+            .get("X-CSRF-Token")
+            .and_then(|v| v.to_str().ok())
+            .ok_or(StatusCode::FORBIDDEN)?;
+
+        let secret = std::env::var("APP_SESSION_SECRET").unwrap_or_default();
+        if !verify_csrf_token(&secret, csrf_token, &session.csrf_token_hash) {
+            return Err(StatusCode::FORBIDDEN);
+        }
+
+        Ok(RequireCsrf)
     }
 }

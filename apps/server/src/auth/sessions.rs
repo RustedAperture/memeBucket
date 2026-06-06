@@ -105,14 +105,14 @@ pub async fn delete_session(pool: &SqlitePool, session_id: &str) -> Result<(), s
 }
 
 pub fn read_session_cookie(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get("cookie")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|cookies| {
-            cookies
-                .split(';')
-                .map(str::trim)
-                .find_map(|cookie| cookie.strip_prefix("session="))
-                .map(str::to_string)
-        })
+    for cookie_header in headers.get_all("cookie").iter() {
+        if let Ok(cookies_str) = cookie_header.to_str() {
+            for cookie in cookies_str.split(';').map(str::trim) {
+                if let Some(session_val) = cookie.strip_prefix("session=") {
+                    return Some(session_val.to_string());
+                }
+            }
+        }
+    }
+    None
 }

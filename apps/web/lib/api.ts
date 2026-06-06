@@ -1,3 +1,9 @@
+function getCsrfToken(): string {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return match ? match[1] : "";
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(path, {
     credentials: "include",
@@ -20,7 +26,11 @@ export async function apiPost<TRequest, TResponse>(path: string, body: TRequest)
   const response = await fetch(path, {
     method: "POST",
     credentials: "include",
-    headers: { "content-type": "application/json", accept: "application/json" },
+    headers: { 
+      "content-type": "application/json", 
+      accept: "application/json",
+      "X-CSRF-Token": getCsrfToken(),
+    },
     body: JSON.stringify(body),
   });
 
@@ -40,7 +50,11 @@ export async function apiPatch<TRequest, TResponse>(path: string, body: TRequest
   const response = await fetch(path, {
     method: "PATCH",
     credentials: "include",
-    headers: { "content-type": "application/json", accept: "application/json" },
+    headers: { 
+      "content-type": "application/json", 
+      accept: "application/json",
+      "X-CSRF-Token": getCsrfToken(),
+    },
     body: JSON.stringify(body),
   });
 
@@ -60,7 +74,10 @@ export async function apiDelete<TResponse>(path: string): Promise<TResponse> {
   const response = await fetch(path, {
     method: "DELETE",
     credentials: "include",
-    headers: { accept: "application/json" },
+    headers: { 
+      accept: "application/json",
+      "X-CSRF-Token": getCsrfToken(),
+    },
   });
 
   if (response.status === 401) {

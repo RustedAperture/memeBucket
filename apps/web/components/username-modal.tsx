@@ -5,7 +5,7 @@ import { useUser } from "./user-provider";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
-import { apiPost } from "@/lib/api";
+import { apiPatch } from "@/lib/api";
 import { User } from "@/lib/types";
 
 export function UsernameModal() {
@@ -25,16 +25,7 @@ export function UsernameModal() {
     setError(null);
     try {
       // Using PATCH /api/account/username
-      const res = await fetch("/api/account/username", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim() }),
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.error || "Failed to set username");
-      }
+      await apiPatch("/api/account/username", { username: username.trim() });
       
       await refreshUser();
     } catch (err) {

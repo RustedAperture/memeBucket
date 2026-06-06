@@ -6,6 +6,7 @@ import { useUser } from "@/components/user-provider";
 import { useState } from "react";
 import { toast } from "sonner";
 import { User } from "lucide-react";
+import { apiPost, apiPatch } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +23,7 @@ export function AccountModal() {
 
   async function handleLogout() {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await apiPost("/api/auth/logout", {});
       window.location.href = "/";
     } catch (err) {
       toast.error("Failed to log out");
@@ -35,16 +36,7 @@ export function AccountModal() {
     setSubmitting(true);
     
     try {
-      const res = await fetch("/api/account/username", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: newUsername.trim() }),
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.error || "Failed to set username");
-      }
+      await apiPatch("/api/account/username", { username: newUsername.trim() });
       
       await refreshUser();
       setNewUsername("");

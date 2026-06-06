@@ -31,7 +31,7 @@ export function ShareDialog({ pool, onPoolChange }: { pool: Pool; onPoolChange: 
       setWhitelistedUsers(users);
       setWhitelistLoaded(true);
     } catch (err) {
-      console.error(err);
+      toast.error("Failed to load whitelist users");
     }
   }
 

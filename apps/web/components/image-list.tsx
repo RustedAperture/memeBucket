@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { apiDelete, apiGet, apiPatch } from "@/lib/api";
 import { ExternalLink, ImageIcon, Trash2, Edit2 } from "lucide-react";
+import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -70,7 +71,7 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false }: { poolI
       setImages(images.map(img => img.id === selectedImage.id ? { ...img, notes: updatedNotes } : img));
       setEditingNotes(false);
     } catch (err) {
-      console.error("Failed to save notes:", err);
+      toast.error("Failed to save notes");
     }
   }
 

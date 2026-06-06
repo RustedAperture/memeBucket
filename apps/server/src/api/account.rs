@@ -1,17 +1,7 @@
-use axum::{
-    Json,
-    extract::State,
-    http::{HeaderMap, StatusCode},
-    response::IntoResponse,
-};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
 use crate::{
-    app_state::AppState,
-    auth::sessions::{
-        AuthenticatedUser, delete_session, expired_csrf_cookie, expired_session_cookie,
-        read_session_cookie,
-    },
-    repositories::users::UserRepository,
+    app_state::AppState, auth::sessions::AuthenticatedUser, repositories::users::UserRepository,
     services::account::AccountService,
 };
 use serde::{Deserialize, Serialize};

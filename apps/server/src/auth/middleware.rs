@@ -68,8 +68,7 @@ impl FromRequestParts<AppState> for RequireCsrf {
             .and_then(|v| v.to_str().ok())
             .ok_or(StatusCode::FORBIDDEN)?;
 
-        let secret = std::env::var("APP_SESSION_SECRET").unwrap_or_default();
-        if !verify_csrf_token(&secret, csrf_token, &session.csrf_token_hash) {
+        if !verify_csrf_token(state.session_secret(), csrf_token, &session.csrf_token_hash) {
             return Err(StatusCode::FORBIDDEN);
         }
 

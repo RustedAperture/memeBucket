@@ -6,3 +6,10 @@ node_modules/
 out/
 data/
 .env
+*.db
+*.sqlite
+*.sqlite3
+*.orig
+*.rej
+*.patch
+scratch.rs

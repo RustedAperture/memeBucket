@@ -173,10 +173,20 @@ impl PoolRepository {
              FROM pools p
              INNER JOIN pool_subscriptions ps ON p.id = ps.pool_id
              LEFT JOIN users u ON p.owner_user_id = u.id
-             WHERE ps.subscriber_user_id = ? AND p.name_folded = ?",
+             WHERE ps.subscriber_user_id = ?
+               AND p.name_folded = ?
+               AND (
+                 p.whitelist_enabled = 0
+                 OR EXISTS (
+                   SELECT 1
+                   FROM pool_whitelists w
+                   WHERE w.pool_id = p.id AND w.user_id = ?
+                 )
+               )",
         )
         .bind(user_id.to_string())
         .bind(name_folded)
+        .bind(user_id.to_string())
         .fetch_optional(&self.pool)
         .await?;
 
@@ -345,8 +355,17 @@ impl PoolRepository {
              JOIN pool_subscriptions s ON s.pool_id = p.id
              LEFT JOIN users u ON p.owner_user_id = u.id
              WHERE s.subscriber_user_id = ?
+               AND (
+                 p.whitelist_enabled = 0
+                 OR EXISTS (
+                   SELECT 1
+                   FROM pool_whitelists w
+                   WHERE w.pool_id = p.id AND w.user_id = ?
+                 )
+               )
              ORDER BY p.name COLLATE NOCASE",
         )
+        .bind(subscriber_user_id.to_string())
         .bind(subscriber_user_id.to_string())
         .fetch_all(&self.pool)
         .await?;

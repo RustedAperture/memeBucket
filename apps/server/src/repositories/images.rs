@@ -64,13 +64,31 @@ impl ImageRepository {
         pool_id: Uuid,
     ) -> Result<Vec<StoredImage>, sqlx::Error> {
         let rows = sqlx::query_as::<_, (String, String, String, String, String, Option<String>)>(
-            "SELECT id, owner_user_id, pool_id, url, created_at, notes 
-             FROM images 
-             WHERE pool_id = ? 
-               AND (owner_user_id = ? OR EXISTS (SELECT 1 FROM pool_subscriptions WHERE pool_id = images.pool_id AND subscriber_user_id = ?)) 
+            "SELECT id, owner_user_id, pool_id, url, created_at, notes
+             FROM images
+             WHERE pool_id = ?
+               AND (
+                 owner_user_id = ?
+                 OR EXISTS (
+                   SELECT 1
+                   FROM pool_subscriptions ps
+                   JOIN pools p ON p.id = ps.pool_id
+                   WHERE ps.pool_id = images.pool_id
+                     AND ps.subscriber_user_id = ?
+                     AND (
+                       p.whitelist_enabled = 0
+                       OR EXISTS (
+                         SELECT 1
+                         FROM pool_whitelists w
+                         WHERE w.pool_id = p.id AND w.user_id = ?
+                       )
+                     )
+                 )
+               )
              ORDER BY created_at",
         )
         .bind(pool_id.to_string())
+        .bind(user_id.to_string())
         .bind(user_id.to_string())
         .bind(user_id.to_string())
         .fetch_all(&self.pool)

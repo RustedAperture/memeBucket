@@ -31,31 +31,34 @@ pub fn verify_csrf_token(session_secret: &str, token: &str, expected_hash: &str)
 
 pub fn session_cookie(value: &str) -> String {
     format!(
-        "session={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400",
+        "session={}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=86400",
         value
     )
 }
 
 pub fn csrf_cookie(value: &str) -> String {
-    format!("csrf_token={}; Path=/; SameSite=Lax; Max-Age=86400", value)
+    format!(
+        "csrf_token={}; Path=/; SameSite=Lax; Secure; Max-Age=86400",
+        value
+    )
 }
 
 pub fn expired_session_cookie() -> String {
-    "session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0".to_string()
+    "session=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0".to_string()
 }
 
 pub fn expired_csrf_cookie() -> String {
-    "csrf_token=; Path=/; SameSite=Lax; Max-Age=0".to_string()
+    "csrf_token=; Path=/; SameSite=Lax; Secure; Max-Age=0".to_string()
 }
 
 pub async fn create_session(
     pool: &SqlitePool,
     user_id: Uuid,
+    session_secret: &str,
 ) -> Result<(Uuid, String), sqlx::Error> {
     let session_id = Uuid::new_v4();
     let csrf_token = Uuid::new_v4().to_string();
-    let secret = std::env::var("APP_SESSION_SECRET").unwrap_or_default();
-    let csrf_token_hash = hash_csrf_token(&secret, &csrf_token);
+    let csrf_token_hash = hash_csrf_token(session_secret, &csrf_token);
 
     sqlx::query(
         "INSERT INTO sessions (id, user_id, csrf_token_hash, expires_at) VALUES (?, ?, ?, datetime('now', '+24 hours'))",
@@ -105,11 +108,15 @@ pub async fn delete_session(pool: &SqlitePool, session_id: &str) -> Result<(), s
 }
 
 pub fn read_session_cookie(headers: &HeaderMap) -> Option<String> {
+    read_cookie(headers, "session")
+}
+
+pub fn read_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
     for cookie_header in headers.get_all("cookie").iter() {
         if let Ok(cookies_str) = cookie_header.to_str() {
             for cookie in cookies_str.split(';').map(str::trim) {
-                if let Some(session_val) = cookie.strip_prefix("session=") {
-                    return Some(session_val.to_string());
+                if let Some(value) = cookie.strip_prefix(&format!("{name}=")) {
+                    return Some(value.to_string());
                 }
             }
         }

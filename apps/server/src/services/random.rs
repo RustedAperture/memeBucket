@@ -72,17 +72,17 @@ impl RandomService {
 
     pub async fn select_random(
         &self,
-        owner_user_id: Uuid,
+        requester_user_id: Uuid,
         pool_name: &str,
         visibility: RandomVisibility,
     ) -> Result<RandomSelection, RandomError> {
-        self.select_random_from_pools(owner_user_id, &[pool_name], visibility)
+        self.select_random_from_pools(requester_user_id, &[pool_name], visibility)
             .await
     }
 
     pub async fn select_random_from_pools(
         &self,
-        owner_user_id: Uuid,
+        requester_user_id: Uuid,
         pool_names: &[&str],
         visibility: RandomVisibility,
     ) -> Result<RandomSelection, RandomError> {
@@ -91,14 +91,14 @@ impl RandomService {
         for pool_name in pool_names {
             let pool = self
                 .pools
-                .find_accessible_by_name_folded(owner_user_id, pool_name)
+                .find_accessible_by_name_folded(requester_user_id, pool_name)
                 .await
                 .map_err(RandomError::Storage)?
                 .ok_or(RandomError::MissingPool)?;
 
             let images = self
                 .images
-                .list_for_pool(pool.owner_user_id, pool.id)
+                .list_for_pool(requester_user_id, pool.id)
                 .await
                 .map_err(RandomError::Storage)?;
 
@@ -108,7 +108,7 @@ impl RandomService {
         let (pool, selected) = choose_image(&choices).ok_or(RandomError::EmptyPool)?;
 
         self.history
-            .record(owner_user_id, pool, selected, visibility.as_str())
+            .record(requester_user_id, pool, selected, visibility.as_str())
             .await
             .map_err(RandomError::Storage)?;
 

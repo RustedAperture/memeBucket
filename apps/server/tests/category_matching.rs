@@ -147,6 +147,53 @@ async fn send_history_record_rejects_cross_owner_inputs() {
 }
 
 #[tokio::test]
+async fn subscribed_pool_random_selection_records_requesting_user_history() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let history = SendHistoryRepository::new(pool.clone());
+    let service = RandomService::new(pools.clone(), images.clone(), history);
+    let owner = users
+        .upsert_by_discord_key("owner-subscribed-history", None, None)
+        .await
+        .unwrap();
+    let subscriber = users
+        .upsert_by_discord_key("subscriber-subscribed-history", None, None)
+        .await
+        .unwrap();
+    let saved_pool = pools.create(owner.id, "Cats").await.unwrap();
+    images
+        .create(owner.id, saved_pool.id, "https://example.com/cat.gif")
+        .await
+        .unwrap();
+    pools
+        .subscribe_user_to_pool(subscriber.id, saved_pool.id)
+        .await
+        .unwrap();
+
+    let selected = service
+        .select_random(subscriber.id, "cats", RandomVisibility::Public)
+        .await
+        .unwrap();
+
+    assert_eq!(selected.pool_name, "Cats");
+    assert_eq!(selected.url, "https://example.com/cat.gif");
+
+    let row = sqlx::query(
+        "SELECT pool_name, url, response_visibility FROM send_history WHERE owner_user_id = ?",
+    )
+    .bind(subscriber.id.to_string())
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(row.get::<String, _>("pool_name"), "Cats");
+    assert_eq!(row.get::<String, _>("url"), "https://example.com/cat.gif");
+    assert_eq!(row.get::<String, _>("response_visibility"), "public");
+}
+
+#[tokio::test]
 async fn storage_failures_are_reported_as_storage_errors() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());

@@ -1,14 +1,15 @@
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Redirect},
 };
+use rand::Rng;
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
     app_state::AppState,
-    auth::sessions::{create_session, session_cookie},
+    auth::sessions::{create_session, read_cookie, session_cookie},
     domain::user_key::DiscordUserKey,
     repositories::users::UserRepository,
 };
@@ -16,6 +17,7 @@ use crate::{
 #[derive(Debug, Deserialize)]
 pub struct OAuthCallbackQuery {
     pub code: String,
+    pub state: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,21 +36,36 @@ struct DiscordUser {
 pub async fn start_discord_oauth() -> impl IntoResponse {
     let client_id = std::env::var("DISCORD_CLIENT_ID").unwrap_or_default();
     let redirect_uri = std::env::var("DISCORD_OAUTH_REDIRECT_URL").unwrap_or_default();
+    let state = random_oauth_state();
 
     let url = format!(
-        "https://discord.com/oauth2/authorize?client_id={}&redirect_uri={}&response_type=code&scope=identify%20applications.commands&integration_type=1",
+        "https://discord.com/oauth2/authorize?client_id={}&redirect_uri={}&response_type=code&scope=identify%20applications.commands&integration_type=1&state={}",
         urlencoding(&client_id),
         urlencoding(&redirect_uri),
+        urlencoding(&state),
     );
 
-    (StatusCode::TEMPORARY_REDIRECT, Redirect::temporary(&url))
+    let mut headers = HeaderMap::new();
+    if let Ok(cookie) = oauth_state_cookie(&state).parse() {
+        headers.append(axum::http::header::SET_COOKIE, cookie);
+    }
+
+    (
+        StatusCode::TEMPORARY_REDIRECT,
+        headers,
+        Redirect::temporary(&url),
+    )
 }
 
 pub async fn handle_discord_oauth_callback(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<OAuthCallbackQuery>,
 ) -> impl IntoResponse {
     if query.code.trim().is_empty() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    if !valid_oauth_state(&headers, query.state.as_deref()) {
         return StatusCode::BAD_REQUEST.into_response();
     }
 
@@ -61,6 +78,9 @@ pub async fn handle_discord_oauth_callback(
                 headers.append(axum::http::header::SET_COOKIE, c);
             }
             if let Ok(c) = csrf_cookie_str.parse() {
+                headers.append(axum::http::header::SET_COOKIE, c);
+            }
+            if let Ok(c) = expired_oauth_state_cookie().parse() {
                 headers.append(axum::http::header::SET_COOKIE, c);
             }
             (
@@ -110,7 +130,10 @@ async fn complete_oauth_flow(state: &AppState, code: &str) -> anyhow::Result<(Uu
         .await?;
 
     // Derive user key and upsert
-    let secret = std::env::var("APP_USER_KEY_SECRET").unwrap_or_default();
+    let secret = std::env::var("APP_USER_KEY_SECRET")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("APP_USER_KEY_SECRET is required"))?;
     let user_key = DiscordUserKey::derive(secret.as_bytes(), &discord_user.id);
     let display_name = discord_user
         .global_name
@@ -134,11 +157,38 @@ async fn complete_oauth_flow(state: &AppState, code: &str) -> anyhow::Result<(Uu
         .await?;
 
     // Create session
-    let (session_id, csrf_token) = create_session(&state.pool, stored_user.id).await?;
+    let (session_id, csrf_token) =
+        create_session(&state.pool, stored_user.id, state.session_secret()).await?;
 
     Ok((session_id, csrf_token))
 }
 
 fn urlencoding(s: &str) -> String {
     url::form_urlencoded::byte_serialize(s.as_bytes()).collect()
+}
+
+fn random_oauth_state() -> String {
+    rand::rng()
+        .sample_iter(&rand::distr::Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect()
+}
+
+fn oauth_state_cookie(value: &str) -> String {
+    format!(
+        "oauth_state={value}; Path=/auth/discord/callback; HttpOnly; SameSite=Lax; Secure; Max-Age=600"
+    )
+}
+
+fn expired_oauth_state_cookie() -> String {
+    "oauth_state=; Path=/auth/discord/callback; HttpOnly; SameSite=Lax; Secure; Max-Age=0"
+        .to_string()
+}
+
+fn valid_oauth_state(headers: &HeaderMap, state: Option<&str>) -> bool {
+    let Some(state) = state.filter(|value| !value.is_empty()) else {
+        return false;
+    };
+    read_cookie(headers, "oauth_state").is_some_and(|expected| expected == state)
 }

@@ -25,7 +25,7 @@ impl Config {
         let discord_application_id = env::var("DISCORD_APPLICATION_ID").unwrap_or_default();
         let discord_bot_token = env::var("DISCORD_BOT_TOKEN").unwrap_or_default();
         let discord_public_key = env::var("DISCORD_PUBLIC_KEY").unwrap_or_default();
-        let session_secret = env::var("SESSION_SECRET").unwrap_or_default();
+        let session_secret = required_env("SESSION_SECRET")?;
         let static_dir = env::var("STATIC_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("apps/web/out"));
@@ -40,6 +40,13 @@ impl Config {
             static_dir,
         })
     }
+}
+
+fn required_env(name: &str) -> anyhow::Result<String> {
+    env::var(name)
+        .ok()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("{name} is required"))
 }
 
 pub async fn connect_sqlite_pool(database_url: &str) -> anyhow::Result<SqlitePool> {
@@ -94,8 +101,10 @@ mod tests {
     fn config_defaults_to_repo_local_sqlite_path() {
         let _cwd_lock = CWD_LOCK.lock().unwrap();
         let old_discord_public_key = std::env::var("DISCORD_PUBLIC_KEY").ok();
+        let old_session_secret = std::env::var("SESSION_SECRET").ok();
         unsafe {
             std::env::remove_var("DISCORD_PUBLIC_KEY");
+            std::env::set_var("SESSION_SECRET", "test-session-secret");
         }
 
         let config = Config::from_env().unwrap();
@@ -108,9 +117,18 @@ mod tests {
                 std::env::remove_var("DISCORD_PUBLIC_KEY");
             },
         }
+        match old_session_secret {
+            Some(value) => unsafe {
+                std::env::set_var("SESSION_SECRET", value);
+            },
+            None => unsafe {
+                std::env::remove_var("SESSION_SECRET");
+            },
+        }
 
         assert_eq!(config.database_url, "sqlite://data/app.db");
         assert_eq!(config.discord_public_key, "");
+        assert_eq!(config.session_secret, "test-session-secret");
     }
 
     #[tokio::test]

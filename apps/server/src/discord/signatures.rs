@@ -1,5 +1,7 @@
 use axum::{body::Bytes, http::HeaderMap};
 
+const MAX_SIGNATURE_AGE_SECONDS: u64 = 300;
+
 pub fn verify_interaction_signature(
     headers: &HeaderMap,
     body: &Bytes,
@@ -17,6 +19,9 @@ pub fn verify_interaction_signature(
     else {
         return false;
     };
+    if !timestamp_is_fresh(timestamp) {
+        return false;
+    }
     let Ok(public_key_bytes) = hex::decode(public_key_hex) else {
         return false;
     };
@@ -39,6 +44,18 @@ pub fn verify_interaction_signature(
     ed25519_dalek::Verifier::verify(&verifying_key, &message, &discord_signature).is_ok()
 }
 
+fn timestamp_is_fresh(timestamp: &str) -> bool {
+    let Ok(timestamp) = timestamp.parse::<u64>() else {
+        return false;
+    };
+    let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) else {
+        return false;
+    };
+    let now = now.as_secs();
+
+    now.abs_diff(timestamp) <= MAX_SIGNATURE_AGE_SECONDS
+}
+
 #[cfg(test)]
 mod tests {
     use super::verify_interaction_signature;
@@ -46,9 +63,17 @@ mod tests {
     use axum::http::{HeaderMap, HeaderValue, header::HeaderName};
     use ed25519_dalek::Signer;
 
+    fn unix_timestamp_now() -> String {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            .to_string()
+    }
+
     fn signed_request(body: &[u8]) -> (HeaderMap, String) {
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&[9; 32]);
-        let timestamp = "1717171717";
+        let timestamp = unix_timestamp_now();
         let signature = signing_key
             .sign(&[timestamp.as_bytes(), body].concat())
             .to_bytes();
@@ -60,7 +85,7 @@ mod tests {
         );
         headers.insert(
             HeaderName::from_static("x-signature-timestamp"),
-            HeaderValue::from_static(timestamp),
+            HeaderValue::from_str(&timestamp).unwrap(),
         );
 
         (headers, hex::encode(signing_key.verifying_key().to_bytes()))

@@ -8,7 +8,7 @@ use axum::{
 use ezgif_server::{
     app_state::AppState,
     auth::sessions::AuthenticatedUser,
-    repositories::{pools::PoolRepository, users::UserRepository},
+    repositories::{images::ImageRepository, pools::PoolRepository, users::UserRepository},
     router::build_router_for_tests,
 };
 use http_body_util::BodyExt;
@@ -292,4 +292,51 @@ async fn create_image_stores_resolved_metadata_image_url() {
     let created: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
     assert_eq!(created["url"], expected_image_url);
+}
+
+#[tokio::test]
+async fn whitelist_enabled_blocks_existing_subscriber_image_access() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let owner = users
+        .upsert_by_discord_key("owner-whitelist", None, None)
+        .await
+        .unwrap();
+    let subscriber = users
+        .upsert_by_discord_key("subscriber-whitelist", None, None)
+        .await
+        .unwrap();
+    let saved_pool = pools.create(owner.id, "cats").await.unwrap();
+    images
+        .create(owner.id, saved_pool.id, "https://example.com/cat.gif")
+        .await
+        .unwrap();
+    pools
+        .subscribe_user_to_pool(subscriber.id, saved_pool.id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        images
+            .list_for_pool(subscriber.id, saved_pool.id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+
+    pools
+        .set_whitelist_enabled(saved_pool.id, owner.id, true)
+        .await
+        .unwrap();
+
+    assert!(
+        images
+            .list_for_pool(subscriber.id, saved_pool.id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }

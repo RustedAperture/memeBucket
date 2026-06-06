@@ -33,6 +33,10 @@ impl AppState {
         self
     }
 
+    pub fn session_secret(&self) -> &str {
+        &self.session_secret
+    }
+
     pub fn with_discord_public_key(mut self, discord_public_key: String) -> Self {
         self.discord_public_key = discord_public_key;
         self

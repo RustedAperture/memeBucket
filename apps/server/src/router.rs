@@ -4,7 +4,7 @@ use axum::{
     routing::{delete, get, post},
 };
 use std::sync::Arc;
-use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
+use tower_governor::{key_extractor::SmartIpKeyExtractor, GovernorLayer, governor::GovernorConfigBuilder};
 
 use crate::{
     api::{
@@ -31,6 +31,7 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
         GovernorConfigBuilder::default()
             .per_second(5)
             .burst_size(20)
+            .key_extractor(SmartIpKeyExtractor)
             .finish()
             .unwrap(),
     );
@@ -38,6 +39,7 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
         GovernorConfigBuilder::default()
             .per_second(1)
             .burst_size(5)
+            .key_extractor(SmartIpKeyExtractor)
             .finish()
             .unwrap(),
     );

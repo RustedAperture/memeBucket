@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { apiDelete, apiGet, apiPatch } from "@/lib/api";
+import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import { ExternalLink, ImageIcon, Trash2, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,8 +26,9 @@ import {
 } from "@/components/ui/dialog";
 
 type ImageItem = { id: string; url: string; createdAt?: string; notes?: string | null };
+import { Pool } from "@/lib/types";
 
-export function ImageList({ poolId, maxHeight = 128, readonly = false }: { poolId: string; maxHeight?: number; readonly?: boolean }) {
+export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [], onMoveImage }: { poolId: string; maxHeight?: number; readonly?: boolean; pools?: Pool[]; onMoveImage?: () => void }) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
@@ -75,6 +76,22 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false }: { poolI
     }
   }
 
+  async function handleMoveToPool(newPoolId: string) {
+    if (!selectedImage || newPoolId === poolId) return;
+    try {
+      await apiPost(`/api/pools/${poolId}/images/${selectedImage.id}/move`, { new_pool_id: newPoolId });
+      setSelectedImage(null);
+      if (onMoveImage) {
+        onMoveImage();
+      } else {
+        await load();
+      }
+      toast.success("Image moved successfully");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to move image");
+    }
+  }
+
   if (images.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center animate-in fade-in-50">
@@ -108,6 +125,11 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false }: { poolI
                   setNotesValue(image.notes || "");
                   setEditingNotes(false);
                 }
+              }}
+              draggable={!readonly}
+              onDragStart={(event) => {
+                event.dataTransfer.setData("application/json", JSON.stringify({ imageId: image.id, sourcePoolId: poolId }));
+                event.dataTransfer.effectAllowed = "move";
               }}
               className="group relative overflow-hidden rounded-xl border border-border/70 hover:ring-2 hover:ring-ring transition-all flex w-max cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
@@ -190,6 +212,23 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false }: { poolI
                   </div>
                 )}
               </div>
+
+              {pools.length > 1 && !readonly && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Move to Pool</p>
+                  <select 
+                    className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    value={poolId}
+                    onChange={(e) => handleMoveToPool(e.target.value)}
+                  >
+                    {pools.map(p => (
+                      <option key={p.id} value={p.id} disabled={p.is_subscribed || p.id === poolId}>
+                        {p.name} {p.id === poolId ? "(Current)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {!readonly && (

@@ -12,6 +12,7 @@ export default function ChangelogPage() {
         <LegalList>
           <li>Added homepage buttons for Ko-fi support and the GitHub repository.</li>
           <li>Added a footer theme selector with Light, Dark, and Auto modes.</li>
+          <li>Added drag-and-drop support and a modal dropdown for moving images between pools.</li>
         </LegalList>
 
         <h3 className="font-medium text-foreground">Fixed</h3>

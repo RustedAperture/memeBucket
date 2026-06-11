@@ -26,6 +26,10 @@ function PoolsContent() {
   const SIZE_LABELS = ["-2", "-1", "0", "+1", "+2"];
   const maxHeight = SIZES[sizeIndex] || 128;
 
+  const handleImageMoved = () => {
+    setRefreshKey((k) => k + 1);
+  };
+
   useEffect(() => {
     setPoolId(searchParams.get("id"));
   }, [searchParams]);
@@ -37,7 +41,7 @@ function PoolsContent() {
     <div className="flex flex-1 min-h-0 w-full overflow-hidden rounded-xl bg-muted/30 border">
       {/* Sidebar Area */}
       <div className="w-64 shrink-0 hidden md:block">
-        <PoolList onPoolsChange={setPools} />
+        <PoolList onPoolsChange={setPools} onImageMoved={handleImageMoved} />
       </div>
       
       {/* Inset Main Content Area */}
@@ -51,7 +55,7 @@ function PoolsContent() {
                   <SheetHeader className="sr-only">
                     <SheetTitle>Pools</SheetTitle>
                   </SheetHeader>
-                  <PoolList isMobile onPoolsChange={setPools} />
+                  <PoolList isMobile onPoolsChange={setPools} onImageMoved={handleImageMoved} />
                 </SheetContent>
               </Sheet>
               <h1 className="text-base font-medium flex items-center gap-2">
@@ -155,7 +159,7 @@ function PoolsContent() {
         <div className="flex-1 flex flex-col overflow-y-auto">
           {poolId ? (
             <div className="p-6 space-y-6 max-w-7xl mx-auto w-full">
-              <ImageList key={refreshKey} poolId={poolId} maxHeight={maxHeight} readonly={isSubscribed} />
+              <ImageList key={refreshKey} poolId={poolId} maxHeight={maxHeight} readonly={isSubscribed} pools={pools} onMoveImage={handleImageMoved} />
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in-50">

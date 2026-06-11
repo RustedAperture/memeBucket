@@ -12,13 +12,35 @@ import { SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 import { Pool } from "@/lib/types";
+import { toast } from "sonner";
 
-export function PoolList({ isMobile, onPoolsChange }: { isMobile?: boolean, onPoolsChange?: (pools: Pool[]) => void }) {
+export function PoolList({ isMobile, onPoolsChange, onImageMoved }: { isMobile?: boolean, onPoolsChange?: (pools: Pool[]) => void, onImageMoved?: () => void }) {
   const [pools, setPools] = useState<Pool[]>([]);
   const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const activeId = searchParams.get("id");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  async function handleDrop(e: React.DragEvent, targetPool: Pool) {
+    e.preventDefault();
+    setDragOverId(null);
+    if (targetPool.is_subscribed) return;
+
+    try {
+      const dataStr = e.dataTransfer.getData("application/json");
+      if (!dataStr) return;
+      
+      const data = JSON.parse(dataStr);
+      if (data.sourcePoolId === targetPool.id) return;
+      
+      await apiPost(`/api/pools/${data.sourcePoolId}/images/${data.imageId}/move`, { new_pool_id: targetPool.id });
+      if (onImageMoved) onImageMoved();
+      toast.success("Image moved successfully");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to move image");
+    }
+  }
 
   async function load() {
     const loaded = await apiGet<Pool[]>("/api/pools");
@@ -79,14 +101,27 @@ export function PoolList({ isMobile, onPoolsChange }: { isMobile?: boolean, onPo
             {pools.map((pool) => {
               const isActive = pool.id === activeId;
               return (
-                <div key={pool.id} className="group relative">
+                <div 
+                  key={pool.id} 
+                  className="group relative"
+                  onDragOver={(e) => {
+                    if (!pool.is_subscribed) {
+                      e.preventDefault();
+                      setDragOverId(pool.id);
+                    }
+                  }}
+                  onDragLeave={() => {
+                    setDragOverId(null);
+                  }}
+                  onDrop={(e) => handleDrop(e, pool)}
+                >
                   <Link 
                     href={`/pools?id=${pool.id}`} 
                     className={`flex h-8 items-center gap-2 overflow-hidden rounded-md px-2 text-sm ring-sidebar-ring outline-hidden transition-all ${
                       isActive 
                         ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" 
                         : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    }`}
+                    } ${dragOverId === pool.id ? "ring-2 ring-primary" : ""}`}
                   >
                     {pool.is_subscribed ? (
                       <Globe className="h-4 w-4 shrink-0" />

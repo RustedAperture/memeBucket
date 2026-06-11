@@ -146,4 +146,24 @@ impl ImageRepository {
 
         Ok(result.rows_affected() == 1)
     }
+
+    pub async fn move_to_pool(
+        &self,
+        owner_user_id: Uuid,
+        pool_id: Uuid,
+        image_id: Uuid,
+        new_pool_id: Uuid,
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query(
+            "UPDATE images SET pool_id = ? WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+        )
+        .bind(new_pool_id.to_string())
+        .bind(owner_user_id.to_string())
+        .bind(pool_id.to_string())
+        .bind(image_id.to_string())
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() == 1)
+    }
 }

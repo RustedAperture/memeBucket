@@ -57,6 +57,10 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
             "/api/pools/{pool_id}/images/{image_id}",
             delete(delete_image).patch(update_image),
         )
+        .route(
+            "/api/pools/{pool_id}/images/{image_id}/move",
+            post(crate::api::images::move_image),
+        )
         .route("/api/pools/{pool_id}", delete(delete_pool))
         .route(
             "/api/pools/{pool_id}/share",

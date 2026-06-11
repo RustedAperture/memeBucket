@@ -29,6 +29,11 @@ pub struct UpdateImageRequest {
     pub notes: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct MoveImageRequest {
+    pub new_pool_id: Uuid,
+}
+
 pub async fn list_images(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -94,6 +99,24 @@ pub async fn update_image(
     let repo = ImageRepository::new(state.pool);
     let updated = repo
         .update_notes(user.user_id, pool_id, image_id, request.notes.as_deref())
+        .await?;
+
+    if !updated {
+        return Err(AppError::NotFound);
+    }
+
+    Ok(Json(serde_json::json!({ "updated": true })))
+}
+
+pub async fn move_image(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Path((pool_id, image_id)): Path<(Uuid, Uuid)>,
+    Json(request): Json<MoveImageRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let repo = ImageRepository::new(state.pool);
+    let updated = repo
+        .move_to_pool(user.user_id, pool_id, image_id, request.new_pool_id)
         .await?;
 
     if !updated {

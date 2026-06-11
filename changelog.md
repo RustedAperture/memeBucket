@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.1 - Jun 11, 2026
+
+### Added
+
+- Added homepage buttons for Ko-fi support and the GitHub repository.
+- Added a footer theme selector with Light, Dark, and Auto modes.
+
+### Fixed
+
+- Fixed theme selector styling so only one mode appears selected at a time.
+
 ## v0.1.0 - Jun 10, 2026
 
 ### Added

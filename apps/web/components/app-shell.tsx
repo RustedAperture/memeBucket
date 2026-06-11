@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { LayoutDashboard, FolderOpen } from "lucide-react";
 import { AccountModal } from "./account-modal";
+import { ThemeToggle } from "./theme-toggle";
 import { useUser } from "./user-provider";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -34,20 +35,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <footer className="border-t">
         <div className="container mx-auto flex max-w-5xl flex-col gap-3 px-4 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <p>ezGif</p>
-          <nav className="flex flex-wrap gap-x-4 gap-y-2">
-            <Link href="/terms" className="hover:text-foreground transition-colors">
-              Terms
-            </Link>
-            <Link href="/privacy" className="hover:text-foreground transition-colors">
-              Privacy
-            </Link>
-            <Link href="/changelog" className="hover:text-foreground transition-colors">
-              Changelog
-            </Link>
-            <Link href="/license" className="hover:text-foreground transition-colors">
-              License
-            </Link>
-          </nav>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            <nav className="flex flex-wrap gap-x-4 gap-y-2">
+              <Link href="/terms" className="hover:text-foreground transition-colors">
+                Terms
+              </Link>
+              <Link href="/privacy" className="hover:text-foreground transition-colors">
+                Privacy
+              </Link>
+              <Link href="/changelog" className="hover:text-foreground transition-colors">
+                Changelog
+              </Link>
+              <Link href="/license" className="hover:text-foreground transition-colors">
+                License
+              </Link>
+            </nav>
+            <ThemeToggle />
+          </div>
         </div>
       </footer>
     </div>

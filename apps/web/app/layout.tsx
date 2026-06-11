@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/theme-provider";
 import { UserProvider } from "@/components/user-provider";
 import { UsernameModal } from "@/components/username-modal";
 import "./globals.css";
@@ -16,13 +17,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="font-sans">
+    <html lang="en" className="font-sans" suppressHydrationWarning>
       <body className="antialiased min-h-screen bg-background selection:bg-primary/30">
-        <UserProvider>
-          <TooltipProvider>{children}</TooltipProvider>
-          <UsernameModal />
-        </UserProvider>
-        <Toaster position="bottom-center" />
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <UserProvider>
+            <TooltipProvider>{children}</TooltipProvider>
+            <UsernameModal />
+          </UserProvider>
+          <Toaster position="bottom-center" />
+        </ThemeProvider>
       </body>
     </html>
   );

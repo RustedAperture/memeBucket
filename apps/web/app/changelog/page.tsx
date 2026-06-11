@@ -5,8 +5,21 @@ export default function ChangelogPage() {
     <LegalPage
       title="Changelog"
       description="Notable changes to ezGif."
-      updated="Jun 10, 2026"
+      updated="Jun 11, 2026"
     >
+      <LegalSection title="v0.1.1 - Jun 11, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added homepage buttons for Ko-fi support and the GitHub repository.</li>
+          <li>Added a footer theme selector with Light, Dark, and Auto modes.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground">Fixed</h3>
+        <LegalList>
+          <li>Fixed theme selector styling so only one mode appears selected at a time.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.1.0 - Jun 10, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

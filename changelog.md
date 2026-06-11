@@ -7,6 +7,7 @@
 - Added homepage buttons for Ko-fi support and the GitHub repository.
 - Added a footer theme selector with Light, Dark, and Auto modes.
 - Added drag-and-drop support and a modal dropdown for moving images between pools.
+- Added a GIF search feature powered by the Klipy API, accessible directly from the pool image form.
 
 ### Fixed
 

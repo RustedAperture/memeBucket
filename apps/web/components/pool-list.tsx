@@ -14,6 +14,12 @@ import { cn } from "@/lib/utils";
 import { Pool } from "@/lib/types";
 import { toast } from "sonner";
 
+type DraggedImagesPayload = {
+  imageId?: string;
+  imageIds?: string[];
+  sourcePoolId?: string;
+};
+
 export function PoolList({ isMobile, onPoolsChange, onImageMoved }: { isMobile?: boolean, onPoolsChange?: (pools: Pool[]) => void, onImageMoved?: () => void }) {
   const [pools, setPools] = useState<Pool[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -31,14 +37,27 @@ export function PoolList({ isMobile, onPoolsChange, onImageMoved }: { isMobile?:
       const dataStr = e.dataTransfer.getData("application/json");
       if (!dataStr) return;
       
-      const data = JSON.parse(dataStr);
+      const data = JSON.parse(dataStr) as DraggedImagesPayload;
+      const imageIds = data.imageIds?.length ? data.imageIds : data.imageId ? [data.imageId] : [];
       if (data.sourcePoolId === targetPool.id) return;
+      if (!data.sourcePoolId || imageIds.length === 0) return;
       
-      await apiPost(`/api/pools/${data.sourcePoolId}/images/${data.imageId}/move`, { new_pool_id: targetPool.id });
+      const results = await Promise.allSettled(
+        imageIds.map((imageId) =>
+          apiPost(`/api/pools/${data.sourcePoolId}/images/${imageId}/move`, { new_pool_id: targetPool.id })
+        )
+      );
+      const movedCount = results.filter((result) => result.status === "fulfilled").length;
       if (onImageMoved) onImageMoved();
-      toast.success("Image moved successfully");
+      if (movedCount === imageIds.length) {
+        toast.success(`${movedCount} image${movedCount === 1 ? "" : "s"} moved successfully`);
+      } else if (movedCount > 0) {
+        toast.warning(`Moved ${movedCount} of ${imageIds.length} images`);
+      } else {
+        toast.error(`Failed to move ${imageIds.length === 1 ? "image" : "images"}`);
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to move image");
+      toast.error(err instanceof Error ? err.message : "Failed to move images");
     }
   }
 
@@ -49,8 +68,23 @@ export function PoolList({ isMobile, onPoolsChange, onImageMoved }: { isMobile?:
   }
 
   useEffect(() => {
-    void load();
-  }, []);
+    let cancelled = false;
+    void apiGet<Pool[]>("/api/pools")
+      .then((loaded) => {
+        if (cancelled) return;
+        setPools(loaded);
+        if (onPoolsChange) onPoolsChange(loaded);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Could not load pools");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onPoolsChange]);
 
   async function handleDelete(pool: Pool) {
     setError(null);

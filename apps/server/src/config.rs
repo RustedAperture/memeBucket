@@ -12,6 +12,7 @@ pub struct Config {
     pub discord_application_id: String,
     pub discord_bot_token: String,
     pub discord_public_key: String,
+    pub klipy_api_key: Option<String>,
     pub static_dir: PathBuf,
 }
 
@@ -26,6 +27,7 @@ impl Config {
         let discord_bot_token = env::var("DISCORD_BOT_TOKEN").unwrap_or_default();
         let discord_public_key = env::var("DISCORD_PUBLIC_KEY").unwrap_or_default();
         let session_secret = required_env("SESSION_SECRET")?;
+        let klipy_api_key = env::var("KLIPY_API_KEY").ok().filter(|v| !v.is_empty());
         let static_dir = env::var("STATIC_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("apps/web/out"));
@@ -37,6 +39,7 @@ impl Config {
             discord_application_id,
             discord_bot_token,
             discord_public_key,
+            klipy_api_key,
             static_dir,
         })
     }

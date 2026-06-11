@@ -11,6 +11,7 @@ use tower_governor::{
 use crate::{
     api::{
         account::{delete_account, export_account, get_profile, logout, update_username},
+        gifs::search_gifs,
         images::{create_image, delete_image, list_images, update_image},
         pools::{create_pool, delete_pool, list_pools},
     },
@@ -49,6 +50,7 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
     let mut api_routes = Router::new()
         .route("/health", get(health))
         .route("/api/auth/logout", post(logout))
+        .route("/api/gifs/search", get(search_gifs))
         .route(
             "/api/pools/{pool_id}/images",
             get(list_images).post(create_image),

@@ -10,6 +10,8 @@ pub enum AppError {
     Forbidden,
     #[error("bad request: {0}")]
     BadRequest(String),
+    #[error("internal server error: {0}")]
+    InternalServerError(String),
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
 }
@@ -21,6 +23,7 @@ impl IntoResponse for AppError {
             AppError::Unauthorized => StatusCode::UNAUTHORIZED,
             AppError::Forbidden => StatusCode::FORBIDDEN,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            AppError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::Sqlx(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { PoolList } from "@/components/pool-list";
@@ -16,7 +16,7 @@ import { RequireAuth } from "@/components/require-auth";
 
 function PoolsContent() {
   const searchParams = useSearchParams();
-  const [poolId, setPoolId] = useState<string | null>(null);
+  const poolId = searchParams.get("id");
   const [pools, setPools] = useState<Pool[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
@@ -29,10 +29,6 @@ function PoolsContent() {
   const handleImageMoved = () => {
     setRefreshKey((k) => k + 1);
   };
-
-  useEffect(() => {
-    setPoolId(searchParams.get("id"));
-  }, [searchParams]);
 
   const activePool = pools.find(p => p.id === poolId);
   const isSubscribed = activePool?.is_subscribed;
@@ -159,7 +155,7 @@ function PoolsContent() {
         <div className="flex-1 flex flex-col overflow-y-auto">
           {poolId ? (
             <div className="p-6 space-y-6 max-w-7xl mx-auto w-full">
-              <ImageList key={refreshKey} poolId={poolId} maxHeight={maxHeight} readonly={isSubscribed} pools={pools} onMoveImage={handleImageMoved} />
+              <ImageList key={`${poolId}:${refreshKey}`} poolId={poolId} maxHeight={maxHeight} readonly={isSubscribed} pools={pools} onMoveImage={handleImageMoved} />
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in-50">

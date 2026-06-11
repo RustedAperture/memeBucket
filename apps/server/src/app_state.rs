@@ -7,6 +7,7 @@ pub struct AppState {
     pub static_dir: PathBuf,
     pub session_secret: String,
     discord_public_key: String,
+    pub klipy_api_key: Option<String>,
 }
 
 impl AppState {
@@ -16,6 +17,7 @@ impl AppState {
             static_dir: PathBuf::from("apps/web/out"),
             session_secret: String::new(),
             discord_public_key: String::new(),
+            klipy_api_key: None,
         }
     }
 
@@ -44,5 +46,10 @@ impl AppState {
 
     pub fn discord_public_key(&self) -> &str {
         &self.discord_public_key
+    }
+
+    pub fn with_klipy_api_key(mut self, klipy_api_key: Option<String>) -> Self {
+        self.klipy_api_key = klipy_api_key;
+        self
     }
 }

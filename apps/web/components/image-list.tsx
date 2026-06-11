@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
-import { ExternalLink, ImageIcon, Trash2, Edit2 } from "lucide-react";
+import { Check, ExternalLink, ImageIcon, Trash2, Edit2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -33,6 +33,7 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [
   const [error, setError] = useState<string | null>(null);
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageItem | null>(null);
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState("");
 
@@ -45,8 +46,43 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [
   }
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    void apiGet<ImageItem[]>(`/api/pools/${poolId}/images`)
+      .then((loadedImages) => {
+        if (!cancelled) {
+          setImages(loadedImages);
+        }
+      })
+      .catch(() => {
+        // pool might be empty or deleted
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [poolId]);
+
+  function toggleImageSelection(imageId: string) {
+    setSelectedImageIds((current) => {
+      const next = new Set(current);
+      if (next.has(imageId)) {
+        next.delete(imageId);
+      } else {
+        next.add(imageId);
+      }
+      return next;
+    });
+  }
+
+  function openImageDetails(image: ImageItem) {
+    setSelectedImage(image);
+    setNotesValue(image.notes || "");
+    setEditingNotes(false);
+  }
+
+  function dragImageIdsFor(imageId: string) {
+    return selectedImageIds.has(imageId) ? Array.from(selectedImageIds) : [imageId];
+  }
 
   async function handleDeleteConfirm() {
     if (!imageToDelete) return;
@@ -71,7 +107,7 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [
       setSelectedImage({ ...selectedImage, notes: updatedNotes });
       setImages(images.map(img => img.id === selectedImage.id ? { ...img, notes: updatedNotes } : img));
       setEditingNotes(false);
-    } catch (err) {
+    } catch {
       toast.error("Failed to save notes");
     }
   }
@@ -107,48 +143,105 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [
       <div className="space-y-4">
 
         {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
-        <div className="flex flex-wrap gap-4 items-start">
-          {images.map((image) => (
-            <div
-              key={image.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                setSelectedImage(image);
-                setNotesValue(image.notes || "");
-                setEditingNotes(false);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  setSelectedImage(image);
-                  setNotesValue(image.notes || "");
-                  setEditingNotes(false);
-                }
-              }}
-              draggable={!readonly}
-              onDragStart={(event) => {
-                event.dataTransfer.setData("application/json", JSON.stringify({ imageId: image.id, sourcePoolId: poolId }));
-                event.dataTransfer.effectAllowed = "move";
-              }}
-              className="group relative overflow-hidden rounded-xl border border-border/70 hover:ring-2 hover:ring-ring transition-all flex w-max cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        {!readonly && selectedImageIds.size > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+            <span className="font-medium">
+              {selectedImageIds.size} image{selectedImageIds.size === 1 ? "" : "s"} selected
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => setSelectedImageIds(new Set())}
             >
-              <img 
-                src={image.url} 
-                alt="Image preview" 
-                style={{ maxHeight: `${maxHeight}px` }}
-                className="w-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                  (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+              <X className="h-3.5 w-3.5" />
+              Clear
+            </Button>
+          </div>
+        ) : null}
+        <div className="flex flex-wrap gap-4 items-start">
+          {images.map((image) => {
+            const isSelected = selectedImageIds.has(image.id);
+            const dragCount = dragImageIdsFor(image.id).length;
+
+            return (
+              <div
+                key={image.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
+                onClick={(event) => {
+                  if (!readonly && (event.metaKey || event.ctrlKey || event.shiftKey)) {
+                    toggleImageSelection(image.id);
+                    return;
+                  }
+                  openImageDetails(image);
                 }}
-              />
-              <ImageIcon className="hidden w-10 h-10 text-muted-foreground/50 absolute z-0" />
-              
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10" />
-              
-            </div>
-          ))}
+                onKeyDown={(event) => {
+                  if (!readonly && event.key === " ") {
+                    event.preventDefault();
+                    toggleImageSelection(image.id);
+                    return;
+                  }
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    openImageDetails(image);
+                  }
+                }}
+                draggable={!readonly}
+                onDragStart={(event) => {
+                  const imageIds = dragImageIdsFor(image.id);
+                  event.dataTransfer.setData("application/json", JSON.stringify({ imageId: image.id, imageIds, sourcePoolId: poolId }));
+                  event.dataTransfer.effectAllowed = "move";
+                }}
+                className={`group relative overflow-hidden rounded-xl border transition-all flex w-max cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
+                  isSelected
+                    ? "border-primary ring-2 ring-primary"
+                    : "border-border/70 hover:ring-2 hover:ring-ring"
+                }`}
+              >
+                <img 
+                  src={image.url} 
+                  alt="Image preview" 
+                  style={{ maxHeight: `${maxHeight}px` }}
+                  className="w-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+                <ImageIcon className="hidden w-10 h-10 text-muted-foreground/50 absolute z-0" />
+                
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10" />
+
+                {!readonly ? (
+                  <button
+                    type="button"
+                    aria-label={isSelected ? "Deselect image" : "Select image"}
+                    aria-pressed={isSelected}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleImageSelection(image.id);
+                    }}
+                    className={`absolute left-2 top-2 z-20 flex h-6 w-6 items-center justify-center rounded-full border text-xs transition-opacity ${
+                      isSelected
+                        ? "border-primary bg-primary text-primary-foreground opacity-100"
+                        : "border-white/70 bg-black/45 text-white opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    }`}
+                  >
+                    {isSelected ? <Check className="h-3.5 w-3.5" /> : null}
+                  </button>
+                ) : null}
+
+                {!readonly && dragCount > 1 ? (
+                  <div className="absolute bottom-2 right-2 z-20 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                    {dragCount}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </div>
 

@@ -31,6 +31,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-5xl px-4 pt-8 pb-4">
         {children}
       </main>
+      <footer className="border-t">
+        <div className="container mx-auto flex max-w-5xl flex-col gap-3 px-4 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <p>ezGif</p>
+          <nav className="flex flex-wrap gap-x-4 gap-y-2">
+            <Link href="/terms" className="hover:text-foreground transition-colors">
+              Terms
+            </Link>
+            <Link href="/privacy" className="hover:text-foreground transition-colors">
+              Privacy
+            </Link>
+            <Link href="/changelog" className="hover:text-foreground transition-colors">
+              Changelog
+            </Link>
+            <Link href="/license" className="hover:text-foreground transition-colors">
+              License
+            </Link>
+          </nav>
+        </div>
+      </footer>
     </div>
   );
 }

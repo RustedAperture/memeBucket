@@ -10,4 +10,14 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+echo "Running cargo clippy..."
+cd apps/server && cargo clippy --all-targets -- -D warnings
+
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "❌ Commit failed: Clippy found warnings."
+  echo "Please fix the clippy warnings before committing."
+  exit 1
+fi
+
 exit 0

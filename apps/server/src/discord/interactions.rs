@@ -676,10 +676,8 @@ async fn handle_add_to_pool_message_command(
     let mut image_url = None;
 
     if let Some(attachment) = message.attachments.iter().find(|a| {
-        a.content_type
-            .as_deref()
-            .unwrap_or("")
-            .starts_with("image/")
+        let ct = a.content_type.as_deref().unwrap_or("");
+        ct.starts_with("image/") || ct.starts_with("video/")
     }) {
         image_url = Some(attachment.url.clone());
     } else if let Some(embed) = message

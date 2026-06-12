@@ -143,10 +143,9 @@ async fn validate_image_url_internal(value: &str) -> Result<(), ImageUrlValidati
         return Err(ImageUrlValidationError::UnsupportedContentType);
     };
 
-    if content_type
-        .get(..6)
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("image/"))
-    {
+    if content_type.get(..6).is_some_and(|prefix| {
+        prefix.eq_ignore_ascii_case("image/") || prefix.eq_ignore_ascii_case("video/")
+    }) {
         return Ok(());
     }
 

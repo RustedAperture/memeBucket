@@ -702,6 +702,20 @@ async fn handle_add_to_pool_message_command(
         }
     }
 
+    // Discord sometimes strips auth query parameters (ex, is, hm) from embed URLs.
+    // If we extracted a Discord CDN URL without auth parameters, check the message content for the full URL.
+    if let Some(url) = &image_url {
+        if url.contains("discordapp.") && !url.contains("ex=") {
+            for part in message.content.split_whitespace() {
+                if part.starts_with("http") && part.contains("discordapp.") && part.contains("ex=")
+                {
+                    image_url = Some(part.to_string());
+                    break;
+                }
+            }
+        }
+    }
+
     let Some(url) = image_url else {
         return ephemeral_message("I could not find an image or GIF in that message.");
     };

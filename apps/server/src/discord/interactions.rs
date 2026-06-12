@@ -250,13 +250,6 @@ pub async fn handle_interaction(
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
 
-    // Log the raw interaction payload for debugging (only for application commands, not pings)
-    if payload.kind == APPLICATION_COMMAND
-        && let Ok(raw) = String::from_utf8(body.to_vec())
-    {
-        tracing::info!(interaction_payload = %raw, "Raw Discord interaction received");
-    }
-
     match payload.kind {
         PING => Json(InteractionResponse {
             kind: PING,
@@ -745,30 +738,29 @@ async fn handle_add_to_pool_message_command(
         return ephemeral_message("I could not find an image or GIF in that message.");
     };
 
-    tracing::info!(extracted_url = %url, "URL extracted from Discord message");
+    tracing::debug!(extracted_url = %url, "URL extracted from Discord message");
 
     // Discord interaction resolved data often strips auth query params (ex, is, hm)
     // from CDN attachment URLs. When detected, re-fetch the message via the REST API
     // to obtain a fresh URL with valid auth tokens.
     let url = if url.contains("cdn.discordapp.com") && !url.contains("ex=") {
-        tracing::info!("Discord CDN URL missing auth params, attempting API re-fetch");
+        tracing::debug!("Discord CDN URL missing auth params, attempting API re-fetch");
         let bot_token = state.discord_bot_token();
         if !bot_token.is_empty() {
             if let Some(fresh) =
                 refetch_attachment_url(bot_token, channel_id, &message.id, &url).await
             {
-                tracing::info!(refreshed_url = %fresh, "Got fresh attachment URL from Discord API");
+                tracing::debug!(refreshed_url = %fresh, "Got fresh attachment URL from Discord API");
                 fresh
             } else {
                 // Fallback: try media.discordapp.net proxy which may work without auth params
                 let proxy_url = url.replace("cdn.discordapp.com", "media.discordapp.net");
-                tracing::info!(proxy_url = %proxy_url, "Trying media.discordapp.net proxy as fallback");
+                tracing::debug!(proxy_url = %proxy_url, "Trying media.discordapp.net proxy as fallback");
                 proxy_url
             }
         } else {
-            tracing::warn!("No bot token configured, cannot re-fetch attachment URL");
             let proxy_url = url.replace("cdn.discordapp.com", "media.discordapp.net");
-            tracing::info!(proxy_url = %proxy_url, "Trying media.discordapp.net proxy as fallback");
+            tracing::debug!(proxy_url = %proxy_url, "Trying media.discordapp.net proxy as fallback");
             proxy_url
         }
     } else {
@@ -844,10 +836,10 @@ async fn refetch_attachment_url(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        tracing::warn!(
+        tracing::debug!(
             status = %status,
             body = %body,
-            "Discord API message re-fetch failed (bot may need READ_MESSAGE_HISTORY permission)"
+            "Discord API message re-fetch failed"
         );
         return None;
     }

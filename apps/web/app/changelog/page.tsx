@@ -13,11 +13,18 @@ export default function ChangelogPage() {
           <li>Added homepage buttons for Ko-fi support and the GitHub repository.</li>
           <li>Added a footer theme selector with Light, Dark, and Auto modes.</li>
           <li>Added drag-and-drop support and a modal dropdown for moving images between pools.</li>
+          <li>Added a GIF search feature powered by the Klipy API, accessible directly from the pool image form.</li>
         </LegalList>
 
         <h3 className="font-medium text-foreground">Fixed</h3>
         <LegalList>
           <li>Fixed theme selector styling so only one mode appears selected at a time.</li>
+          <li>Fixed an issue in GIF search where "Load more" would append duplicate results.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Changed</h3>
+        <LegalList>
+          <li>Improved the GIF search layout by using a masonry-style columns layout to better preserve image aspect ratios.</li>
         </LegalList>
       </LegalSection>
 

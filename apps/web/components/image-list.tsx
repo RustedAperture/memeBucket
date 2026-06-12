@@ -215,15 +215,30 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                     : "border-border/70 hover:ring-2 hover:ring-ring"
                 }`}
               >
-                <img 
-                  src={image.url} 
-                  alt="Image preview" 
-                  className="w-full h-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                  }}
-                />
+                {image.url.split('?')[0].toLowerCase().endsWith('.mp4') || image.url.split('?')[0].toLowerCase().endsWith('.webm') ? (
+                  <video 
+                    src={image.url} 
+                    autoPlay 
+                    loop 
+                    muted 
+                    playsInline 
+                    className="w-full h-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
+                    onError={(e) => {
+                      (e.target as HTMLVideoElement).style.display = 'none';
+                      (e.target as HTMLVideoElement).nextElementSibling?.classList.remove('hidden');
+                    }}
+                  />
+                ) : (
+                  <img 
+                    src={image.url} 
+                    alt="Image preview" 
+                    className="w-full h-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                    }}
+                  />
+                )}
                 <ImageIcon className="hidden w-10 h-10 text-muted-foreground/50 absolute z-0" />
                 
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10" />
@@ -270,11 +285,22 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
 
             <div className="grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto] gap-4">
               <div className="min-h-0 overflow-hidden rounded-xl border border-border/70 bg-muted/20">
-                <img
-                  src={selectedImage.url}
-                  alt="Selected image preview"
-                  className="h-full max-h-full w-full object-contain"
-                />
+                {selectedImage.url.split('?')[0].toLowerCase().endsWith('.mp4') || selectedImage.url.split('?')[0].toLowerCase().endsWith('.webm') ? (
+                  <video
+                    src={selectedImage.url}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="h-full max-h-full w-full object-contain"
+                  />
+                ) : (
+                  <img
+                    src={selectedImage.url}
+                    alt="Selected image preview"
+                    className="h-full max-h-full w-full object-contain"
+                  />
+                )}
               </div>
 
               <div className="space-y-2 min-w-0">

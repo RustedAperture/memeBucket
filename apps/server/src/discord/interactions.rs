@@ -80,6 +80,8 @@ pub struct InteractionEmbed {
     pub image: Option<InteractionEmbedMedia>,
     #[serde(default)]
     pub video: Option<InteractionEmbedMedia>,
+    #[serde(default)]
+    pub thumbnail: Option<InteractionEmbedMedia>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -703,14 +705,14 @@ async fn handle_add_to_pool_message_command(
             .proxy_url
             .clone()
             .or_else(|| Some(attachment.url.clone()));
-    } else if let Some(embed) = message
-        .embeds
-        .iter()
-        .find(|e| e.image.is_some() || e.video.is_some() || e.url.is_some())
-    {
+    } else if let Some(embed) = message.embeds.iter().find(|e| {
+        e.image.is_some() || e.video.is_some() || e.thumbnail.is_some() || e.url.is_some()
+    }) {
         if let Some(media) = &embed.image {
             image_url = media.proxy_url.clone().or_else(|| media.url.clone());
         } else if let Some(media) = &embed.video {
+            image_url = media.proxy_url.clone().or_else(|| media.url.clone());
+        } else if let Some(media) = &embed.thumbnail {
             image_url = media.proxy_url.clone().or_else(|| media.url.clone());
         } else {
             image_url = embed.url.clone();

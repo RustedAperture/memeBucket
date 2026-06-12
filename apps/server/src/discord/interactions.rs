@@ -720,14 +720,12 @@ async fn handle_add_to_pool_message_command(
         base.ends_with(".mp4") || base.ends_with(".webm")
     };
 
-    if is_video {
-        if let Some(key) = &state.imgbb_api_key {
-            match crate::services::video_converter::convert_and_upload_mp4(&resolved_url, key).await
-            {
-                Ok(new_url) => resolved_url = new_url,
-                Err(_) => {
-                    return ephemeral_message("I hit an error converting that video to a GIF.");
-                }
+    if is_video && state.imgbb_api_key.is_some() {
+        let key = state.imgbb_api_key.as_ref().unwrap();
+        match crate::services::video_converter::convert_and_upload_mp4(&resolved_url, key).await {
+            Ok(new_url) => resolved_url = new_url,
+            Err(_) => {
+                return ephemeral_message("I hit an error converting that video to a GIF.");
             }
         }
     }

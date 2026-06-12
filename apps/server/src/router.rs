@@ -13,7 +13,7 @@ use crate::{
         account::{delete_account, export_account, get_profile, logout, update_username},
         gifs::search_gifs,
         images::{create_image, delete_image, list_images, update_image},
-        pools::{create_pool, delete_pool, list_pools},
+        pools::{create_pool, delete_pool, list_pools, rename_pool},
     },
     app_state::AppState,
     auth::discord_oauth::{handle_discord_oauth_callback, start_discord_oauth},
@@ -63,7 +63,10 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
             "/api/pools/{pool_id}/images/{image_id}/move",
             post(crate::api::images::move_image),
         )
-        .route("/api/pools/{pool_id}", delete(delete_pool))
+        .route(
+            "/api/pools/{pool_id}",
+            delete(delete_pool).patch(rename_pool),
+        )
         .route(
             "/api/pools/{pool_id}/share",
             post(crate::api::pools::share_pool),

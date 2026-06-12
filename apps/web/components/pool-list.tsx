@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Plus, Trash2, X, Users, Globe } from "lucide-react";
+import { Folder, Plus, Users, Globe } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -8,8 +8,19 @@ import { Button } from "@/components/ui/button";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PoolForm } from "@/components/pool-form";
-import { SheetClose } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+
+import {
+  SidebarHeader,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarMenuBadge,
+  useSidebar,
+} from "@/components/ui/sidebar";
 
 import { Pool } from "@/lib/types";
 import { toast } from "sonner";
@@ -20,13 +31,16 @@ type DraggedImagesPayload = {
   sourcePoolId?: string;
 };
 
-export function PoolList({ isMobile, onPoolsChange, onImageMoved }: { isMobile?: boolean, onPoolsChange?: (pools: Pool[]) => void, onImageMoved?: () => void }) {
+export function PoolList({ onPoolsChange, onImageMoved, refreshKey }: { onPoolsChange?: (pools: Pool[]) => void, onImageMoved?: () => void, refreshKey?: number }) {
   const [pools, setPools] = useState<Pool[]>([]);
   const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const activeId = searchParams.get("id");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  
+  // useSidebar must be inside a component wrapped by SidebarProvider
+  const { setOpenMobile } = useSidebar();
 
   async function handleDrop(e: React.DragEvent, targetPool: Pool) {
     e.preventDefault();
@@ -68,6 +82,10 @@ export function PoolList({ isMobile, onPoolsChange, onImageMoved }: { isMobile?:
   }
 
   useEffect(() => {
+    void load();
+  }, [refreshKey]);
+
+  useEffect(() => {
     let cancelled = false;
     void apiGet<Pool[]>("/api/pools")
       .then((loaded) => {
@@ -86,58 +104,43 @@ export function PoolList({ isMobile, onPoolsChange, onImageMoved }: { isMobile?:
     };
   }, [onPoolsChange]);
 
-  async function handleDelete(pool: Pool) {
-    setError(null);
-    try {
-      if (pool.is_subscribed) {
-        await apiPost(`/api/pools/${pool.id}/unsubscribe`, {});
-      } else {
-        await apiDelete(`/api/pools/${pool.id}`);
-      }
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove pool");
-    }
-  }
+
 
   return (
-    <div className="flex flex-col h-full bg-sidebar/50 text-sidebar-foreground">
-      <div className="flex h-14 items-center justify-between pl-4 pr-2">
+    <>
+      <SidebarHeader className="flex flex-row h-14 items-center justify-between pl-4 pr-2 border-b">
         <span className="font-semibold text-lg">Pools</span>
-        
-        <div className={cn("flex items-center", isMobile && "-space-x-px")}>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger render={<Button variant="outline" size="icon" className={cn("h-8 w-8 relative z-10", isMobile && "rounded-r-none hover:z-20")} />}>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger render={
+            <Button variant="outline" size="icon" className="h-8 w-8 relative z-10" title="Add New Pool">
               <Plus className="w-4 h-4" />
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Pool</DialogTitle>
-              </DialogHeader>
-              <PoolForm onCreated={() => { setDialogOpen(false); void load(); }} />
-            </DialogContent>
-          </Dialog>
-          {isMobile && (
-            <SheetClose render={<Button variant="outline" size="icon" className="h-8 w-8 rounded-l-none relative z-10 hover:z-20" />}>
-              <X className="w-4 h-4" />
-            </SheetClose>
-          )}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-2 pb-4 pt-2">
-        <div className="mb-4 h-px bg-border" />
+              <span className="sr-only">Add New Pool</span>
+            </Button>
+          } />
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New Pool</DialogTitle>
+            </DialogHeader>
+            <PoolForm onCreated={() => { setDialogOpen(false); void load(); }} />
+          </DialogContent>
+        </Dialog>
+      </SidebarHeader>
+      <SidebarContent className="bg-transparent pt-2">
+        <SidebarGroup>
+          <SidebarGroupContent>
         {error ? <p className="text-sm font-medium text-destructive px-2 pb-2">{error}</p> : null}
         {pools.length === 0 ? (
           <p className="text-sm text-muted-foreground p-4 text-center">No pools yet.</p>
         ) : (
-          <div className="space-y-1">
+          <SidebarMenu>
             {pools.map((pool) => {
               const isActive = pool.id === activeId;
+              const hasBadge = !pool.is_subscribed && pool.share_token && pool.subscriber_count > 0;
+              
+              // We adjust padding right if it has a badge, but SidebarMenuAction handles its own overlap
               return (
-                <div 
-                  key={pool.id} 
-                  className="group relative"
+                <SidebarMenuItem 
+                  key={pool.id}
                   onDragOver={(e) => {
                     if (!pool.is_subscribed) {
                       e.preventDefault();
@@ -149,48 +152,33 @@ export function PoolList({ isMobile, onPoolsChange, onImageMoved }: { isMobile?:
                   }}
                   onDrop={(e) => handleDrop(e, pool)}
                 >
-                  <Link 
-                    href={`/pools?id=${pool.id}`} 
-                    className={`flex h-8 items-center gap-2 overflow-hidden rounded-md px-2 text-sm ring-sidebar-ring outline-hidden transition-all ${
-                      isActive 
-                        ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" 
-                        : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    } ${dragOverId === pool.id ? "ring-2 ring-primary" : ""}`}
+                  <SidebarMenuButton
+                    render={<Link href={`/pools?id=${pool.id}`} onClick={() => setOpenMobile(false)} />}
+                    isActive={isActive}
+                    className={cn(
+                      dragOverId === pool.id && "ring-2 ring-primary bg-sidebar-accent",
+                      isActive && "!bg-primary !text-primary-foreground hover:!bg-primary/90",
+                      hasBadge && "pr-12" // leave room for badge
+                    )}
                   >
-                    {pool.is_subscribed ? (
-                      <Globe className="h-4 w-4 shrink-0" />
-                    ) : (
-                      <Folder className="h-4 w-4 shrink-0" />
-                    )}
-                    <span className="truncate flex-1">{pool.name}</span>
-                    {!pool.is_subscribed && pool.share_token && pool.subscriber_count > 0 && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded-sm mr-6">
-                        <Users className="w-3 h-3" />
-                        <span>{pool.subscriber_count}</span>
-                      </div>
-                    )}
-                  </Link>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    title={pool.is_subscribed ? "Unsubscribe" : "Delete"}
-                    className={`absolute right-1 top-1 h-6 w-6 rounded-md p-0 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 ${
-                      isActive ? "text-sidebar-accent-foreground" : "text-muted-foreground"
-                    }`}
-                    onClick={(e) => { e.preventDefault(); handleDelete(pool); }}
-                  >
-                    {pool.is_subscribed ? (
-                      <X className="w-3 h-3 text-muted-foreground" />
-                    ) : (
-                      <Trash2 className="w-3 h-3 text-destructive" />
-                    )}
-                  </Button>
-                </div>
+                    {pool.is_subscribed ? <Globe /> : <Folder />}
+                    <span>{pool.name}</span>
+                  </SidebarMenuButton>
+
+                  {hasBadge && (
+                    <SidebarMenuBadge className={cn("gap-1 bg-muted/50 font-normal px-1.5 right-2", isActive && "text-primary-foreground bg-primary-foreground/20")}>
+                      <Users className="w-3 h-3" />
+                      <span>{pool.subscriber_count}</span>
+                    </SidebarMenuBadge>
+                  )}
+                </SidebarMenuItem>
               );
             })}
-          </div>
+          </SidebarMenu>
         )}
-      </div>
-    </div>
+      </SidebarGroupContent>
+    </SidebarGroup>
+    </SidebarContent>
+    </>
   );
 }

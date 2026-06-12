@@ -53,6 +53,28 @@ impl PoolRepository {
         })
     }
 
+    pub async fn rename_pool(
+        &self,
+        pool_id: Uuid,
+        owner_user_id: Uuid,
+        new_name: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let trimmed_name = new_name.trim();
+        let name_folded = trimmed_name.to_lowercase();
+
+        let result = sqlx::query(
+            "UPDATE pools SET name = ?, name_folded = ? WHERE id = ? AND owner_user_id = ?",
+        )
+        .bind(trimmed_name)
+        .bind(&name_folded)
+        .bind(pool_id.to_string())
+        .bind(owner_user_id.to_string())
+        .execute(&self.pool)
+        .await?;
+
+        Ok(result.rows_affected() == 1)
+    }
+
     pub async fn list_for_user(&self, owner_user_id: Uuid) -> Result<Vec<StoredPool>, sqlx::Error> {
         let rows = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool)>(
             "SELECT p.id, p.owner_user_id, p.name, p.share_token, 

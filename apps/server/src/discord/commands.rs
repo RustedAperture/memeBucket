@@ -59,5 +59,11 @@ pub fn command_definitions() -> Vec<Value> {
             "integration_types": [1],
             "contexts": [0, 1, 2]
         }),
+        json!({
+            "name": "Add to Pool",
+            "type": 3,
+            "integration_types": [1],
+            "contexts": [0, 1, 2]
+        }),
     ]
 }

@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.1.2 - Jun 11, 2026
+
+### Added
+
+- Added an "Add to Pool" Discord message context menu command to save images directly from messages into an "Added from Discord" pool.
+- Added the ability to rename image pools.
+
+### Changed
+
+- Migrated the web dashboard's sidebar layout to use standard Shadcn UI components.
+- Consolidated pool settings (rename, delete, unsubscribe) into a clean Settings modal.
+
 ## v0.1.1 - Jun 11, 2026
 
 ### Added

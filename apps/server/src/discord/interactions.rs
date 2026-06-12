@@ -48,6 +48,49 @@ pub struct InteractionData {
     pub name: String,
     #[serde(default)]
     pub options: Vec<InteractionOption>,
+    #[serde(default)]
+    pub target_id: Option<String>,
+    #[serde(default)]
+    pub resolved: Option<InteractionResolved>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InteractionResolved {
+    #[serde(default)]
+    pub messages: std::collections::HashMap<String, InteractionMessage>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InteractionMessage {
+    pub id: String,
+    pub content: String,
+    #[serde(default)]
+    pub embeds: Vec<InteractionEmbed>,
+    #[serde(default)]
+    pub attachments: Vec<InteractionAttachment>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InteractionEmbed {
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub image: Option<InteractionEmbedMedia>,
+    #[serde(default)]
+    pub video: Option<InteractionEmbedMedia>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InteractionEmbedMedia {
+    #[serde(default)]
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InteractionAttachment {
+    pub url: String,
+    #[serde(default)]
+    pub content_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -282,6 +325,7 @@ async fn dispatch_command(state: &AppState, payload: &InteractionPayload) -> Val
         "ez" => handle_random_command(state, user.id, data).await,
         "pool" => handle_pool_command(state, user.id, data).await,
         "manage" => handle_manage_command().await,
+        "Add to Pool" => handle_add_to_pool_message_command(state, user.id, data).await,
         _ => ephemeral_message("Unsupported command."),
     }
 }
@@ -607,4 +651,85 @@ async fn resolve_user(
         .map_err(|_| DiscordAuthError::Storage)?;
 
     Ok(AppUser { id: stored_user.id })
+}
+
+async fn handle_add_to_pool_message_command(
+    state: &AppState,
+    user_id: Uuid,
+    data: &InteractionData,
+) -> Value {
+    let target_id = match &data.target_id {
+        Some(id) => id,
+        None => return ephemeral_message("Could not find the selected message."),
+    };
+
+    let resolved = match &data.resolved {
+        Some(res) => res,
+        None => return ephemeral_message("Could not find message details."),
+    };
+
+    let message = match resolved.messages.get(target_id) {
+        Some(msg) => msg,
+        None => return ephemeral_message("Could not find the selected message."),
+    };
+
+    let mut image_url = None;
+
+    if let Some(attachment) = message.attachments.iter().find(|a| {
+        a.content_type
+            .as_deref()
+            .unwrap_or("")
+            .starts_with("image/")
+    }) {
+        image_url = Some(attachment.url.clone());
+    } else if let Some(embed) = message
+        .embeds
+        .iter()
+        .find(|e| e.image.is_some() || e.video.is_some() || e.url.is_some())
+    {
+        if let Some(media) = &embed.image {
+            image_url = media.url.clone();
+        } else if let Some(media) = &embed.video {
+            image_url = media.url.clone();
+        } else {
+            image_url = embed.url.clone();
+        }
+    } else {
+        let content = message.content.trim();
+        for part in content.split_whitespace() {
+            if part.starts_with("http") {
+                image_url = Some(part.to_string());
+                break;
+            }
+        }
+    }
+
+    let Some(url) = image_url else {
+        return ephemeral_message("I could not find an image or GIF in that message.");
+    };
+
+    let resolved_url = match resolve_image_url(&url).await {
+        Ok(url) => url,
+        Err(err) => return ephemeral_message(err.user_message()),
+    };
+
+    let pools = PoolRepository::new(state.pool.clone());
+    let pool_name = "Added from Discord";
+
+    let pool = match pools.create(user_id, pool_name).await {
+        Ok(pool) => pool,
+        Err(sqlx::Error::RowNotFound) => {
+            match pools.find_by_name_folded(user_id, pool_name).await {
+                Ok(Some(pool)) => pool,
+                _ => return ephemeral_message("I hit a storage error while finding your pool."),
+            }
+        }
+        Err(_) => return ephemeral_message("I hit a storage error while creating the pool."),
+    };
+
+    let images = ImageRepository::new(state.pool.clone());
+    match images.create(user_id, pool.id, &resolved_url).await {
+        Ok(_) => ephemeral_message(&format!("Added image to \"{}\".", pool.name)),
+        Err(_) => ephemeral_message("I hit a storage error while saving the image."),
+    }
 }

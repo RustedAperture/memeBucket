@@ -1,30 +1,42 @@
 "use client";
 
 import { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { PoolList } from "@/components/pool-list";
 import { ImageForm } from "@/components/image-form";
 import { ImageList } from "@/components/image-list";
-import { Folder, Plus, PanelLeft, Info } from "lucide-react";
+import { Folder, Plus, PanelLeft, Info, Link as LinkIcon, Settings, Trash2, Check, X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { SidebarProvider, Sidebar, SidebarContent, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Pool } from "@/lib/types";
 import { ShareDialog } from "@/components/share-dialog";
 import { RequireAuth } from "@/components/require-auth";
+import { apiDelete, apiPost, apiPatch } from "@/lib/api";
 
 function PoolsContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const poolId = searchParams.get("id");
   const [pools, setPools] = useState<Pool[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [sizeIndex, setSizeIndex] = useState(2);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState("");
 
-  const SIZES = [64, 96, 128, 192, 256];
+  const COLUMN_CLASSES = [
+    "columns-3 sm:columns-4 md:columns-5 lg:columns-6",
+    "columns-2 sm:columns-3 md:columns-4 lg:columns-5",
+    "columns-2 sm:columns-2 md:columns-3 lg:columns-4",
+    "columns-1 sm:columns-2 md:columns-2 lg:columns-3",
+    "columns-1 sm:columns-1 md:columns-2 lg:columns-2",
+  ];
   const SIZE_LABELS = ["-2", "-1", "0", "+1", "+2"];
-  const maxHeight = SIZES[sizeIndex] || 128;
+  const columnClass = COLUMN_CLASSES[sizeIndex] || COLUMN_CLASSES[2];
 
   const handleImageMoved = () => {
     setRefreshKey((k) => k + 1);
@@ -33,40 +45,89 @@ function PoolsContent() {
   const activePool = pools.find(p => p.id === poolId);
   const isSubscribed = activePool?.is_subscribed;
 
+  const handleDeletePool = async (pool: Pool) => {
+    try {
+      if (pool.is_subscribed) {
+        await apiPost(`/api/pools/${pool.id}/unsubscribe`, {});
+      } else {
+        await apiDelete(`/api/pools/${pool.id}`);
+      }
+      setInfoOpen(false);
+      setRefreshKey((k) => k + 1);
+      router.push("/pools");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRenamePool = async () => {
+    if (!activePool || !newName.trim() || newName.trim() === activePool.name) {
+      setEditingName(false);
+      return;
+    }
+    try {
+      await apiPatch(`/api/pools/${activePool.id}`, { name: newName.trim() });
+      setEditingName(false);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
-    <div className="flex flex-1 min-h-0 w-full overflow-hidden rounded-xl bg-muted/30 border">
+    <SidebarProvider className="flex flex-1 min-h-0 w-full overflow-hidden rounded-xl bg-muted/30 border relative">
       {/* Sidebar Area */}
-      <div className="w-64 shrink-0 hidden md:block">
-        <PoolList onPoolsChange={setPools} onImageMoved={handleImageMoved} />
-      </div>
+      <Sidebar className="absolute h-full bg-transparent border-r-0 hidden md:flex" collapsible="offcanvas" variant="inset">
+        <PoolList onPoolsChange={setPools} onImageMoved={handleImageMoved} refreshKey={refreshKey} />
+      </Sidebar>
       
       {/* Inset Main Content Area */}
-      <div className="flex-1 flex flex-col m-2 rounded-xl bg-background shadow-sm border overflow-hidden">
+      <SidebarInset className="flex-1 flex flex-col m-2 rounded-xl bg-background shadow-sm border overflow-hidden">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear">
           <div className="flex w-full items-center justify-between px-4 lg:px-6">
             <div className="flex items-center gap-2">
-              <Sheet>
-                <SheetTrigger render={<Button variant="ghost" size="icon" className="md:hidden h-8 w-8 -ml-2 text-muted-foreground"><PanelLeft className="h-5 w-5" /></Button>} />
-                <SheetContent side="left" className="w-72 p-0 flex flex-col gap-0 border-r-0" showCloseButton={false}>
-                  <SheetHeader className="sr-only">
-                    <SheetTitle>Pools</SheetTitle>
-                  </SheetHeader>
-                  <PoolList isMobile onPoolsChange={setPools} onImageMoved={handleImageMoved} />
-                </SheetContent>
-              </Sheet>
+              <SidebarTrigger className="h-8 w-8 -ml-2 text-muted-foreground" />
               <h1 className="text-base font-medium flex items-center gap-2">
                 {activePool ? activePool.name : "Images"}
                 {activePool && (
-                  <Dialog>
-                    <DialogTrigger render={<Button variant="ghost" size="icon" className="h-6 w-6"><Info className="h-4 w-4 text-muted-foreground hover:text-foreground"/></Button>} />
+                  <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+                    <DialogTrigger render={<Button variant="ghost" size="icon" className="h-6 w-6 ml-1"><Settings className="h-4 w-4 text-muted-foreground hover:text-foreground"/></Button>} />
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
-                        <DialogTitle>Pool Information</DialogTitle>
+                        <DialogTitle>Pool Settings</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4 text-sm mt-4">
-                        <div className="flex justify-between border-b pb-2">
+                        <div className="flex justify-between items-center border-b pb-2">
                           <span className="text-muted-foreground">Pool Name</span>
-                          <span className="font-medium">{activePool.name}</span>
+                          {editingName ? (
+                            <div className="flex items-center gap-1">
+                              <Input 
+                                value={newName} 
+                                onChange={(e) => setNewName(e.target.value)}
+                                className="h-7 py-1 px-2 text-sm w-40"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleRenamePool();
+                                  if (e.key === 'Escape') setEditingName(false);
+                                }}
+                              />
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleRenamePool}>
+                                <Check className="h-4 w-4 text-green-500" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingName(false)}>
+                                <X className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 font-medium">
+                              <span>{activePool.name}</span>
+                              {!isSubscribed && (
+                                <Button variant="ghost" size="icon" className="h-5 w-5 ml-1" onClick={() => { setNewName(activePool.name); setEditingName(true); }}>
+                                  <Pencil className="h-3 w-3 text-muted-foreground" />
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div className="flex justify-between border-b pb-2">
                           <span className="text-muted-foreground">Owner</span>
@@ -80,6 +141,13 @@ function PoolsContent() {
                           <span className="text-muted-foreground">Role</span>
                           <span className="font-medium">{activePool.is_subscribed ? "Subscriber" : "Owner"}</span>
                         </div>
+                        
+                        <div className="pt-4 flex justify-end">
+                          <Button variant="destructive" onClick={() => handleDeletePool(activePool)}>
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            {activePool.is_subscribed ? "Unsubscribe" : "Delete Pool"}
+                          </Button>
+                        </div>
                       </div>
                     </DialogContent>
                   </Dialog>
@@ -89,7 +157,8 @@ function PoolsContent() {
             {poolId && !isSubscribed && activePool && (
               <div className="flex items-center gap-2">
                 <Dialog>
-                  <DialogTrigger render={<Button variant="outline" size="sm" className="h-8 gap-1" />}>
+                  <DialogTrigger render={<Button variant="default" size="sm" className="h-8 gap-1.5" />}>
+                    <LinkIcon className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Share Settings</span>
                   </DialogTrigger>
                   <DialogContent>
@@ -102,26 +171,13 @@ function PoolsContent() {
                     />
                   </DialogContent>
                 </Dialog>
-                
-                <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-                  <DialogTrigger render={<Button size="sm" className="h-8 gap-1"><Plus className="h-4 w-4" /><span className="hidden sm:inline">Add Image</span></Button>} />
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Add New Image</DialogTitle>
-                    </DialogHeader>
-                    <ImageForm 
-                      poolId={poolId} 
-                      onCreated={() => { setRefreshKey((k) => k + 1); setLinkDialogOpen(false); }} 
-                    />
-                  </DialogContent>
-                </Dialog>
               </div>
             )}
           </div>
         </header>
         {/* Size toolbar */}
         {poolId && (
-          <div className="flex items-center gap-3 px-4 lg:px-6 h-10 shrink-0 border-b bg-muted/30">
+          <div className="flex items-center gap-3 px-4 lg:px-6 h-12 shrink-0 border-b bg-muted/30">
             <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
               Size
             </span>
@@ -129,15 +185,15 @@ function PoolsContent() {
               <div className="absolute left-0 right-0 h-0.5 rounded-full bg-border" />
               <div
                 className="absolute left-0 h-0.5 rounded-full bg-primary transition-all duration-150"
-                style={{ width: `${(sizeIndex / (SIZES.length - 1)) * 100}%` }}
+                style={{ width: `${(sizeIndex / (COLUMN_CLASSES.length - 1)) * 100}%` }}
               />
-              {SIZES.map((_, i) => (
+              {COLUMN_CLASSES.map((_, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => setSizeIndex(i)}
                   className="absolute flex items-center justify-center"
-                  style={{ left: `${(i / (SIZES.length - 1)) * 100}%`, transform: "translateX(-50%)" }}
+                  style={{ left: `${(i / (COLUMN_CLASSES.length - 1)) * 100}%`, transform: "translateX(-50%)" }}
                   aria-label={`Thumbnail size ${SIZE_LABELS[i]}`}
                 >
                   <span
@@ -150,12 +206,20 @@ function PoolsContent() {
                 </button>
               ))}
             </div>
+            {!isSubscribed && activePool && (
+              <div className="ml-auto">
+                <ImageForm 
+                  poolId={poolId} 
+                  onCreated={() => setRefreshKey((k) => k + 1)} 
+                />
+              </div>
+            )}
           </div>
         )}
         <div className="flex-1 flex flex-col overflow-y-auto">
           {poolId ? (
             <div className="p-6 space-y-6 max-w-7xl mx-auto w-full">
-              <ImageList key={`${poolId}:${refreshKey}`} poolId={poolId} maxHeight={maxHeight} readonly={isSubscribed} pools={pools} onMoveImage={handleImageMoved} />
+              <ImageList key={`${poolId}:${refreshKey}`} poolId={poolId} columnClass={columnClass} readonly={isSubscribed} pools={pools} onMoveImage={handleImageMoved} />
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in-50">
@@ -169,8 +233,8 @@ function PoolsContent() {
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 

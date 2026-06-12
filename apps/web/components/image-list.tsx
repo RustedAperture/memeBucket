@@ -38,7 +38,7 @@ import {
 type ImageItem = { id: string; url: string; createdAt?: string; notes?: string | null };
 import { Pool } from "@/lib/types";
 
-export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [], onMoveImage }: { poolId: string; maxHeight?: number; readonly?: boolean; pools?: Pool[]; onMoveImage?: () => void }) {
+export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:columns-3 lg:columns-4", readonly = false, pools = [], onMoveImage }: { poolId: string; columnClass?: string; readonly?: boolean; pools?: Pool[]; onMoveImage?: () => void }) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
@@ -174,7 +174,7 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [
             </Button>
           </div>
         ) : null}
-        <div className="flex flex-wrap gap-4 items-start">
+        <div className={`gap-4 ${columnClass}`}>
           {images.map((image) => {
             const isSelected = selectedImageIds.has(image.id);
             const dragCount = dragImageIdsFor(image.id).length;
@@ -209,7 +209,7 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [
                   event.dataTransfer.setData("application/json", JSON.stringify({ imageId: image.id, imageIds, sourcePoolId: poolId }));
                   event.dataTransfer.effectAllowed = "move";
                 }}
-                className={`group relative overflow-hidden rounded-xl border transition-all flex w-max cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${
+                className={`group relative overflow-hidden rounded-xl border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none break-inside-avoid mb-4 ${
                   isSelected
                     ? "border-primary ring-2 ring-primary"
                     : "border-border/70 hover:ring-2 hover:ring-ring"
@@ -218,8 +218,7 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [
                 <img 
                   src={image.url} 
                   alt="Image preview" 
-                  style={{ maxHeight: `${maxHeight}px` }}
-                  className="w-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
+                  className="w-full h-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';
                     (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');

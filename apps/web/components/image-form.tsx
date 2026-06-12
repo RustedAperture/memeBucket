@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { apiPost } from "@/lib/api";
 import { Plus, Search } from "lucide-react";
 import { GifSearchModal } from "./gif-search-modal";
+import { ButtonGroup } from "@/components/ui/button-group";
 
 export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: () => void }) {
   const [url, setUrl] = useState("");
@@ -39,28 +40,33 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
 
   return (
     <>
-      <form onSubmit={submit} className="flex flex-col gap-4">
+    <form onSubmit={submit} className="flex items-center gap-2 relative">
       <Input 
         value={url} 
         onChange={(event) => setUrl(event.target.value)} 
-        placeholder="https://example.com/image.gif" 
-        className="w-full"
+        placeholder="Paste URL..." 
+        className="h-8 w-48 text-sm"
       />
-      <div className="flex justify-between items-center">
+      <ButtonGroup>
+        <Button 
+          type="submit" 
+          variant="default"
+          size="icon" 
+          title="Add Image"
+        >
+          <Plus className="w-4 h-4" />
+        </Button>
         <Button
           type="button"
-          variant="secondary"
+          variant="default"
+          size="icon"
           onClick={() => setSearchOpen(true)}
+          title="Search GIFs"
         >
-          <Search className="w-4 h-4 mr-2" />
-          Search GIFs
+          <Search className="w-4 h-4" />
         </Button>
-        <Button type="submit">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Image
-        </Button>
-      </div>
-      {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
+      </ButtonGroup>
+      {error ? <p className="absolute top-full mt-1 right-0 text-xs font-medium text-destructive whitespace-nowrap">{error}</p> : null}
     </form>
     
     <GifSearchModal 

@@ -111,6 +111,38 @@ pub async fn delete_pool(
     Ok(Json(serde_json::json!({ "deleted": deleted })))
 }
 
+#[derive(Deserialize)]
+pub struct RenamePoolRequest {
+    pub name: String,
+}
+
+pub async fn rename_pool(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Path(pool_id): Path<Uuid>,
+    Json(request): Json<RenamePoolRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if request.name.trim().is_empty() {
+        return Err(AppError::BadRequest("pool name is required".to_string()));
+    }
+
+    match PoolRepository::new(state.pool)
+        .rename_pool(pool_id, user.user_id, &request.name)
+        .await
+    {
+        Ok(true) => Ok(Json(serde_json::json!({ "success": true }))),
+        Ok(false) => Err(AppError::NotFound),
+        Err(e) => {
+            if let Some(db_err) = e.as_database_error() {
+                if db_err.is_unique_violation() {
+                    return Err(AppError::BadRequest("pool already exists".to_string()));
+                }
+            }
+            Err(e.into())
+        }
+    }
+}
+
 use rand::Rng;
 
 pub async fn share_pool(

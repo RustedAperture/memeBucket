@@ -7,6 +7,20 @@ export default function ChangelogPage() {
       description="Notable changes to ezGif."
       updated="Jun 11, 2026"
     >
+      <LegalSection title="v0.1.2 - Jun 11, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added an "Add to Pool" Discord message context menu command to save images directly from messages into an "Added from Discord" pool.</li>
+          <li>Added the ability to rename image pools.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Changed</h3>
+        <LegalList>
+          <li>Migrated the web dashboard's sidebar layout to use standard Shadcn UI components.</li>
+          <li>Consolidated pool settings (rename, delete, unsubscribe) into a clean Settings modal.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.1.1 - Jun 11, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

@@ -45,6 +45,8 @@ pub async fn convert_and_upload_mp4(url: &str, imgbb_api_key: &str) -> Result<St
             "fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
             "-loop",
             "0",
+            "-f",
+            "gif",
             temp_gif_path.to_str().unwrap(),
         ])
         .output()

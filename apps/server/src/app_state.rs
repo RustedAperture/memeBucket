@@ -19,6 +19,7 @@ pub struct AppState {
     pub session_secret: String,
     discord_public_key: String,
     pub klipy_api_key: Option<String>,
+    pub imgbb_api_key: Option<String>,
     pub klipy_api_base_url: String,
     pub gif_search_cache: Arc<Mutex<HashMap<String, GifSearchCacheEntry>>>,
     pub gif_search_cache_ttl: Duration,
@@ -32,6 +33,7 @@ impl AppState {
             session_secret: String::new(),
             discord_public_key: String::new(),
             klipy_api_key: None,
+            imgbb_api_key: None,
             klipy_api_base_url: "https://api.klipy.com".to_string(),
             gif_search_cache: Arc::new(Mutex::new(HashMap::new())),
             gif_search_cache_ttl: Duration::from_secs(60 * 60 * 6),
@@ -67,6 +69,11 @@ impl AppState {
 
     pub fn with_klipy_api_key(mut self, klipy_api_key: Option<String>) -> Self {
         self.klipy_api_key = klipy_api_key;
+        self
+    }
+
+    pub fn with_imgbb_api_key(mut self, imgbb_api_key: Option<String>) -> Self {
+        self.imgbb_api_key = imgbb_api_key;
         self
     }
 

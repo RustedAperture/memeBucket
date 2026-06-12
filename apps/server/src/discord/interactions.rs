@@ -706,10 +706,31 @@ async fn handle_add_to_pool_message_command(
         return ephemeral_message("I could not find an image or GIF in that message.");
     };
 
-    let resolved_url = match resolve_image_url(&url).await {
+    let mut resolved_url = match resolve_image_url(&url).await {
         Ok(url) => url,
         Err(err) => return ephemeral_message(err.user_message()),
     };
+
+    let is_video = {
+        let base = resolved_url
+            .split('?')
+            .next()
+            .unwrap_or(&resolved_url)
+            .to_lowercase();
+        base.ends_with(".mp4") || base.ends_with(".webm")
+    };
+
+    if is_video {
+        if let Some(key) = &state.imgbb_api_key {
+            match crate::services::video_converter::convert_and_upload_mp4(&resolved_url, key).await
+            {
+                Ok(new_url) => resolved_url = new_url,
+                Err(_) => {
+                    return ephemeral_message("I hit an error converting that video to a GIF.");
+                }
+            }
+        }
+    }
 
     let pools = PoolRepository::new(state.pool.clone());
     let pool_name = "Added from Discord";

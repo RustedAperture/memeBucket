@@ -248,6 +248,13 @@ pub async fn handle_interaction(
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
 
+    // Log the raw interaction payload for debugging (only for application commands, not pings)
+    if payload.kind == APPLICATION_COMMAND
+        && let Ok(raw) = String::from_utf8(body.to_vec())
+    {
+        tracing::info!(interaction_payload = %raw, "Raw Discord interaction received");
+    }
+
     match payload.kind {
         PING => Json(InteractionResponse {
             kind: PING,
@@ -751,14 +758,16 @@ async fn handle_add_to_pool_message_command(
                 tracing::info!(refreshed_url = %fresh, "Got fresh attachment URL from Discord API");
                 fresh
             } else {
-                tracing::warn!(
-                    "Could not re-fetch attachment URL from Discord API, using original"
-                );
-                url
+                // Fallback: try media.discordapp.net proxy which may work without auth params
+                let proxy_url = url.replace("cdn.discordapp.com", "media.discordapp.net");
+                tracing::info!(proxy_url = %proxy_url, "Trying media.discordapp.net proxy as fallback");
+                proxy_url
             }
         } else {
             tracing::warn!("No bot token configured, cannot re-fetch attachment URL");
-            url
+            let proxy_url = url.replace("cdn.discordapp.com", "media.discordapp.net");
+            tracing::info!(proxy_url = %proxy_url, "Trying media.discordapp.net proxy as fallback");
+            proxy_url
         }
     } else {
         url
@@ -831,9 +840,12 @@ async fn refetch_attachment_url(
         .ok()?;
 
     if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
         tracing::warn!(
-            status = %resp.status(),
-            "Discord API message re-fetch failed"
+            status = %status,
+            body = %body,
+            "Discord API message re-fetch failed (bot may need READ_MESSAGE_HISTORY permission)"
         );
         return None;
     }

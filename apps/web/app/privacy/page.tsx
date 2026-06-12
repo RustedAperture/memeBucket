@@ -41,9 +41,10 @@ export default function PrivacyPage() {
       <LegalSection title="Third Parties">
         <p>
           ezGif relies on Discord for OAuth, application commands, profile data, and
-          message delivery. Image and GIF URLs may point to third-party hosts; loading
-          or viewing them may contact those hosts. Those services have their own
-          terms and privacy policies.
+          message delivery. It also uses the Klipy API for the GIF search feature, 
+          which means your search queries are sent to Klipy. Image and GIF URLs may 
+          point to third-party hosts; loading or viewing them may contact those hosts. 
+          Those services have their own terms and privacy policies.
         </p>
       </LegalSection>
 

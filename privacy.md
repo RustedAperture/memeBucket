@@ -33,7 +33,7 @@ When you send an image through Discord, Discord and the recipients of that messa
 
 ## Third Parties
 
-ezGif relies on Discord for OAuth, application commands, user profile data, and message delivery. It also uses the Klipy API for the GIF search feature, meaning your search queries are sent to Klipy. Image and GIF URLs may point to third-party hosts; loading or viewing those URLs may contact the third-party host. Those services are governed by their own terms and privacy policies.
+ezGif relies on Discord for OAuth, application commands, user profile data, and message delivery. It also uses the Klipy API for the GIF search feature, meaning your search queries are sent to Klipy. When you add a raw video file (like an MP4) to your pool, ezGif may temporarily process that file and automatically upload it to ImgBB (api.imgbb.com) to convert it into a hosted GIF. Image and GIF URLs may point to third-party hosts; loading or viewing those URLs may contact the third-party host. Those services are governed by their own terms and privacy policies.
 
 ## Retention
 

@@ -189,6 +189,7 @@ async fn fetch_success(value: &str) -> Result<reqwest::Response, ImageUrlValidat
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .redirect(reqwest::redirect::Policy::none())
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 ezGifBot/1.0")
             .resolve(host, safe_addr)
             .build()
             .map_err(|_| ImageUrlValidationError::FetchFailed)?;

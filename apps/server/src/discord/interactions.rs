@@ -84,11 +84,15 @@ pub struct InteractionEmbed {
 pub struct InteractionEmbedMedia {
     #[serde(default)]
     pub url: Option<String>,
+    #[serde(default)]
+    pub proxy_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct InteractionAttachment {
     pub url: String,
+    #[serde(default)]
+    pub proxy_url: Option<String>,
     #[serde(default)]
     pub content_type: Option<String>,
 }
@@ -679,16 +683,22 @@ async fn handle_add_to_pool_message_command(
         let ct = a.content_type.as_deref().unwrap_or("");
         ct.starts_with("image/") || ct.starts_with("video/")
     }) {
-        image_url = Some(attachment.url.clone());
+        // Prefer proxy_url for Discord CDN attachments — the primary url often
+        // arrives without the required auth query params (ex, is, hm) in
+        // interaction resolved data, causing 404s.
+        image_url = attachment
+            .proxy_url
+            .clone()
+            .or_else(|| Some(attachment.url.clone()));
     } else if let Some(embed) = message
         .embeds
         .iter()
         .find(|e| e.image.is_some() || e.video.is_some() || e.url.is_some())
     {
         if let Some(media) = &embed.image {
-            image_url = media.url.clone();
+            image_url = media.proxy_url.clone().or_else(|| media.url.clone());
         } else if let Some(media) = &embed.video {
-            image_url = media.url.clone();
+            image_url = media.proxy_url.clone().or_else(|| media.url.clone());
         } else {
             image_url = embed.url.clone();
         }
@@ -719,6 +729,8 @@ async fn handle_add_to_pool_message_command(
     let Some(url) = image_url else {
         return ephemeral_message("I could not find an image or GIF in that message.");
     };
+
+    tracing::debug!(extracted_url = %url, "URL extracted from Discord message");
 
     let mut resolved_url = match resolve_image_url(&url).await {
         Ok(url) => url,

@@ -94,12 +94,16 @@ fn normalize_tenor_url(url_str: &str) -> String {
     };
 
     if host.ends_with(".tenor.com") || host == "tenor.com" {
-        let path = url.path().to_string();
+        let mut path = url.path().to_string();
         if let Some(stripped) = path.strip_prefix("/m/") {
-            let _ = url.set_host(Some("media.tenor.com"));
-            url.set_path(stripped);
-            return url.to_string();
+            path = stripped.to_string();
         }
+
+        path = path.replace("AAAPo/", "AAAAC/").replace(".mp4", ".gif");
+
+        let _ = url.set_host(Some("media.tenor.com"));
+        url.set_path(&path);
+        return url.to_string();
     }
 
     url_str.to_string()

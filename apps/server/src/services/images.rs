@@ -1,6 +1,7 @@
 use ipnet::IpNet;
 use std::net::IpAddr;
 use std::str::FromStr;
+use tracing::{error, warn};
 use url::Url;
 
 const METADATA_READ_LIMIT_BYTES: usize = 512 * 1024;
@@ -180,11 +181,15 @@ async fn fetch_success(value: &str) -> Result<reqwest::Response, ImageUrlValidat
 
         let mut addrs = tokio::net::lookup_host(format!("{}:{}", host, port))
             .await
-            .map_err(|_| ImageUrlValidationError::FetchFailed)?;
+            .map_err(|e| {
+                error!("DNS lookup failed for {}: {}", host, e);
+                ImageUrlValidationError::FetchFailed
+            })?;
 
-        let safe_addr = addrs
-            .find(|addr| is_safe_ip(&addr.ip()))
-            .ok_or(ImageUrlValidationError::FetchFailed)?;
+        let safe_addr = addrs.find(|addr| is_safe_ip(&addr.ip())).ok_or_else(|| {
+            error!("No safe IP found for {}", host);
+            ImageUrlValidationError::FetchFailed
+        })?;
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
@@ -192,26 +197,37 @@ async fn fetch_success(value: &str) -> Result<reqwest::Response, ImageUrlValidat
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 ezGifBot/1.0")
             .resolve(host, safe_addr)
             .build()
-            .map_err(|_| ImageUrlValidationError::FetchFailed)?;
+            .map_err(|e| {
+                error!("Failed to build reqwest client: {}", e);
+                ImageUrlValidationError::FetchFailed
+            })?;
 
-        let response = client
-            .get(&current_url_str)
-            .send()
-            .await
-            .map_err(|_| ImageUrlValidationError::FetchFailed)?;
+        let response = client.get(&current_url_str).send().await.map_err(|e| {
+            error!("Failed to send request to {}: {}", current_url_str, e);
+            ImageUrlValidationError::FetchFailed
+        })?;
 
         if response.status().is_redirection() {
             let loc = response
                 .headers()
                 .get(reqwest::header::LOCATION)
-                .ok_or(ImageUrlValidationError::FetchFailed)?;
-            let loc_str = loc
-                .to_str()
-                .map_err(|_| ImageUrlValidationError::FetchFailed)?;
-            let next_url = parsed_url
-                .join(loc_str)
-                .map_err(|_| ImageUrlValidationError::FetchFailed)?;
+                .ok_or_else(|| {
+                    error!(
+                        "Missing LOCATION header in redirect for {}",
+                        current_url_str
+                    );
+                    ImageUrlValidationError::FetchFailed
+                })?;
+            let loc_str = loc.to_str().map_err(|e| {
+                error!("Invalid LOCATION header: {}", e);
+                ImageUrlValidationError::FetchFailed
+            })?;
+            let next_url = parsed_url.join(loc_str).map_err(|e| {
+                error!("Invalid redirect URL {}: {}", loc_str, e);
+                ImageUrlValidationError::FetchFailed
+            })?;
             if !matches!(next_url.scheme(), "http" | "https") {
+                error!("Invalid redirect scheme: {}", next_url.scheme());
                 return Err(ImageUrlValidationError::FetchFailed);
             }
             current_url_str = next_url.to_string();
@@ -220,6 +236,11 @@ async fn fetch_success(value: &str) -> Result<reqwest::Response, ImageUrlValidat
         }
 
         if !response.status().is_success() {
+            error!(
+                "Request to {} failed with status {}",
+                current_url_str,
+                response.status()
+            );
             return Err(ImageUrlValidationError::FetchFailed);
         }
 

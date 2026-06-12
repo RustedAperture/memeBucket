@@ -47,6 +47,9 @@ pub async fn resolve_image_url(value: &str) -> Result<String, ImageUrlValidation
         return Err(ImageUrlValidationError::InvalidHttpUrl);
     }
 
+    let value_normalized = normalize_tenor_url(value);
+    let value = &value_normalized;
+
     if validate_image_url_internal(value).await.is_ok() {
         return Ok(value.to_string());
     }
@@ -65,16 +68,41 @@ pub async fn resolve_image_url(value: &str) -> Result<String, ImageUrlValidation
     if let Some(oembed_url) = find_oembed_url(value, &html)
         && let Some(media_url) = resolve_oembed_photo_url(&oembed_url).await?
     {
-        return Ok(media_url);
+        return Ok(normalize_tenor_url(&media_url));
     }
 
     for candidate in find_page_image_candidates(value, &html) {
-        if validate_image_url_internal(&candidate).await.is_ok() {
-            return Ok(candidate);
+        let candidate_normalized = normalize_tenor_url(&candidate);
+        if validate_image_url_internal(&candidate_normalized)
+            .await
+            .is_ok()
+        {
+            return Ok(candidate_normalized);
         }
     }
 
     Err(ImageUrlValidationError::UnsupportedContentType)
+}
+
+fn normalize_tenor_url(url_str: &str) -> String {
+    let Ok(mut url) = Url::parse(url_str) else {
+        return url_str.to_string();
+    };
+
+    let Some(host) = url.host_str() else {
+        return url_str.to_string();
+    };
+
+    if host.ends_with(".tenor.com") || host == "tenor.com" {
+        let path = url.path().to_string();
+        if let Some(stripped) = path.strip_prefix("/m/") {
+            let _ = url.set_host(Some("media.tenor.com"));
+            url.set_path(stripped);
+            return url.to_string();
+        }
+    }
+
+    url_str.to_string()
 }
 
 fn is_safe_ip(ip: &IpAddr) -> bool {

@@ -7,6 +7,7 @@ import { PoolList } from "@/components/pool-list";
 import { ImageForm } from "@/components/image-form";
 import { ImageList } from "@/components/image-list";
 import { Folder, Plus, PanelLeft, Info, Link as LinkIcon, Settings, Trash2, Check, X, Pencil } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -56,7 +57,7 @@ function PoolsContent() {
       setRefreshKey((k) => k + 1);
       router.push("/pools");
     } catch (err) {
-      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Could not process request.");
     }
   };
 
@@ -70,7 +71,7 @@ function PoolsContent() {
       setEditingName(false);
       setRefreshKey((k) => k + 1);
     } catch (err) {
-      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Could not rename pool.");
     }
   };
 

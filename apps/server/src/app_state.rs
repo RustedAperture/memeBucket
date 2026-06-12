@@ -1,5 +1,16 @@
 use sqlx::SqlitePool;
-use std::path::PathBuf;
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
+
+#[derive(Clone)]
+pub struct GifSearchCacheEntry {
+    pub value: serde_json::Value,
+    pub expires_at: Instant,
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -8,6 +19,9 @@ pub struct AppState {
     pub session_secret: String,
     discord_public_key: String,
     pub klipy_api_key: Option<String>,
+    pub klipy_api_base_url: String,
+    pub gif_search_cache: Arc<Mutex<HashMap<String, GifSearchCacheEntry>>>,
+    pub gif_search_cache_ttl: Duration,
 }
 
 impl AppState {
@@ -18,6 +32,9 @@ impl AppState {
             session_secret: String::new(),
             discord_public_key: String::new(),
             klipy_api_key: None,
+            klipy_api_base_url: "https://api.klipy.com".to_string(),
+            gif_search_cache: Arc::new(Mutex::new(HashMap::new())),
+            gif_search_cache_ttl: Duration::from_secs(60 * 60 * 6),
         }
     }
 
@@ -50,6 +67,16 @@ impl AppState {
 
     pub fn with_klipy_api_key(mut self, klipy_api_key: Option<String>) -> Self {
         self.klipy_api_key = klipy_api_key;
+        self
+    }
+
+    pub fn with_klipy_api_base_url(mut self, klipy_api_base_url: String) -> Self {
+        self.klipy_api_base_url = klipy_api_base_url;
+        self
+    }
+
+    pub fn with_gif_search_cache_ttl(mut self, gif_search_cache_ttl: Duration) -> Self {
+        self.gif_search_cache_ttl = gif_search_cache_ttl;
         self
     }
 }

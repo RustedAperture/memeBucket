@@ -13,8 +13,40 @@ use ezgif_server::{
 };
 use http_body_util::BodyExt;
 use sqlx::SqlitePool;
+use std::ffi::OsString;
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 use tower::ServiceExt;
+
+static LOCAL_IP_TEST_LOCK: Mutex<()> = Mutex::const_new(());
+
+struct EnvVarGuard {
+    name: &'static str,
+    previous: Option<OsString>,
+}
+
+impl EnvVarGuard {
+    fn set(name: &'static str, value: &str) -> Self {
+        let previous = std::env::var_os(name);
+        unsafe {
+            std::env::set_var(name, value);
+        }
+        Self { name, previous }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => unsafe {
+                std::env::set_var(self.name, value);
+            },
+            None => unsafe {
+                std::env::remove_var(self.name);
+            },
+        }
+    }
+}
 
 async fn test_pool() -> SqlitePool {
     let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
@@ -233,6 +265,9 @@ async fn create_category_allows_same_name_for_different_owners() {
 
 #[tokio::test]
 async fn create_image_stores_resolved_metadata_image_url() {
+    let _local_ip_guard = LOCAL_IP_TEST_LOCK.lock().await;
+    let _allow_local_ips = EnvVarGuard::set("EZGIF_ALLOW_LOCAL_IPS_IN_TESTS", "1");
+
     async fn page(address: String) -> Response {
         (
             [(header::CONTENT_TYPE, "text/html; charset=utf-8")],

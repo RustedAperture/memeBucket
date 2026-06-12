@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
 import { Check, ExternalLink, ImageIcon, Trash2, Edit2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +25,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type ImageItem = { id: string; url: string; createdAt?: string; notes?: string | null };
 import { Pool } from "@/lib/types";
@@ -36,6 +46,10 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState("");
+  const movePoolItems = pools.map((p) => ({
+    label: `${p.name}${p.id === poolId ? " (Current)" : ""}`,
+    value: p.id,
+  }));
 
   async function load() {
     try {
@@ -247,7 +261,7 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [
 
       <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
         {selectedImage ? (
-          <DialogContent className="sm:max-w-2xl">
+          <DialogContent className="min-w-0 max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Image details</DialogTitle>
               <DialogDescription>
@@ -255,26 +269,28 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4">
-              <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/20">
+            <div className="grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto] gap-4">
+              <div className="min-h-0 overflow-hidden rounded-xl border border-border/70 bg-muted/20">
                 <img
                   src={selectedImage.url}
                   alt="Selected image preview"
-                  className="max-h-[60vh] w-full object-contain"
+                  className="h-full max-h-full w-full object-contain"
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Link</p>
-                <a
-                  href={selectedImage.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-2 rounded-lg border bg-secondary/40 px-3 py-2 text-sm text-foreground transition-colors hover:bg-secondary"
-                >
-                  <span className="min-w-0 flex-1 truncate">{selectedImage.url}</span>
-                  <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
-                </a>
+                <div className="flex min-w-0 gap-2">
+                  <Input readOnly value={selectedImage.url} title={selectedImage.url} />
+                  <Button
+                    variant="secondary"
+                    size="icon"
+                    aria-label="Open image link"
+                    render={<a href={selectedImage.url} target="_blank" rel="noreferrer" />}
+                  >
+                    <ExternalLink />
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -300,26 +316,45 @@ export function ImageList({ poolId, maxHeight = 128, readonly = false, pools = [
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-lg border bg-secondary/20 px-3 py-2 text-sm text-foreground min-h-[2.5rem] whitespace-pre-wrap">
-                    {selectedImage.notes ? selectedImage.notes : <span className="text-muted-foreground italic">No notes provided.</span>}
-                  </div>
+                  <Textarea
+                    readOnly
+                    value={selectedImage.notes || ""}
+                    placeholder="No notes provided."
+                    className="min-h-10"
+                  />
                 )}
               </div>
 
               {pools.length > 1 && !readonly && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Move to Pool</p>
-                  <select 
-                    className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  <Select
+                    items={movePoolItems}
                     value={poolId}
-                    onChange={(e) => handleMoveToPool(e.target.value)}
+                    onValueChange={(newPoolId) => {
+                      if (typeof newPoolId === "string") {
+                        void handleMoveToPool(newPoolId);
+                      }
+                    }}
                   >
-                    {pools.map(p => (
-                      <option key={p.id} value={p.id} disabled={p.is_subscribed || p.id === poolId}>
-                        {p.name} {p.id === poolId ? "(Current)" : ""}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectLabel>Pools</SelectLabel>
+                        {pools.map((p) => (
+                          <SelectItem
+                            key={p.id}
+                            value={p.id}
+                            disabled={p.is_subscribed || p.id === poolId}
+                          >
+                            {p.name}{p.id === poolId ? " (Current)" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
             </div>

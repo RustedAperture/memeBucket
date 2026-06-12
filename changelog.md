@@ -12,6 +12,11 @@
 ### Fixed
 
 - Fixed theme selector styling so only one mode appears selected at a time.
+- Fixed an issue in GIF search where "Load more" would append duplicate results.
+
+### Changed
+
+- Improved the GIF search layout by using a masonry-style columns layout to better preserve image aspect ratios.
 
 ## v0.1.0 - Jun 10, 2026
 

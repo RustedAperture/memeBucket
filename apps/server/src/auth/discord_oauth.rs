@@ -39,7 +39,7 @@ pub async fn start_discord_oauth() -> impl IntoResponse {
     let state = random_oauth_state();
 
     let url = format!(
-        "https://discord.com/oauth2/authorize?client_id={}&redirect_uri={}&response_type=code&scope=identify%20applications.commands&integration_type=1&state={}",
+        "https://discord.com/oauth2/authorize?client_id={}&redirect_uri={}&response_type=code&scope=identify%20applications.commands&permissions=65536&integration_type=1&state={}",
         urlencoding(&client_id),
         urlencoding(&redirect_uri),
         urlencoding(&state),

@@ -99,13 +99,13 @@ fn sqlite_file_path(database_url: &str) -> Option<PathBuf> {
 mod tests {
     use super::{Config, connect_sqlite_pool};
     use std::fs;
-    use std::sync::Mutex;
+    use tokio::sync::Mutex;
 
-    static CWD_LOCK: Mutex<()> = Mutex::new(());
+    static CWD_LOCK: Mutex<()> = Mutex::const_new(());
 
-    #[test]
-    fn config_defaults_to_repo_local_sqlite_path() {
-        let _cwd_lock = CWD_LOCK.lock().unwrap();
+    #[tokio::test]
+    async fn config_defaults_to_repo_local_sqlite_path() {
+        let _cwd_lock = CWD_LOCK.lock().await;
         let old_discord_public_key = std::env::var("DISCORD_PUBLIC_KEY").ok();
         let old_session_secret = std::env::var("SESSION_SECRET").ok();
         unsafe {
@@ -139,7 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn connect_sqlite_pool_creates_missing_parent_dir() {
-        let _cwd_lock = CWD_LOCK.lock().unwrap();
+        let _cwd_lock = CWD_LOCK.lock().await;
         let old_cwd = std::env::current_dir().unwrap();
         let root = std::env::temp_dir().join(format!("random-media-bot-{}", uuid::Uuid::new_v4()));
         let db_path = root.join("data").join("app.db");

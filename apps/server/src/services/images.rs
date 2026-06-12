@@ -1,7 +1,7 @@
 use ipnet::IpNet;
 use std::net::IpAddr;
 use std::str::FromStr;
-use tracing::{error, warn};
+use tracing::error;
 use url::Url;
 
 const METADATA_READ_LIMIT_BYTES: usize = 512 * 1024;

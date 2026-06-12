@@ -133,10 +133,10 @@ pub async fn rename_pool(
         Ok(true) => Ok(Json(serde_json::json!({ "success": true }))),
         Ok(false) => Err(AppError::NotFound),
         Err(e) => {
-            if let Some(db_err) = e.as_database_error() {
-                if db_err.is_unique_violation() {
-                    return Err(AppError::BadRequest("pool already exists".to_string()));
-                }
+            if e.as_database_error()
+                .is_some_and(|db_err| db_err.is_unique_violation())
+            {
+                return Err(AppError::BadRequest("pool already exists".to_string()));
             }
             Err(e.into())
         }

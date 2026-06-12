@@ -18,6 +18,7 @@ pub struct AppState {
     pub static_dir: PathBuf,
     pub session_secret: String,
     discord_public_key: String,
+    discord_bot_token: String,
     pub klipy_api_key: Option<String>,
     pub imgbb_api_key: Option<String>,
     pub klipy_api_base_url: String,
@@ -32,6 +33,7 @@ impl AppState {
             static_dir: PathBuf::from("apps/web/out"),
             session_secret: String::new(),
             discord_public_key: String::new(),
+            discord_bot_token: String::new(),
             klipy_api_key: None,
             imgbb_api_key: None,
             klipy_api_base_url: "https://api.klipy.com".to_string(),
@@ -65,6 +67,15 @@ impl AppState {
 
     pub fn discord_public_key(&self) -> &str {
         &self.discord_public_key
+    }
+
+    pub fn with_discord_bot_token(mut self, discord_bot_token: String) -> Self {
+        self.discord_bot_token = discord_bot_token;
+        self
+    }
+
+    pub fn discord_bot_token(&self) -> &str {
+        &self.discord_bot_token
     }
 
     pub fn with_klipy_api_key(mut self, klipy_api_key: Option<String>) -> Self {

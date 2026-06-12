@@ -41,6 +41,8 @@ pub struct InteractionPayload {
     pub user: Option<InteractionUser>,
     #[serde(default)]
     pub member: Option<InteractionMember>,
+    #[serde(default)]
+    pub channel_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -329,7 +331,10 @@ async fn dispatch_command(state: &AppState, payload: &InteractionPayload) -> Val
         "ez" => handle_random_command(state, user.id, data).await,
         "pool" => handle_pool_command(state, user.id, data).await,
         "manage" => handle_manage_command().await,
-        "Add to Pool" => handle_add_to_pool_message_command(state, user.id, data).await,
+        "Add to Pool" => {
+            handle_add_to_pool_message_command(state, user.id, data, payload.channel_id.as_deref())
+                .await
+        }
         _ => ephemeral_message("Unsupported command."),
     }
 }
@@ -661,6 +666,7 @@ async fn handle_add_to_pool_message_command(
     state: &AppState,
     user_id: Uuid,
     data: &InteractionData,
+    channel_id: Option<&str>,
 ) -> Value {
     let target_id = match &data.target_id {
         Some(id) => id,
@@ -730,7 +736,33 @@ async fn handle_add_to_pool_message_command(
         return ephemeral_message("I could not find an image or GIF in that message.");
     };
 
-    tracing::debug!(extracted_url = %url, "URL extracted from Discord message");
+    tracing::info!(extracted_url = %url, "URL extracted from Discord message");
+
+    // Discord interaction resolved data often strips auth query params (ex, is, hm)
+    // from CDN attachment URLs. When detected, re-fetch the message via the REST API
+    // to obtain a fresh URL with valid auth tokens.
+    let url = if url.contains("cdn.discordapp.com") && !url.contains("ex=") {
+        tracing::info!("Discord CDN URL missing auth params, attempting API re-fetch");
+        let bot_token = state.discord_bot_token();
+        if !bot_token.is_empty() {
+            if let Some(fresh) =
+                refetch_attachment_url(bot_token, channel_id, &message.id, &url).await
+            {
+                tracing::info!(refreshed_url = %fresh, "Got fresh attachment URL from Discord API");
+                fresh
+            } else {
+                tracing::warn!(
+                    "Could not re-fetch attachment URL from Discord API, using original"
+                );
+                url
+            }
+        } else {
+            tracing::warn!("No bot token configured, cannot re-fetch attachment URL");
+            url
+        }
+    } else {
+        url
+    };
 
     let mut resolved_url = match resolve_image_url(&url).await {
         Ok(url) => url,
@@ -774,4 +806,64 @@ async fn handle_add_to_pool_message_command(
         Ok(_) => ephemeral_message(&format!("Added image to \"{}\".", pool.name)),
         Err(_) => ephemeral_message("I hit a storage error while saving the image."),
     }
+}
+
+/// Re-fetch a message via the Discord REST API to obtain fresh attachment URLs
+/// with valid authentication query parameters.
+async fn refetch_attachment_url(
+    bot_token: &str,
+    channel_id: Option<&str>,
+    message_id: &str,
+    original_url: &str,
+) -> Option<String> {
+    let channel_id = channel_id?;
+
+    let api_url =
+        format!("https://discord.com/api/v10/channels/{channel_id}/messages/{message_id}");
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(&api_url)
+        .header("Authorization", format!("Bot {bot_token}"))
+        .header("User-Agent", "ezGifBot/1.0")
+        .send()
+        .await
+        .ok()?;
+
+    if !resp.status().is_success() {
+        tracing::warn!(
+            status = %resp.status(),
+            "Discord API message re-fetch failed"
+        );
+        return None;
+    }
+
+    let body: Value = resp.json().await.ok()?;
+
+    // Extract the filename from the original URL to match the right attachment.
+    let original_filename = original_url.rsplit('/').next().unwrap_or("");
+
+    if let Some(attachments) = body["attachments"].as_array() {
+        for attachment in attachments {
+            if let Some(url) = attachment["url"].as_str() {
+                // Match by filename — the path segment before query params
+                let attachment_filename = url
+                    .split('?')
+                    .next()
+                    .and_then(|base| base.rsplit('/').next())
+                    .unwrap_or("");
+                if attachment_filename == original_filename {
+                    return Some(url.to_string());
+                }
+            }
+        }
+        // If no filename match, return the first attachment URL as fallback
+        if let Some(first) = attachments.first()
+            && let Some(url) = first["url"].as_str()
+        {
+            return Some(url.to_string());
+        }
+    }
+
+    None
 }

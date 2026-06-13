@@ -142,7 +142,7 @@ async fn search_images_filters_by_text_tags_favorite_and_random_state() {
         .extensions_mut()
         .insert(AuthenticatedUser { user_id: owner.id });
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let results = read_json(response).await;
 
@@ -174,8 +174,18 @@ async fn search_images_returns_only_accessible_images() {
         .upsert_by_discord_key("image-search-bob", None, None)
         .await
         .unwrap();
+    let carol = users
+        .upsert_by_discord_key("image-search-carol", None, None)
+        .await
+        .unwrap();
+    users
+        .update_username(alice.id, "alice-search")
+        .await
+        .unwrap();
     let alice_pool = pools.create(alice.id, "Alice Cats").await.unwrap();
     let bob_pool = pools.create(bob.id, "Bob Cats").await.unwrap();
+    let carol_public_pool = pools.create(carol.id, "Carol Public Cats").await.unwrap();
+    let carol_private_pool = pools.create(carol.id, "Carol Private Cats").await.unwrap();
     let visible = images
         .create_with_metadata(
             alice.id,
@@ -200,9 +210,45 @@ async fn search_images_returns_only_accessible_images() {
         )
         .await
         .unwrap();
+    let subscribed_visible = images
+        .create_with_metadata(
+            carol.id,
+            carol_public_pool.id,
+            "https://example.com/subscribed-cat.gif",
+            Some("Subscribed Cat"),
+            false,
+            1,
+            &["cat".to_string()],
+        )
+        .await
+        .unwrap();
+    let whitelisted_visible = images
+        .create_with_metadata(
+            carol.id,
+            carol_private_pool.id,
+            "https://example.com/whitelisted-cat.gif",
+            Some("Whitelisted Cat"),
+            false,
+            1,
+            &["cat".to_string()],
+        )
+        .await
+        .unwrap();
+    pools
+        .subscribe_user_to_pool(alice.id, carol_public_pool.id)
+        .await
+        .unwrap();
+    pools
+        .subscribe_user_to_pool(alice.id, carol_private_pool.id)
+        .await
+        .unwrap();
+    pools
+        .set_whitelist_enabled(carol_private_pool.id, carol.id, true)
+        .await
+        .unwrap();
 
     let state = AppState::for_tests(pool);
-    let app = build_router_for_tests(state);
+    let app = build_router_for_tests(state.clone());
     let mut request = Request::builder()
         .uri("/api/images/search?q=cat")
         .body(Body::empty())
@@ -211,13 +257,47 @@ async fn search_images_returns_only_accessible_images() {
         .extensions_mut()
         .insert(AuthenticatedUser { user_id: alice.id });
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let results = read_json(response).await;
 
-    assert_eq!(results.as_array().unwrap().len(), 1);
-    assert_eq!(results[0]["poolName"], "Alice Cats");
-    assert_eq!(results[0]["image"]["id"], visible.id.to_string());
+    let ids = results
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|result| result["image"]["id"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&visible.id.to_string()));
+    assert!(ids.contains(&subscribed_visible.id.to_string()));
+    assert!(!ids.contains(&whitelisted_visible.id.to_string()));
+
+    pools
+        .add_whitelist_user(carol_private_pool.id, carol.id, "alice-search")
+        .await
+        .unwrap();
+    let mut whitelisted_request = Request::builder()
+        .uri("/api/images/search?q=cat")
+        .body(Body::empty())
+        .unwrap();
+    whitelisted_request
+        .extensions_mut()
+        .insert(AuthenticatedUser { user_id: alice.id });
+
+    let whitelisted_response = app.oneshot(whitelisted_request).await.unwrap();
+    assert_eq!(whitelisted_response.status(), StatusCode::OK);
+    let whitelisted_results = read_json(whitelisted_response).await;
+    let whitelisted_ids = whitelisted_results
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|result| result["image"]["id"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(whitelisted_ids.len(), 3);
+    assert!(whitelisted_ids.contains(&visible.id.to_string()));
+    assert!(whitelisted_ids.contains(&subscribed_visible.id.to_string()));
+    assert!(whitelisted_ids.contains(&whitelisted_visible.id.to_string()));
 }
 
 #[tokio::test]
@@ -359,6 +439,46 @@ async fn bulk_update_images_rejects_cross_owner_images_without_partial_update() 
     assert_eq!(listed.len(), 1);
     assert!(!listed[0].favorite);
     assert_eq!(listed[0].tags, vec!["safe".to_string()]);
+}
+
+#[tokio::test]
+async fn bulk_update_images_rejects_blank_tag_only_changes() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let owner = users
+        .upsert_by_discord_key("bulk-blank-owner", None, None)
+        .await
+        .unwrap();
+    let saved_pool = pools.create(owner.id, "Cats").await.unwrap();
+    let image = images
+        .create(owner.id, saved_pool.id, "https://example.com/cat.gif")
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool);
+    let app = build_router_for_tests(state);
+    let mut request = Request::builder()
+        .method("PATCH")
+        .uri(format!("/api/pools/{}/images/bulk", saved_pool.id))
+        .header("content-type", "application/json")
+        .body(Body::from(format!(
+            r#"{{"imageIds":["{}"],"addTags":["!!!","   "],"removeTags":["***"]}}"#,
+            image.id
+        )))
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(AuthenticatedUser { user_id: owner.id });
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(
+        &body[..],
+        b"bad request: at least one metadata change is required"
+    );
 }
 
 #[tokio::test]

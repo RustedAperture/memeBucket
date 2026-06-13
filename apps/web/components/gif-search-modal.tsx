@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiGet } from "@/lib/api";
 import type { GifSearchSelection } from "@/lib/types";
-import { Loader2 } from "lucide-react";
+import { Loader2, Tags } from "lucide-react";
 
 type GifAsset = {
   url?: string;
@@ -54,7 +54,7 @@ export function GifSearchModal({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelect: (selection: GifSearchSelection) => void;
+  onSelect: (selection: GifSearchSelection, action: "add" | "stage") => void;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GifResult[]>([]);
@@ -211,13 +211,26 @@ export function GifSearchModal({
                     <div
                       key={result.id || idx}
                       className="relative cursor-pointer group rounded-md overflow-hidden bg-muted break-inside-avoid"
-                      onClick={() => onSelect(buildSelection(result, imgUrl))}
+                      onClick={() => onSelect(buildSelection(result, imgUrl), "add")}
                     >
                       <img
                         src={previewUrl}
                         alt={title || "GIF preview"}
                         className="w-full h-auto object-cover transition-transform group-hover:scale-105"
                       />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        title="Edit metadata before adding"
+                        className="absolute right-2 top-2 h-7 w-7 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus:opacity-100"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onSelect(buildSelection(result, imgUrl), "stage");
+                        }}
+                      >
+                        <Tags className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   );
                 })}
@@ -247,46 +260,15 @@ export function GifSearchModal({
   );
 }
 
-const STOP_WORDS = new Set([
-  "a",
-  "an",
-  "and",
-  "are",
-  "as",
-  "at",
-  "be",
-  "by",
-  "for",
-  "from",
-  "gif",
-  "gifs",
-  "in",
-  "is",
-  "it",
-  "its",
-  "of",
-  "on",
-  "or",
-  "sticker",
-  "stickers",
-  "that",
-  "the",
-  "this",
-  "to",
-  "with",
-  "you",
-  "your",
-]);
-
 function normalizeTitle(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
-  const normalized = value.replace(/\s+/g, " ").trim();
+  const normalized = value.trim();
   if (!normalized) {
     return null;
   }
-  return normalized.slice(0, 200);
+  return normalized;
 }
 
 function buildSuggestedTags(result: GifResult, query: string): string[] {
@@ -294,7 +276,7 @@ function buildSuggestedTags(result: GifResult, query: string): string[] {
   const seen = new Set<string>();
 
   const add = (value: unknown) => {
-    for (const token of tagTokens(value)) {
+    for (const token of tagSuggestions(value)) {
       if (seen.has(token)) {
         continue;
       }
@@ -314,25 +296,24 @@ function buildSuggestedTags(result: GifResult, query: string): string[] {
   return tags;
 }
 
-function tagTokens(value: unknown): string[] {
+function tagSuggestions(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value.flatMap((item) => tagTokens(item));
+    return value.flatMap((item) => tagSuggestions(item));
   }
 
   if (value && typeof value === "object") {
     const tagged = value as { name?: unknown; title?: unknown; slug?: unknown };
-    return [...tagTokens(tagged.name), ...tagTokens(tagged.title), ...tagTokens(tagged.slug)];
+    return [
+      ...tagSuggestions(tagged.name),
+      ...tagSuggestions(tagged.title),
+      ...tagSuggestions(tagged.slug),
+    ];
   }
 
   if (typeof value !== "string") {
     return [];
   }
 
-  return value
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .split(/[^a-z0-9_-]+/g)
-    .map((token) => token.replace(/^[-_]+|[-_]+$/g, ""))
-    .filter((token) => token.length >= 2 && !STOP_WORDS.has(token))
-    .map((token) => token.slice(0, 32));
+  const normalized = value.trim();
+  return normalized ? [normalized] : [];
 }

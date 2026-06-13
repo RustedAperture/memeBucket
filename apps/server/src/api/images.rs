@@ -261,11 +261,13 @@ pub async fn bulk_update_images(
         .random_weight
         .map(validate_random_weight)
         .transpose()?;
+    let add_tags = normalized_tag_inputs(&request.add_tags);
+    let remove_tags = normalized_tag_inputs(&request.remove_tags);
 
     if request.favorite.is_none()
         && random_weight.is_none()
-        && request.add_tags.is_empty()
-        && request.remove_tags.is_empty()
+        && add_tags.is_empty()
+        && remove_tags.is_empty()
     {
         return Err(AppError::BadRequest(
             "at least one metadata change is required".to_string(),
@@ -281,8 +283,8 @@ pub async fn bulk_update_images(
                 image_ids: request.image_ids,
                 favorite: request.favorite,
                 random_weight,
-                add_tags: request.add_tags,
-                remove_tags: request.remove_tags,
+                add_tags,
+                remove_tags,
             },
         )
         .await?;
@@ -394,4 +396,27 @@ fn parse_tag_filter(tags: Option<String>) -> Vec<String> {
         .filter(|tag| !tag.is_empty())
         .map(str::to_string)
         .collect()
+}
+
+fn normalized_tag_inputs(tags: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    for tag in tags {
+        let cleaned = tag
+            .trim()
+            .trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '-' && c != '_')
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        if cleaned.is_empty() {
+            continue;
+        }
+        let folded = cleaned.to_lowercase();
+        if seen.insert(folded) {
+            normalized.push(cleaned);
+        }
+    }
+
+    normalized
 }

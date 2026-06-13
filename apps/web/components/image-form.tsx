@@ -16,6 +16,14 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
   const [selectedGif, setSelectedGif] = useState<GifSearchSelection | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
+  async function createImage(payload: { url: string; title?: string; tags?: string[] }) {
+    await apiPost(`/api/pools/${poolId}/images`, payload);
+    setUrl("");
+    setSelectedGif(null);
+    setSelectedTags([]);
+    onCreated();
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const trimmedUrl = url.trim();
@@ -28,11 +36,7 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
       ...(shouldUseMetadata && selectedTags.length > 0 ? { tags: selectedTags } : {}),
     };
     try {
-      await apiPost(`/api/pools/${poolId}/images`, payload);
-      setUrl("");
-      setSelectedGif(null);
-      setSelectedTags([]);
-      onCreated();
+      await createImage(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add image");
     }
@@ -46,9 +50,22 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
     }
   }
 
-  function handleGifSelect(selection: GifSearchSelection) {
+  async function handleGifSelect(selection: GifSearchSelection, action: "add" | "stage") {
     setSearchOpen(false);
     setError(null);
+    if (action === "add") {
+      try {
+        await createImage({
+          url: selection.url,
+          ...(selection.title ? { title: selection.title } : {}),
+          ...(selection.tags.length > 0 ? { tags: selection.tags } : {}),
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not add image");
+      }
+      return;
+    }
+
     setUrl(selection.url);
     setSelectedGif(selection);
     setSelectedTags(selection.tags);

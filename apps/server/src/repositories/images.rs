@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
@@ -12,6 +14,10 @@ pub struct StoredImage {
     pub owner_user_id: Uuid,
     pub pool_id: Uuid,
     pub url: String,
+    pub title: Option<String>,
+    pub favorite: bool,
+    pub random_weight: i64,
+    pub tags: Vec<String>,
     pub created_at: String,
     pub notes: Option<String>,
 }
@@ -27,35 +33,60 @@ impl ImageRepository {
         pool_id: Uuid,
         url: &str,
     ) -> Result<StoredImage, sqlx::Error> {
+        self.create_with_metadata(owner_user_id, pool_id, url, None, false, 1, &[])
+            .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_with_metadata(
+        &self,
+        owner_user_id: Uuid,
+        pool_id: Uuid,
+        url: &str,
+        title: Option<&str>,
+        favorite: bool,
+        random_weight: i64,
+        tags: &[String],
+    ) -> Result<StoredImage, sqlx::Error> {
         let id = Uuid::new_v4();
-        let (stored_id, stored_owner_user_id, stored_pool_id, stored_url, created_at, stored_notes) =
-            sqlx::query_as::<_, (String, String, String, String, String, Option<String>)>(
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                Option<String>,
+                bool,
+                i64,
+                String,
+                Option<String>,
+            ),
+        >(
                 r#"
-                INSERT INTO images (id, owner_user_id, pool_id, url, notes)
-                SELECT ?, ?, id, ?, NULL
+                INSERT INTO images (id, owner_user_id, pool_id, url, title, favorite, random_weight, notes)
+                SELECT ?, ?, id, ?, ?, ?, ?, NULL
                 FROM pools
                 WHERE id = ? AND owner_user_id = ?
-                RETURNING id, owner_user_id, pool_id, url, created_at, notes
+                RETURNING id, owner_user_id, pool_id, url, title, favorite, random_weight, created_at, notes
                 "#,
             )
             .bind(id.to_string())
             .bind(owner_user_id.to_string())
             .bind(url)
+            .bind(title)
+            .bind(favorite)
+            .bind(random_weight)
             .bind(pool_id.to_string())
             .bind(owner_user_id.to_string())
-            .fetch_one(&self.pool)
+            .fetch_one(&mut *tx)
             .await?;
 
-        Ok(StoredImage {
-            id: Uuid::parse_str(&stored_id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-            owner_user_id: Uuid::parse_str(&stored_owner_user_id)
-                .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-            pool_id: Uuid::parse_str(&stored_pool_id)
-                .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-            url: stored_url,
-            created_at,
-            notes: stored_notes,
-        })
+        let normalized_tags = self.replace_tags(&mut tx, owner_user_id, id, tags).await?;
+        tx.commit().await?;
+
+        Self::stored_image_from_row(row, normalized_tags)
     }
 
     pub async fn list_for_pool(
@@ -63,8 +94,21 @@ impl ImageRepository {
         user_id: Uuid,
         pool_id: Uuid,
     ) -> Result<Vec<StoredImage>, sqlx::Error> {
-        let rows = sqlx::query_as::<_, (String, String, String, String, String, Option<String>)>(
-            "SELECT id, owner_user_id, pool_id, url, created_at, notes
+        let rows = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                Option<String>,
+                bool,
+                i64,
+                String,
+                Option<String>,
+            ),
+        >(
+            "SELECT id, owner_user_id, pool_id, url, title, favorite, random_weight, created_at, notes
              FROM images
              WHERE pool_id = ?
                AND (
@@ -94,18 +138,16 @@ impl ImageRepository {
         .fetch_all(&self.pool)
         .await?;
 
+        let tags_by_image = self.load_tags_for_images(rows.iter()).await?;
+
         rows.into_iter()
-            .map(|(id, owner, pool, url, created_at, notes)| {
-                Ok(StoredImage {
-                    id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-                    owner_user_id: Uuid::parse_str(&owner)
-                        .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-                    pool_id: Uuid::parse_str(&pool)
-                        .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-                    url,
-                    created_at,
-                    notes,
-                })
+            .map(|row| {
+                let image_id =
+                    Uuid::parse_str(&row.0).map_err(|err| sqlx::Error::Decode(Box::new(err)))?;
+                Self::stored_image_from_row(
+                    row,
+                    tags_by_image.get(&image_id).cloned().unwrap_or_default(),
+                )
             })
             .collect()
     }
@@ -147,6 +189,45 @@ impl ImageRepository {
         Ok(result.rows_affected() == 1)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_metadata(
+        &self,
+        owner_user_id: Uuid,
+        pool_id: Uuid,
+        image_id: Uuid,
+        title: Option<&str>,
+        notes: Option<&str>,
+        favorite: bool,
+        random_weight: i64,
+        tags: &[String],
+    ) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let result = sqlx::query(
+            "UPDATE images
+             SET title = ?, notes = ?, favorite = ?, random_weight = ?
+             WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+        )
+        .bind(title)
+        .bind(notes)
+        .bind(favorite)
+        .bind(random_weight)
+        .bind(owner_user_id.to_string())
+        .bind(pool_id.to_string())
+        .bind(image_id.to_string())
+        .execute(&mut *tx)
+        .await?;
+
+        if result.rows_affected() != 1 {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+
+        self.replace_tags(&mut tx, owner_user_id, image_id, tags)
+            .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
     pub async fn move_to_pool(
         &self,
         owner_user_id: Uuid,
@@ -155,15 +236,184 @@ impl ImageRepository {
         new_pool_id: Uuid,
     ) -> Result<bool, sqlx::Error> {
         let result = sqlx::query(
-            "UPDATE images SET pool_id = ? WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+            "UPDATE images
+             SET pool_id = ?
+             WHERE owner_user_id = ?
+               AND pool_id = ?
+               AND id = ?
+               AND EXISTS (
+                 SELECT 1
+                 FROM pools
+                 WHERE id = ? AND owner_user_id = ?
+               )",
         )
         .bind(new_pool_id.to_string())
         .bind(owner_user_id.to_string())
         .bind(pool_id.to_string())
         .bind(image_id.to_string())
+        .bind(new_pool_id.to_string())
+        .bind(owner_user_id.to_string())
         .execute(&self.pool)
         .await?;
 
         Ok(result.rows_affected() == 1)
+    }
+
+    async fn replace_tags(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        owner_user_id: Uuid,
+        image_id: Uuid,
+        tags: &[String],
+    ) -> Result<Vec<String>, sqlx::Error> {
+        sqlx::query("DELETE FROM image_tags WHERE owner_user_id = ? AND image_id = ?")
+            .bind(owner_user_id.to_string())
+            .bind(image_id.to_string())
+            .execute(&mut **tx)
+            .await?;
+
+        let mut normalized = Vec::new();
+        let mut seen = HashSet::new();
+        for tag in tags {
+            let Some((name, name_folded)) = Self::normalize_tag(tag) else {
+                continue;
+            };
+            if !seen.insert(name_folded.clone()) {
+                continue;
+            }
+
+            let position = normalized.len() as i64;
+
+            sqlx::query(
+                "INSERT INTO image_tags (id, owner_user_id, image_id, position, name, name_folded)
+                 VALUES (?, ?, ?, ?, ?, ?)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(owner_user_id.to_string())
+            .bind(image_id.to_string())
+            .bind(position)
+            .bind(&name)
+            .bind(&name_folded)
+            .execute(&mut **tx)
+            .await?;
+
+            normalized.push(name);
+        }
+
+        Ok(normalized)
+    }
+
+    async fn load_tags_for_images<'a, I>(
+        &self,
+        rows: I,
+    ) -> Result<HashMap<Uuid, Vec<String>>, sqlx::Error>
+    where
+        I: IntoIterator<
+            Item = &'a (
+                String,
+                String,
+                String,
+                String,
+                Option<String>,
+                bool,
+                i64,
+                String,
+                Option<String>,
+            ),
+        >,
+    {
+        let mut image_ids = Vec::new();
+        for row in rows {
+            image_ids
+                .push(Uuid::parse_str(&row.0).map_err(|err| sqlx::Error::Decode(Box::new(err)))?);
+        }
+
+        if image_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut query = String::from("SELECT image_id, name FROM image_tags WHERE image_id IN (");
+        for index in 0..image_ids.len() {
+            if index > 0 {
+                query.push_str(", ");
+            }
+            query.push('?');
+        }
+        query.push_str(") ORDER BY image_id, position");
+
+        let mut built = sqlx::query_as::<_, (String, String)>(&query);
+        for image_id in &image_ids {
+            built = built.bind(image_id.to_string());
+        }
+
+        let rows = built.fetch_all(&self.pool).await?;
+        let mut tags_by_image = HashMap::new();
+        for (image_id, name) in rows {
+            let image_id =
+                Uuid::parse_str(&image_id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?;
+            tags_by_image
+                .entry(image_id)
+                .or_insert_with(Vec::new)
+                .push(name);
+        }
+
+        Ok(tags_by_image)
+    }
+
+    fn normalize_tag(value: &str) -> Option<(String, String)> {
+        let cleaned = value
+            .trim()
+            .trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '-' && c != '_')
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        if cleaned.is_empty() {
+            return None;
+        }
+
+        Some((cleaned.clone(), cleaned.to_lowercase()))
+    }
+
+    fn stored_image_from_row(
+        row: (
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            bool,
+            i64,
+            String,
+            Option<String>,
+        ),
+        tags: Vec<String>,
+    ) -> Result<StoredImage, sqlx::Error> {
+        let (
+            stored_id,
+            stored_owner_user_id,
+            stored_pool_id,
+            stored_url,
+            stored_title,
+            stored_favorite,
+            stored_random_weight,
+            created_at,
+            stored_notes,
+        ) = row;
+
+        Ok(StoredImage {
+            id: Uuid::parse_str(&stored_id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+            owner_user_id: Uuid::parse_str(&stored_owner_user_id)
+                .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+            pool_id: Uuid::parse_str(&stored_pool_id)
+                .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+            url: stored_url,
+            title: stored_title,
+            favorite: stored_favorite,
+            random_weight: stored_random_weight,
+            tags,
+            created_at,
+            notes: stored_notes,
+        })
     }
 }

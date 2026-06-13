@@ -8,7 +8,10 @@ use axum::{
 use ezgif_server::{
     app_state::AppState,
     auth::sessions::AuthenticatedUser,
-    repositories::{images::ImageRepository, pools::PoolRepository, users::UserRepository},
+    repositories::{
+        images::ImageRepository, pools::PoolRepository, send_history::SendHistoryRepository,
+        users::UserRepository,
+    },
     router::build_router_for_tests,
 };
 use http_body_util::BodyExt;
@@ -374,4 +377,99 @@ async fn whitelist_enabled_blocks_existing_subscriber_image_access() {
             .unwrap()
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn shared_pool_preview_uses_viewer_send_count_and_anonymous_gets_zero() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let send_history = SendHistoryRepository::new(pool.clone());
+    let owner = users
+        .upsert_by_discord_key("owner-shared-preview", None, None)
+        .await
+        .unwrap();
+    let subscriber = users
+        .upsert_by_discord_key("subscriber-shared-preview", None, None)
+        .await
+        .unwrap();
+    let saved_pool = pools.create(owner.id, "cats").await.unwrap();
+    let image = images
+        .create_with_metadata(
+            owner.id,
+            saved_pool.id,
+            "https://example.com/cat.gif",
+            Some("Preview Cat"),
+            false,
+            1,
+            &["shared".to_string()],
+        )
+        .await
+        .unwrap();
+    pools
+        .subscribe_user_to_pool(subscriber.id, saved_pool.id)
+        .await
+        .unwrap();
+    pools
+        .set_share_token(saved_pool.id, owner.id, Some("share1"))
+        .await
+        .unwrap();
+
+    send_history
+        .record(owner.id, &saved_pool, &image, "public")
+        .await
+        .unwrap();
+    send_history
+        .record(owner.id, &saved_pool, &image, "private")
+        .await
+        .unwrap();
+    send_history
+        .record(subscriber.id, &saved_pool, &image, "public")
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool);
+    let app = build_router_for_tests(state);
+
+    let mut subscriber_request = Request::builder()
+        .uri("/api/share/share1")
+        .body(Body::empty())
+        .unwrap();
+    subscriber_request
+        .extensions_mut()
+        .insert(AuthenticatedUser {
+            user_id: subscriber.id,
+        });
+
+    let subscriber_response = app.clone().oneshot(subscriber_request).await.unwrap();
+    assert_eq!(subscriber_response.status(), StatusCode::OK);
+    let subscriber_body = subscriber_response
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+    let subscriber_preview: serde_json::Value = serde_json::from_slice(&subscriber_body).unwrap();
+    assert_eq!(subscriber_preview["images"][0]["title"], "Preview Cat");
+    assert_eq!(subscriber_preview["images"][0]["sendCount"], 1);
+
+    let anonymous_response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/share/share1")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(anonymous_response.status(), StatusCode::OK);
+    let anonymous_body = anonymous_response
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+    let anonymous_preview: serde_json::Value = serde_json::from_slice(&anonymous_body).unwrap();
+    assert_eq!(anonymous_preview["images"][0]["sendCount"], 0);
 }

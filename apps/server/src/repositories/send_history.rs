@@ -1,4 +1,5 @@
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::repositories::{images::StoredImage, pools::StoredPool};
@@ -66,5 +67,46 @@ impl SendHistoryRepository {
         }
 
         Ok(())
+    }
+
+    pub async fn count_for_images(
+        &self,
+        requester_user_id: Uuid,
+        image_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, i64>, sqlx::Error> {
+        if image_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let mut query = String::from(
+            "SELECT image_id, COUNT(*) as count
+             FROM send_history
+             WHERE owner_user_id = ?
+               AND image_id IN (",
+        );
+        for index in 0..image_ids.len() {
+            if index > 0 {
+                query.push_str(", ");
+            }
+            query.push('?');
+        }
+        query.push_str(") GROUP BY image_id");
+
+        let mut built =
+            sqlx::query_as::<_, (String, i64)>(&query).bind(requester_user_id.to_string());
+        for image_id in image_ids {
+            built = built.bind(image_id.to_string());
+        }
+
+        let rows = built.fetch_all(&self.pool).await?;
+        let mut counts = HashMap::new();
+        for (image_id, count) in rows {
+            counts.insert(
+                Uuid::parse_str(&image_id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
+                count,
+            );
+        }
+
+        Ok(counts)
     }
 }

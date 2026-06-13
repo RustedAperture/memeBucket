@@ -238,7 +238,7 @@ pub async fn get_shared_pool(
 
     if pool.whitelist_enabled {
         let is_allowed = match user {
-            Some(u) => repo.is_user_whitelisted(pool.id, u.user_id).await?,
+            Some(ref u) => repo.is_user_whitelisted(pool.id, u.user_id).await?,
             None => false,
         };
         if !is_allowed {
@@ -246,24 +246,20 @@ pub async fn get_shared_pool(
         }
     }
 
-    let image_repo = crate::repositories::images::ImageRepository::new(state.pool);
+    let image_repo = crate::repositories::images::ImageRepository::new(state.pool.clone());
     let images = image_repo
         .list_for_pool(pool.owner_user_id, pool.id)
         .await?;
+    let requester_user_id = user.as_ref().map(|user| user.user_id);
+    let image_responses =
+        crate::api::images::build_image_responses(state.pool.clone(), requester_user_id, images)
+            .await?;
 
     Ok(Json(SharedPoolPreview {
         id: pool.id.to_string(),
         name: pool.name,
         subscriber_count: pool.subscriber_count,
-        images: images
-            .into_iter()
-            .map(|img| crate::api::images::ImageResponse {
-                id: img.id.to_string(),
-                url: img.url,
-                created_at: img.created_at,
-                notes: img.notes,
-            })
-            .collect(),
+        images: image_responses,
     }))
 }
 

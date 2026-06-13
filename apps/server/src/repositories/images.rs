@@ -22,6 +22,15 @@ pub struct StoredImage {
     pub notes: Option<String>,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct UpdateImageMetadataPatch {
+    pub title: Option<Option<String>>,
+    pub notes: Option<Option<String>>,
+    pub favorite: Option<bool>,
+    pub random_weight: Option<i64>,
+    pub tags: Option<Vec<String>>,
+}
+
 impl ImageRepository {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
@@ -152,6 +161,47 @@ impl ImageRepository {
             .collect()
     }
 
+    pub async fn get_for_owner(
+        &self,
+        owner_user_id: Uuid,
+        pool_id: Uuid,
+        image_id: Uuid,
+    ) -> Result<Option<StoredImage>, sqlx::Error> {
+        let row = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                Option<String>,
+                bool,
+                i64,
+                String,
+                Option<String>,
+            ),
+        >(
+            "SELECT id, owner_user_id, pool_id, url, title, favorite, random_weight, created_at, notes
+             FROM images
+             WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+        )
+        .bind(owner_user_id.to_string())
+        .bind(pool_id.to_string())
+        .bind(image_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let tags_by_image = self.load_tags_for_image_ids(&[image_id]).await?;
+        Ok(Some(Self::stored_image_from_row(
+            row,
+            tags_by_image.get(&image_id).cloned().unwrap_or_default(),
+        )?))
+    }
+
     pub async fn delete_for_user(
         &self,
         owner_user_id: Uuid,
@@ -224,6 +274,90 @@ impl ImageRepository {
 
         self.replace_tags(&mut tx, owner_user_id, image_id, tags)
             .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
+    pub async fn update_metadata_partial(
+        &self,
+        owner_user_id: Uuid,
+        pool_id: Uuid,
+        image_id: Uuid,
+        patch: &UpdateImageMetadataPatch,
+    ) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool.begin().await?;
+        let exists = sqlx::query_scalar::<_, i64>(
+            "SELECT 1 FROM images WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+        )
+        .bind(owner_user_id.to_string())
+        .bind(pool_id.to_string())
+        .bind(image_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?
+        .is_some();
+
+        if !exists {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+
+        if let Some(title) = &patch.title {
+            sqlx::query(
+                "UPDATE images SET title = ? WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+            )
+            .bind(title.as_deref())
+            .bind(owner_user_id.to_string())
+            .bind(pool_id.to_string())
+            .bind(image_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        if let Some(notes) = &patch.notes {
+            sqlx::query(
+                "UPDATE images SET notes = ? WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+            )
+            .bind(notes.as_deref())
+            .bind(owner_user_id.to_string())
+            .bind(pool_id.to_string())
+            .bind(image_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        if let Some(favorite) = patch.favorite {
+            sqlx::query(
+                "UPDATE images
+                 SET favorite = ?
+                 WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+            )
+            .bind(favorite)
+            .bind(owner_user_id.to_string())
+            .bind(pool_id.to_string())
+            .bind(image_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        if let Some(random_weight) = patch.random_weight {
+            sqlx::query(
+                "UPDATE images
+                 SET random_weight = ?
+                 WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+            )
+            .bind(random_weight)
+            .bind(owner_user_id.to_string())
+            .bind(pool_id.to_string())
+            .bind(image_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        if let Some(tags) = &patch.tags {
+            self.replace_tags(&mut tx, owner_user_id, image_id, tags)
+                .await?;
+        }
+
         tx.commit().await?;
         Ok(true)
     }
@@ -332,6 +466,17 @@ impl ImageRepository {
             return Ok(HashMap::new());
         }
 
+        self.load_tags_for_image_ids(&image_ids).await
+    }
+
+    async fn load_tags_for_image_ids(
+        &self,
+        image_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, Vec<String>>, sqlx::Error> {
+        if image_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
         let mut query = String::from("SELECT image_id, name FROM image_tags WHERE image_id IN (");
         for index in 0..image_ids.len() {
             if index > 0 {
@@ -342,7 +487,7 @@ impl ImageRepository {
         query.push_str(") ORDER BY image_id, position");
 
         let mut built = sqlx::query_as::<_, (String, String)>(&query);
-        for image_id in &image_ids {
+        for image_id in image_ids {
             built = built.bind(image_id.to_string());
         }
 

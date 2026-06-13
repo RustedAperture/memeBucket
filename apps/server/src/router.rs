@@ -12,7 +12,7 @@ use crate::{
     api::{
         account::{delete_account, export_account, get_profile, logout, update_username},
         gifs::search_gifs,
-        images::{create_image, delete_image, list_images, update_image},
+        images::{create_image, delete_image, list_images, search_images, update_image},
         pools::{create_pool, delete_pool, list_pools, rename_pool},
     },
     app_state::AppState,
@@ -51,6 +51,7 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
         .route("/health", get(health))
         .route("/api/auth/logout", post(logout))
         .route("/api/gifs/search", get(search_gifs))
+        .route("/api/images/search", get(search_images))
         .route(
             "/api/pools/{pool_id}/images",
             get(list_images).post(create_image),

@@ -88,6 +88,139 @@ async fn read_json(response: axum::response::Response) -> serde_json::Value {
 }
 
 #[tokio::test]
+async fn search_images_filters_by_text_tags_favorite_and_random_state() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let history = SendHistoryRepository::new(pool.clone());
+    let owner = users
+        .upsert_by_discord_key("image-search-owner", None, None)
+        .await
+        .unwrap();
+    let cats = pools.create(owner.id, "Cats").await.unwrap();
+    let dogs = pools.create(owner.id, "Dogs").await.unwrap();
+    let happy = images
+        .create_with_metadata(
+            owner.id,
+            cats.id,
+            "https://example.com/happy-cat.gif",
+            Some("Happy Cat"),
+            true,
+            4,
+            &["cat".to_string(), "reaction".to_string()],
+        )
+        .await
+        .unwrap();
+    images
+        .create_with_metadata(
+            owner.id,
+            dogs.id,
+            "https://example.com/sad-dog.gif",
+            Some("Sad Dog"),
+            false,
+            0,
+            &["dog".to_string(), "reaction".to_string()],
+        )
+        .await
+        .unwrap();
+    history
+        .record(owner.id, &cats, &happy, "private")
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool);
+    let app = build_router_for_tests(state);
+    let mut request = Request::builder()
+        .uri(format!(
+            "/api/images/search?q=happy&tags=cat&favorite=true&randomEnabled=true&poolId={}",
+            cats.id
+        ))
+        .body(Body::empty())
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(AuthenticatedUser { user_id: owner.id });
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let results = read_json(response).await;
+
+    assert_eq!(results.as_array().unwrap().len(), 1);
+    assert_eq!(results[0]["poolId"], cats.id.to_string());
+    assert_eq!(results[0]["poolName"], "Cats");
+    assert_eq!(results[0]["image"]["id"], happy.id.to_string());
+    assert_eq!(results[0]["image"]["title"], "Happy Cat");
+    assert_eq!(results[0]["image"]["favorite"], true);
+    assert_eq!(results[0]["image"]["randomWeight"], 4);
+    assert_eq!(results[0]["image"]["sendCount"], 1);
+    assert_eq!(
+        results[0]["image"]["tags"],
+        serde_json::json!(["cat", "reaction"])
+    );
+}
+
+#[tokio::test]
+async fn search_images_returns_only_accessible_images() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let alice = users
+        .upsert_by_discord_key("image-search-alice", None, None)
+        .await
+        .unwrap();
+    let bob = users
+        .upsert_by_discord_key("image-search-bob", None, None)
+        .await
+        .unwrap();
+    let alice_pool = pools.create(alice.id, "Alice Cats").await.unwrap();
+    let bob_pool = pools.create(bob.id, "Bob Cats").await.unwrap();
+    let visible = images
+        .create_with_metadata(
+            alice.id,
+            alice_pool.id,
+            "https://example.com/visible-cat.gif",
+            Some("Visible Cat"),
+            false,
+            1,
+            &["cat".to_string()],
+        )
+        .await
+        .unwrap();
+    images
+        .create_with_metadata(
+            bob.id,
+            bob_pool.id,
+            "https://example.com/secret-cat.gif",
+            Some("Secret Cat"),
+            false,
+            1,
+            &["cat".to_string()],
+        )
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool);
+    let app = build_router_for_tests(state);
+    let mut request = Request::builder()
+        .uri("/api/images/search?q=cat")
+        .body(Body::empty())
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(AuthenticatedUser { user_id: alice.id });
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let results = read_json(response).await;
+
+    assert_eq!(results.as_array().unwrap().len(), 1);
+    assert_eq!(results[0]["poolName"], "Alice Cats");
+    assert_eq!(results[0]["image"]["id"], visible.id.to_string());
+}
+
+#[tokio::test]
 async fn create_image_accepts_metadata_and_returns_normalized_fields() {
     let _local_ip_guard = LOCAL_IP_TEST_LOCK.lock().await;
     let _allow_local_ips = EnvVarGuard::set("EZGIF_ALLOW_LOCAL_IPS_IN_TESTS", "1");

@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use sqlx::SqlitePool;
+use sqlx::{QueryBuilder, Sqlite, SqlitePool};
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -30,6 +30,47 @@ pub struct UpdateImageMetadataPatch {
     pub random_weight: Option<i64>,
     pub tags: Option<Vec<String>>,
 }
+
+#[derive(Clone, Debug, Default)]
+pub struct ImageSearchFilters {
+    pub query: Option<String>,
+    pub pool_id: Option<Uuid>,
+    pub favorite: Option<bool>,
+    pub random_enabled: Option<bool>,
+    pub tags: Vec<String>,
+    pub limit: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct StoredImageSearchResult {
+    pub pool_name: String,
+    pub image: StoredImage,
+}
+
+type StoredImageRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    bool,
+    i64,
+    String,
+    Option<String>,
+);
+
+type SearchImageRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    bool,
+    i64,
+    String,
+    Option<String>,
+);
 
 impl ImageRepository {
     pub fn new(pool: SqlitePool) -> Self {
@@ -157,6 +198,136 @@ impl ImageRepository {
                     row,
                     tags_by_image.get(&image_id).cloned().unwrap_or_default(),
                 )
+            })
+            .collect()
+    }
+
+    pub async fn search_for_user(
+        &self,
+        user_id: Uuid,
+        filters: &ImageSearchFilters,
+    ) -> Result<Vec<StoredImageSearchResult>, sqlx::Error> {
+        let mut builder: QueryBuilder<'_, Sqlite> = QueryBuilder::new(
+            "SELECT p.name, images.id, images.owner_user_id, images.pool_id, images.url,
+                    images.title, images.favorite, images.random_weight, images.created_at, images.notes
+             FROM images
+             INNER JOIN pools p
+                ON p.id = images.pool_id
+               AND p.owner_user_id = images.owner_user_id
+             WHERE (
+                 images.owner_user_id = ",
+        );
+        builder.push_bind(user_id.to_string());
+        builder.push(
+            "
+                 OR EXISTS (
+                   SELECT 1
+                   FROM pool_subscriptions ps
+                   WHERE ps.pool_id = images.pool_id
+                     AND ps.subscriber_user_id = ",
+        );
+        builder.push_bind(user_id.to_string());
+        builder.push(
+            "
+                     AND (
+                       p.whitelist_enabled = 0
+                       OR EXISTS (
+                         SELECT 1
+                         FROM pool_whitelists w
+                         WHERE w.pool_id = p.id AND w.user_id = ",
+        );
+        builder.push_bind(user_id.to_string());
+        builder.push(
+            "
+                       )
+                     )
+                 )
+             )",
+        );
+
+        if let Some(pool_id) = filters.pool_id {
+            builder.push(" AND images.pool_id = ");
+            builder.push_bind(pool_id.to_string());
+        }
+
+        if let Some(favorite) = filters.favorite {
+            builder.push(" AND images.favorite = ");
+            builder.push_bind(favorite);
+        }
+
+        if let Some(random_enabled) = filters.random_enabled {
+            if random_enabled {
+                builder.push(" AND images.random_weight > 0");
+            } else {
+                builder.push(" AND images.random_weight = 0");
+            }
+        }
+
+        if let Some(query) = normalized_search_query(&filters.query) {
+            let pattern = like_pattern(&query);
+            builder.push(
+                " AND (
+                    images.url LIKE ",
+            );
+            builder.push_bind(pattern.clone());
+            builder.push(" ESCAPE '\\' OR images.title LIKE ");
+            builder.push_bind(pattern.clone());
+            builder.push(" ESCAPE '\\' OR images.notes LIKE ");
+            builder.push_bind(pattern.clone());
+            builder.push(" ESCAPE '\\' OR p.name LIKE ");
+            builder.push_bind(pattern.clone());
+            builder.push(" ESCAPE '\\'");
+            builder.push(
+                " OR EXISTS (
+                    SELECT 1
+                    FROM image_tags it
+                    WHERE it.image_id = images.id
+                      AND it.name_folded LIKE ",
+            );
+            builder.push_bind(pattern);
+            builder.push(" ESCAPE '\\'))");
+        }
+
+        for tag in normalized_filter_tags(&filters.tags) {
+            builder.push(
+                " AND EXISTS (
+                    SELECT 1
+                    FROM image_tags it
+                    WHERE it.image_id = images.id
+                      AND it.name_folded = ",
+            );
+            builder.push_bind(tag);
+            builder.push(")");
+        }
+
+        builder.push(" ORDER BY images.favorite DESC, images.created_at DESC LIMIT ");
+        builder.push_bind(filters.limit.clamp(1, 100));
+
+        let rows = builder
+            .build_query_as::<SearchImageRow>()
+            .fetch_all(&self.pool)
+            .await?;
+
+        let image_ids = rows
+            .iter()
+            .map(|row| Uuid::parse_str(&row.1).map_err(|err| sqlx::Error::Decode(Box::new(err))))
+            .collect::<Result<Vec<_>, _>>()?;
+        let tags_by_image = self.load_tags_for_image_ids(&image_ids).await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let image_id =
+                    Uuid::parse_str(&row.1).map_err(|err| sqlx::Error::Decode(Box::new(err)))?;
+                let image_row = (
+                    row.1, row.2, row.3, row.4, row.5, row.6, row.7, row.8, row.9,
+                );
+                Ok(StoredImageSearchResult {
+                    pool_name: row.0,
+                    image: Self::stored_image_from_row(
+                        image_row,
+                        tags_by_image.get(&image_id).cloned().unwrap_or_default(),
+                    )?,
+                })
             })
             .collect()
     }
@@ -521,17 +692,7 @@ impl ImageRepository {
     }
 
     fn stored_image_from_row(
-        row: (
-            String,
-            String,
-            String,
-            String,
-            Option<String>,
-            bool,
-            i64,
-            String,
-            Option<String>,
-        ),
+        row: StoredImageRow,
         tags: Vec<String>,
     ) -> Result<StoredImage, sqlx::Error> {
         let (
@@ -561,4 +722,43 @@ impl ImageRepository {
             notes: stored_notes,
         })
     }
+}
+
+fn normalized_search_query(query: &Option<String>) -> Option<String> {
+    query
+        .as_deref()
+        .map(str::trim)
+        .filter(|query| !query.is_empty())
+        .map(str::to_lowercase)
+}
+
+fn like_pattern(value: &str) -> String {
+    let mut pattern = String::from("%");
+    for character in value.chars() {
+        match character {
+            '\\' | '%' | '_' => {
+                pattern.push('\\');
+                pattern.push(character);
+            }
+            _ => pattern.push(character),
+        }
+    }
+    pattern.push('%');
+    pattern
+}
+
+fn normalized_filter_tags(tags: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    let mut seen = HashSet::new();
+
+    for tag in tags {
+        let Some((_, folded)) = ImageRepository::normalize_tag(tag) else {
+            continue;
+        };
+        if seen.insert(folded.clone()) {
+            normalized.push(folded);
+        }
+    }
+
+    normalized
 }

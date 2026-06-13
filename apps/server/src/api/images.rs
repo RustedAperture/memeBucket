@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::SqlitePool;
@@ -11,7 +11,7 @@ use crate::{
     auth::sessions::AuthenticatedUser,
     error::AppError,
     repositories::{
-        images::{ImageRepository, StoredImage, UpdateImageMetadataPatch},
+        images::{ImageRepository, ImageSearchFilters, StoredImage, UpdateImageMetadataPatch},
         send_history::SendHistoryRepository,
     },
     services::images::resolve_image_url,
@@ -57,6 +57,27 @@ pub struct MoveImageRequest {
     pub new_pool_id: Uuid,
 }
 
+#[derive(Deserialize)]
+pub struct SearchImagesQuery {
+    pub q: Option<String>,
+    #[serde(rename = "poolId")]
+    pub pool_id: Option<Uuid>,
+    pub favorite: Option<bool>,
+    #[serde(rename = "randomEnabled")]
+    pub random_enabled: Option<bool>,
+    pub tags: Option<String>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Serialize)]
+pub struct ImageSearchResponse {
+    #[serde(rename = "poolId")]
+    pub pool_id: String,
+    #[serde(rename = "poolName")]
+    pub pool_name: String,
+    pub image: ImageResponse,
+}
+
 pub async fn list_images(
     State(state): State<AppState>,
     user: AuthenticatedUser,
@@ -66,6 +87,47 @@ pub async fn list_images(
     let images = repo.list_for_pool(user.user_id, pool_id).await?;
     Ok(Json(
         build_image_responses(state.pool, Some(user.user_id), images).await?,
+    ))
+}
+
+pub async fn search_images(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Query(query): Query<SearchImagesQuery>,
+) -> Result<Json<Vec<ImageSearchResponse>>, AppError> {
+    let repo = ImageRepository::new(state.pool.clone());
+    let filters = ImageSearchFilters {
+        query: query.q,
+        pool_id: query.pool_id,
+        favorite: query.favorite,
+        random_enabled: query.random_enabled,
+        tags: parse_tag_filter(query.tags),
+        limit: i64::from(query.limit.unwrap_or(50).clamp(1, 100)),
+    };
+    let results = repo.search_for_user(user.user_id, &filters).await?;
+    let image_ids = results
+        .iter()
+        .map(|result| result.image.id)
+        .collect::<Vec<_>>();
+    let send_counts = SendHistoryRepository::new(state.pool)
+        .count_for_images(user.user_id, &image_ids)
+        .await?;
+
+    Ok(Json(
+        results
+            .into_iter()
+            .map(|result| {
+                let send_count = send_counts
+                    .get(&result.image.id)
+                    .copied()
+                    .unwrap_or_default();
+                ImageSearchResponse {
+                    pool_id: result.image.pool_id.to_string(),
+                    pool_name: result.pool_name,
+                    image: image_response_from_stored(result.image, send_count),
+                }
+            })
+            .collect(),
     ))
 }
 
@@ -255,4 +317,13 @@ fn validate_random_weight(random_weight: i64) -> Result<i64, AppError> {
             "randomWeight must be between 0 and 10".to_string(),
         ))
     }
+}
+
+fn parse_tag_filter(tags: Option<String>) -> Vec<String> {
+    tags.unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|tag| !tag.is_empty())
+        .map(str::to_string)
+        .collect()
 }

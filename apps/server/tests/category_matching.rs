@@ -94,6 +94,168 @@ async fn random_lookup_combines_images_from_multiple_pools() {
 }
 
 #[tokio::test]
+async fn random_excludes_zero_weight_images() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let history = SendHistoryRepository::new(pool.clone());
+    let service = RandomService::new(pools.clone(), images.clone(), history);
+    let user = users
+        .upsert_by_discord_key("zero-weight-user", None, None)
+        .await
+        .unwrap();
+    let saved_pool = pools.create(user.id, "cats").await.unwrap();
+    images
+        .create_with_metadata(
+            user.id,
+            saved_pool.id,
+            "https://example.com/skip.gif",
+            None,
+            false,
+            0,
+            &[],
+        )
+        .await
+        .unwrap();
+    images
+        .create_with_metadata(
+            user.id,
+            saved_pool.id,
+            "https://example.com/use.gif",
+            None,
+            false,
+            1,
+            &[],
+        )
+        .await
+        .unwrap();
+
+    for _ in 0..10 {
+        let selected = service
+            .select_random(user.id, "cats", RandomVisibility::Public)
+            .await
+            .unwrap();
+        assert_eq!(selected.url, "https://example.com/use.gif");
+    }
+}
+
+#[tokio::test]
+async fn random_avoids_recent_image_when_alternative_exists() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let history = SendHistoryRepository::new(pool.clone());
+    let service = RandomService::new(pools.clone(), images.clone(), history.clone());
+    let user = users
+        .upsert_by_discord_key("recent-user", None, None)
+        .await
+        .unwrap();
+    let saved_pool = pools.create(user.id, "cats").await.unwrap();
+    let recent = images
+        .create(user.id, saved_pool.id, "https://example.com/recent.gif")
+        .await
+        .unwrap();
+    let fresh = images
+        .create(user.id, saved_pool.id, "https://example.com/fresh.gif")
+        .await
+        .unwrap();
+    history
+        .record(user.id, &saved_pool, &recent, "public")
+        .await
+        .unwrap();
+
+    let selected = service
+        .select_random(user.id, "cats", RandomVisibility::Public)
+        .await
+        .unwrap();
+
+    assert_eq!(selected.url, fresh.url);
+}
+
+#[tokio::test]
+async fn random_returns_only_image_from_single_image_pool() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let history = SendHistoryRepository::new(pool.clone());
+    let service = RandomService::new(pools.clone(), images.clone(), history.clone());
+    let user = users
+        .upsert_by_discord_key("single-image-user", None, None)
+        .await
+        .unwrap();
+    let saved_pool = pools.create(user.id, "cats").await.unwrap();
+    let only = images
+        .create(user.id, saved_pool.id, "https://example.com/only.gif")
+        .await
+        .unwrap();
+    history
+        .record(user.id, &saved_pool, &only, "public")
+        .await
+        .unwrap();
+
+    let selected = service
+        .select_random(user.id, "cats", RandomVisibility::Public)
+        .await
+        .unwrap();
+
+    assert_eq!(selected.url, only.url);
+}
+
+#[tokio::test]
+async fn all_zero_weight_images_return_random_enabled_error() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let history = SendHistoryRepository::new(pool.clone());
+    let service = RandomService::new(pools.clone(), images.clone(), history);
+    let user = users
+        .upsert_by_discord_key("all-zero-random-user", None, None)
+        .await
+        .unwrap();
+    let saved_pool = pools.create(user.id, "cats").await.unwrap();
+    images
+        .create_with_metadata(
+            user.id,
+            saved_pool.id,
+            "https://example.com/zero-a.gif",
+            None,
+            false,
+            0,
+            &[],
+        )
+        .await
+        .unwrap();
+    images
+        .create_with_metadata(
+            user.id,
+            saved_pool.id,
+            "https://example.com/zero-b.gif",
+            None,
+            true,
+            0,
+            &[],
+        )
+        .await
+        .unwrap();
+
+    let err = service
+        .select_random(user.id, "cats", RandomVisibility::Private)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, RandomError::NoRandomEnabledImages));
+    assert_eq!(
+        err.user_message(),
+        "That pool has no random-enabled images yet."
+    );
+    assert!(err.is_private());
+}
+
+#[tokio::test]
 async fn empty_category_returns_private_safe_error() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
@@ -144,6 +306,44 @@ async fn send_history_record_rejects_cross_owner_inputs() {
         .unwrap_err();
 
     assert!(matches!(err, sqlx::Error::RowNotFound));
+}
+
+#[tokio::test]
+async fn recent_image_ids_for_pools_prefers_latest_insert_when_sent_at_ties() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let history = SendHistoryRepository::new(pool.clone());
+    let user = users
+        .upsert_by_discord_key("recent-order-user", None, None)
+        .await
+        .unwrap();
+    let saved_pool = pools.create(user.id, "Cats").await.unwrap();
+    let first = images
+        .create(user.id, saved_pool.id, "https://example.com/first.gif")
+        .await
+        .unwrap();
+    let second = images
+        .create(user.id, saved_pool.id, "https://example.com/second.gif")
+        .await
+        .unwrap();
+
+    history
+        .record(user.id, &saved_pool, &first, "public")
+        .await
+        .unwrap();
+    history
+        .record(user.id, &saved_pool, &second, "public")
+        .await
+        .unwrap();
+
+    let recent_ids = history
+        .recent_image_ids_for_pools(user.id, &[saved_pool.id], 1)
+        .await
+        .unwrap();
+
+    assert_eq!(recent_ids, vec![second.id]);
 }
 
 #[tokio::test]

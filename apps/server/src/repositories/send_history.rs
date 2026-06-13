@@ -109,4 +109,36 @@ impl SendHistoryRepository {
 
         Ok(counts)
     }
+
+    pub async fn recent_image_ids_for_pools(
+        &self,
+        requester_user_id: Uuid,
+        pool_ids: &[Uuid],
+        limit: usize,
+    ) -> Result<Vec<Uuid>, sqlx::Error> {
+        if pool_ids.is_empty() || limit == 0 {
+            return Ok(Vec::new());
+        }
+
+        let placeholders = vec!["?"; pool_ids.len()].join(", ");
+        let sql = format!(
+            "SELECT image_id FROM send_history
+             WHERE owner_user_id = ?
+               AND image_id IS NOT NULL
+               AND pool_id IN ({placeholders})
+             ORDER BY sent_at DESC, rowid DESC
+             LIMIT ?"
+        );
+
+        let mut query = sqlx::query_scalar::<_, String>(&sql).bind(requester_user_id.to_string());
+        for pool_id in pool_ids {
+            query = query.bind(pool_id.to_string());
+        }
+        query = query.bind(limit as i64);
+
+        let rows = query.fetch_all(&self.pool).await?;
+        rows.into_iter()
+            .map(|id| Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err))))
+            .collect()
+    }
 }

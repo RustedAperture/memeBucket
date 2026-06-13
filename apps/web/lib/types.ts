@@ -38,6 +38,12 @@ export type GifSearchSelection = {
   tags: string[];
 };
 
+export type ImageSearchResult = {
+  poolId: string;
+  poolName: string;
+  image: ImageItem;
+};
+
 export type Pool = {
   id: string;
   name: string;

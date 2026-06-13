@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiGet } from "@/lib/api";
+import type { GifSearchSelection } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 
 type GifAsset = {
@@ -19,6 +20,9 @@ type GifAsset = {
 type GifResult = {
   id?: string | number;
   url?: string;
+  title?: string;
+  slug?: string;
+  tags?: unknown;
   file?: {
     hd?: { gif?: GifAsset };
     md?: { gif?: GifAsset };
@@ -50,7 +54,7 @@ export function GifSearchModal({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelect: (url: string) => void;
+  onSelect: (selection: GifSearchSelection) => void;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GifResult[]>([]);
@@ -164,6 +168,15 @@ export function GifSearchModal({
     return getImageUrl(result);
   }
 
+  function buildSelection(result: GifResult, imageUrl: string): GifSearchSelection {
+    return {
+      url: imageUrl,
+      title: normalizeTitle(result.title),
+      slug: normalizeTitle(result.slug),
+      tags: buildSuggestedTags(result, query),
+    };
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl h-[80vh] flex flex-col">
@@ -192,16 +205,17 @@ export function GifSearchModal({
                 {results.map((result, idx) => {
                   const imgUrl = getImageUrl(result);
                   const previewUrl = getPreviewUrl(result);
+                  const title = normalizeTitle(result.title);
                   if (!imgUrl) return null;
                   return (
                     <div
                       key={result.id || idx}
                       className="relative cursor-pointer group rounded-md overflow-hidden bg-muted break-inside-avoid"
-                      onClick={() => onSelect(imgUrl)}
+                      onClick={() => onSelect(buildSelection(result, imgUrl))}
                     >
                       <img
                         src={previewUrl}
-                        alt="GIF preview"
+                        alt={title || "GIF preview"}
                         className="w-full h-auto object-cover transition-transform group-hover:scale-105"
                       />
                     </div>
@@ -231,4 +245,94 @@ export function GifSearchModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+const STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
+  "for",
+  "from",
+  "gif",
+  "gifs",
+  "in",
+  "is",
+  "it",
+  "its",
+  "of",
+  "on",
+  "or",
+  "sticker",
+  "stickers",
+  "that",
+  "the",
+  "this",
+  "to",
+  "with",
+  "you",
+  "your",
+]);
+
+function normalizeTitle(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return null;
+  }
+  return normalized.slice(0, 200);
+}
+
+function buildSuggestedTags(result: GifResult, query: string): string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (value: unknown) => {
+    for (const token of tagTokens(value)) {
+      if (seen.has(token)) {
+        continue;
+      }
+      seen.add(token);
+      tags.push(token);
+      if (tags.length >= 12) {
+        return;
+      }
+    }
+  };
+
+  add(query);
+  add(result.tags);
+  add(result.title);
+  add(result.slug);
+
+  return tags;
+}
+
+function tagTokens(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => tagTokens(item));
+  }
+
+  if (value && typeof value === "object") {
+    const tagged = value as { name?: unknown; title?: unknown; slug?: unknown };
+    return [...tagTokens(tagged.name), ...tagTokens(tagged.title), ...tagTokens(tagged.slug)];
+  }
+
+  if (typeof value !== "string") {
+    return [];
+  }
+
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .split(/[^a-z0-9_-]+/g)
+    .map((token) => token.replace(/^[-_]+|[-_]+$/g, ""))
+    .filter((token) => token.length >= 2 && !STOP_WORDS.has(token))
+    .map((token) => token.slice(0, 32));
 }

@@ -19,6 +19,25 @@ export type MediaLink = {
   previewStatus: "unchecked" | "ok" | "warning" | "failed";
 };
 
+export type ImageItem = {
+  id: string;
+  url: string;
+  title: string | null;
+  favorite: boolean;
+  randomWeight: number;
+  tags: string[];
+  sendCount: number;
+  createdAt?: string;
+  notes?: string | null;
+};
+
+export type GifSearchSelection = {
+  url: string;
+  title: string | null;
+  slug: string | null;
+  tags: string[];
+};
+
 export type Pool = {
   id: string;
   name: string;

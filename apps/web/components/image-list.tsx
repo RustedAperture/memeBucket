@@ -4,9 +4,12 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
-import { Check, ExternalLink, ImageIcon, Trash2, Edit2, X } from "lucide-react";
+import { Check, ExternalLink, ImageIcon, Trash2, Edit2, X, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,9 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-type ImageItem = { id: string; url: string; createdAt?: string; notes?: string | null };
-import { Pool } from "@/lib/types";
+import type { ImageItem, Pool } from "@/lib/types";
 
 export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:columns-3 lg:columns-4", readonly = false, pools = [], onMoveImage }: { poolId: string; columnClass?: string; readonly?: boolean; pools?: Pool[]; onMoveImage?: () => void }) {
   const [images, setImages] = useState<ImageItem[]>([]);
@@ -44,7 +45,11 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageItem | null>(null);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
-  const [editingNotes, setEditingNotes] = useState(false);
+  const [editingMetadata, setEditingMetadata] = useState(false);
+  const [titleValue, setTitleValue] = useState("");
+  const [favoriteValue, setFavoriteValue] = useState(false);
+  const [randomWeightValue, setRandomWeightValue] = useState(1);
+  const [tagsValue, setTagsValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
   const movePoolItems = pools.map((p) => ({
     label: `${p.name}${p.id === poolId ? " (Current)" : ""}`,
@@ -90,8 +95,12 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
 
   function openImageDetails(image: ImageItem) {
     setSelectedImage(image);
+    setTitleValue(image.title || "");
+    setFavoriteValue(image.favorite);
+    setRandomWeightValue(image.randomWeight);
+    setTagsValue(image.tags.join(", "));
     setNotesValue(image.notes || "");
-    setEditingNotes(false);
+    setEditingMetadata(false);
   }
 
   function dragImageIdsFor(imageId: string) {
@@ -113,16 +122,33 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
     }
   }
 
-  async function handleSaveNotes() {
+  async function handleSaveMetadata() {
     if (!selectedImage) return;
+    const normalizedTags = parseTagInput(tagsValue);
+    const normalizedTitle = titleValue.trim() || null;
+    const normalizedNotes = notesValue.trim() || null;
+    const normalizedWeight = clampRandomWeight(randomWeightValue);
     try {
-      await apiPatch(`/api/pools/${poolId}/images/${selectedImage.id}`, { notes: notesValue });
-      const updatedNotes = notesValue.trim() || null;
-      setSelectedImage({ ...selectedImage, notes: updatedNotes });
-      setImages(images.map(img => img.id === selectedImage.id ? { ...img, notes: updatedNotes } : img));
-      setEditingNotes(false);
+      await apiPatch(`/api/pools/${poolId}/images/${selectedImage.id}`, {
+        title: normalizedTitle,
+        notes: normalizedNotes,
+        favorite: favoriteValue,
+        randomWeight: normalizedWeight,
+        tags: normalizedTags,
+      });
+      const updatedImage = {
+        ...selectedImage,
+        title: normalizedTitle,
+        notes: normalizedNotes,
+        favorite: favoriteValue,
+        randomWeight: normalizedWeight,
+        tags: normalizedTags,
+      };
+      setSelectedImage(updatedImage);
+      setImages(images.map(img => img.id === selectedImage.id ? updatedImage : img));
+      setEditingMetadata(false);
     } catch {
-      toast.error("Failed to save notes");
+      toast.error("Failed to save image details");
     }
   }
 
@@ -216,12 +242,12 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                 }`}
               >
                 {image.url.split('?')[0].toLowerCase().endsWith('.mp4') || image.url.split('?')[0].toLowerCase().endsWith('.webm') ? (
-                  <video 
-                    src={image.url} 
-                    autoPlay 
-                    loop 
-                    muted 
-                    playsInline 
+                  <video
+                    src={image.url}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
                     className="w-full h-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
                     onError={(e) => {
                       (e.target as HTMLVideoElement).style.display = 'none';
@@ -229,9 +255,9 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                     }}
                   />
                 ) : (
-                  <img 
-                    src={image.url} 
-                    alt="Image preview" 
+                  <img
+                    src={image.url}
+                    alt={image.title || "Image preview"}
                     className="w-full h-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
@@ -240,7 +266,7 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                   />
                 )}
                 <ImageIcon className="hidden w-10 h-10 text-muted-foreground/50 absolute z-0" />
-                
+
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10" />
 
                 {!readonly ? (
@@ -277,13 +303,13 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
         {selectedImage ? (
           <DialogContent className="min-w-0 max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Image details</DialogTitle>
+              <DialogTitle className="truncate">{selectedImage.title || "Image details"}</DialogTitle>
               <DialogDescription>
-                {formatAddedAt(selectedImage.createdAt)}
+                {formatAddedAt(selectedImage.createdAt)} - {selectedImage.sendCount} send{selectedImage.sendCount === 1 ? "" : "s"}
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto] gap-4">
+            <div className="grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] gap-4 overflow-y-auto pr-1">
               <div className="min-h-0 overflow-hidden rounded-xl border border-border/70 bg-muted/20">
                 {selectedImage.url.split('?')[0].toLowerCase().endsWith('.mp4') || selectedImage.url.split('?')[0].toLowerCase().endsWith('.webm') ? (
                   <video
@@ -297,9 +323,140 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                 ) : (
                   <img
                     src={selectedImage.url}
-                    alt="Selected image preview"
+                    alt={selectedImage.title || "Selected image preview"}
                     className="h-full max-h-full w-full object-contain"
                   />
+                )}
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-border/70 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Metadata</p>
+                  {!readonly && !editingMetadata ? (
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEditingMetadata(true)}>
+                      <Edit2 className="h-3 w-3 mr-1" /> Edit
+                    </Button>
+                  ) : null}
+                </div>
+
+                {editingMetadata ? (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="image-title">Title</Label>
+                      <Input
+                        id="image-title"
+                        value={titleValue}
+                        maxLength={200}
+                        onChange={(event) => setTitleValue(event.target.value)}
+                        placeholder="Untitled"
+                      />
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="image-tags">Tags</Label>
+                        <Input
+                          id="image-tags"
+                          value={tagsValue}
+                          onChange={(event) => setTagsValue(event.target.value)}
+                          placeholder="cat, reaction, happy"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="image-weight">Weight</Label>
+                        <Input
+                          id="image-weight"
+                          type="number"
+                          min={0}
+                          max={10}
+                          step={1}
+                          value={randomWeightValue}
+                          onChange={(event) => setRandomWeightValue(clampRandomWeight(Number(event.target.value)))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                      <Label htmlFor="image-favorite" className="gap-2">
+                        <Star className={favoriteValue ? "h-4 w-4 fill-current text-primary" : "h-4 w-4 text-muted-foreground"} />
+                        Favorite
+                      </Label>
+                      <Switch
+                        id="image-favorite"
+                        checked={favoriteValue}
+                        onCheckedChange={setFavoriteValue}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="image-notes">Notes / Credits</Label>
+                      <Textarea
+                        id="image-notes"
+                        value={notesValue}
+                        onChange={(event) => setNotesValue(event.target.value)}
+                        placeholder="Add notes, credits, or context..."
+                        className="resize-none h-24"
+                      />
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingMetadata(false);
+                          setTitleValue(selectedImage.title || "");
+                          setFavoriteValue(selectedImage.favorite);
+                          setRandomWeightValue(selectedImage.randomWeight);
+                          setTagsValue(selectedImage.tags.join(", "));
+                          setNotesValue(selectedImage.notes || "");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button size="sm" onClick={handleSaveMetadata}>Save</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid gap-2 text-sm sm:grid-cols-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Favorite</p>
+                        <p className="flex items-center gap-1 font-medium">
+                          <Star className={selectedImage.favorite ? "h-4 w-4 fill-current text-primary" : "h-4 w-4 text-muted-foreground"} />
+                          {selectedImage.favorite ? "Yes" : "No"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Weight</p>
+                        <p className="font-medium">{selectedImage.randomWeight}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Sends</p>
+                        <p className="font-medium">{selectedImage.sendCount}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">Tags</p>
+                      {selectedImage.tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedImage.tags.map((tag) => (
+                            <Badge key={tag} variant="secondary" className="max-w-full rounded-md">
+                              <span className="truncate">{tag}</span>
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No tags</p>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">Notes / Credits</p>
+                      <p className="min-h-5 whitespace-pre-wrap text-sm text-foreground">
+                        {selectedImage.notes || "No notes provided."}
+                      </p>
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -316,38 +473,6 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                     <ExternalLink />
                   </Button>
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Notes / Credits</p>
-                  {!readonly && !editingNotes && (
-                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEditingNotes(true)}>
-                      <Edit2 className="h-3 w-3 mr-1" /> Edit
-                    </Button>
-                  )}
-                </div>
-                {editingNotes ? (
-                  <div className="space-y-2">
-                    <Textarea 
-                      value={notesValue}
-                      onChange={(e) => setNotesValue(e.target.value)}
-                      placeholder="Add notes, credits, or context..."
-                      className="resize-none h-24"
-                    />
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={() => { setEditingNotes(false); setNotesValue(selectedImage.notes || ""); }}>Cancel</Button>
-                      <Button size="sm" onClick={handleSaveNotes}>Save</Button>
-                    </div>
-                  </div>
-                ) : (
-                  <Textarea
-                    readOnly
-                    value={selectedImage.notes || ""}
-                    placeholder="No notes provided."
-                    className="min-h-10"
-                  />
-                )}
               </div>
 
               {pools.length > 1 && !readonly && (
@@ -431,4 +556,31 @@ function formatAddedAt(value?: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date)}`;
+}
+
+function clampRandomWeight(value: number) {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.min(10, Math.max(0, Math.round(value)));
+}
+
+function parseTagInput(value: string) {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  for (const tag of value.split(",")) {
+    const normalized = tag.trim().replace(/\s+/g, " ");
+    if (!normalized) {
+      continue;
+    }
+    const folded = normalized.toLowerCase();
+    if (seen.has(folded)) {
+      continue;
+    }
+    seen.add(folded);
+    tags.push(normalized);
+  }
+
+  return tags;
 }

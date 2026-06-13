@@ -32,6 +32,15 @@ pub struct UpdateImageMetadataPatch {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct BulkImageMetadataPatch {
+    pub image_ids: Vec<Uuid>,
+    pub favorite: Option<bool>,
+    pub random_weight: Option<i64>,
+    pub add_tags: Vec<String>,
+    pub remove_tags: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct ImageSearchFilters {
     pub query: Option<String>,
     pub pool_id: Option<Uuid>,
@@ -533,6 +542,120 @@ impl ImageRepository {
         Ok(true)
     }
 
+    pub async fn update_metadata_bulk(
+        &self,
+        owner_user_id: Uuid,
+        pool_id: Uuid,
+        patch: &BulkImageMetadataPatch,
+    ) -> Result<usize, sqlx::Error> {
+        let mut unique_image_ids = Vec::new();
+        let mut seen_image_ids = HashSet::new();
+        for image_id in &patch.image_ids {
+            if seen_image_ids.insert(*image_id) {
+                unique_image_ids.push(*image_id);
+            }
+        }
+
+        if unique_image_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let mut tx = self.pool.begin().await?;
+        let mut valid_image_ids = Vec::new();
+        for image_id in &unique_image_ids {
+            let exists = sqlx::query_scalar::<_, i64>(
+                "SELECT 1 FROM images WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+            )
+            .bind(owner_user_id.to_string())
+            .bind(pool_id.to_string())
+            .bind(image_id.to_string())
+            .fetch_optional(&mut *tx)
+            .await?
+            .is_some();
+
+            if exists {
+                valid_image_ids.push(*image_id);
+            }
+        }
+
+        if valid_image_ids.len() != unique_image_ids.len() {
+            tx.rollback().await?;
+            return Ok(0);
+        }
+
+        let add_tags = normalized_tag_names(&patch.add_tags);
+        let remove_tags = normalized_tag_folds(&patch.remove_tags);
+        let should_update_tags = !add_tags.is_empty() || !remove_tags.is_empty();
+
+        for image_id in &valid_image_ids {
+            if let Some(favorite) = patch.favorite {
+                sqlx::query(
+                    "UPDATE images
+                     SET favorite = ?
+                     WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+                )
+                .bind(favorite)
+                .bind(owner_user_id.to_string())
+                .bind(pool_id.to_string())
+                .bind(image_id.to_string())
+                .execute(&mut *tx)
+                .await?;
+            }
+
+            if let Some(random_weight) = patch.random_weight {
+                sqlx::query(
+                    "UPDATE images
+                     SET random_weight = ?
+                     WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+                )
+                .bind(random_weight)
+                .bind(owner_user_id.to_string())
+                .bind(pool_id.to_string())
+                .bind(image_id.to_string())
+                .execute(&mut *tx)
+                .await?;
+            }
+
+            if should_update_tags {
+                let current_tags = sqlx::query_scalar::<_, String>(
+                    "SELECT name FROM image_tags WHERE image_id = ? ORDER BY position",
+                )
+                .bind(image_id.to_string())
+                .fetch_all(&mut *tx)
+                .await?;
+                let mut next_tags = current_tags
+                    .into_iter()
+                    .filter(|tag| {
+                        let Some((_, folded)) = Self::normalize_tag(tag) else {
+                            return false;
+                        };
+                        !remove_tags.contains(&folded)
+                    })
+                    .collect::<Vec<_>>();
+
+                let mut seen_tags = next_tags
+                    .iter()
+                    .filter_map(|tag| Self::normalize_tag(tag).map(|(_, folded)| folded))
+                    .collect::<HashSet<_>>();
+
+                for tag in &add_tags {
+                    let Some((name, folded)) = Self::normalize_tag(tag) else {
+                        continue;
+                    };
+                    if seen_tags.insert(folded) {
+                        next_tags.push(name);
+                    }
+                }
+
+                self.replace_tags(&mut tx, owner_user_id, *image_id, &next_tags)
+                    .await?;
+            }
+        }
+
+        tx.commit().await?;
+        Ok(valid_image_ids.len())
+    }
+
     pub async fn move_to_pool(
         &self,
         owner_user_id: Uuid,
@@ -761,4 +884,26 @@ fn normalized_filter_tags(tags: &[String]) -> Vec<String> {
     }
 
     normalized
+}
+
+fn normalized_tag_names(tags: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    let mut seen = HashSet::new();
+
+    for tag in tags {
+        let Some((name, folded)) = ImageRepository::normalize_tag(tag) else {
+            continue;
+        };
+        if seen.insert(folded) {
+            normalized.push(name);
+        }
+    }
+
+    normalized
+}
+
+fn normalized_tag_folds(tags: &[String]) -> HashSet<String> {
+    tags.iter()
+        .filter_map(|tag| ImageRepository::normalize_tag(tag).map(|(_, folded)| folded))
+        .collect()
 }

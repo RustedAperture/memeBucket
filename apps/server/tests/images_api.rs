@@ -221,6 +221,147 @@ async fn search_images_returns_only_accessible_images() {
 }
 
 #[tokio::test]
+async fn bulk_update_images_updates_weight_favorite_and_tags() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let owner = users
+        .upsert_by_discord_key("bulk-image-owner", None, None)
+        .await
+        .unwrap();
+    let saved_pool = pools.create(owner.id, "Cats").await.unwrap();
+    let first = images
+        .create_with_metadata(
+            owner.id,
+            saved_pool.id,
+            "https://example.com/first.gif",
+            Some("First"),
+            false,
+            1,
+            &["cat".to_string()],
+        )
+        .await
+        .unwrap();
+    let second = images
+        .create_with_metadata(
+            owner.id,
+            saved_pool.id,
+            "https://example.com/second.gif",
+            Some("Second"),
+            false,
+            3,
+            &["dog".to_string()],
+        )
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool);
+    let app = build_router_for_tests(state);
+    let mut request = Request::builder()
+        .method("PATCH")
+        .uri(format!("/api/pools/{}/images/bulk", saved_pool.id))
+        .header("content-type", "application/json")
+        .body(Body::from(format!(
+            r#"{{"imageIds":["{}","{}"],"favorite":true,"randomWeight":0,"addTags":["reaction"],"removeTags":["dog"]}}"#,
+            first.id, second.id
+        )))
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(AuthenticatedUser { user_id: owner.id });
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let updated = read_json(response).await;
+    assert_eq!(updated, serde_json::json!({ "updated": 2 }));
+
+    let mut list_request = Request::builder()
+        .uri(format!("/api/pools/{}/images", saved_pool.id))
+        .body(Body::empty())
+        .unwrap();
+    list_request
+        .extensions_mut()
+        .insert(AuthenticatedUser { user_id: owner.id });
+    let list_response = app.oneshot(list_request).await.unwrap();
+    assert_eq!(list_response.status(), StatusCode::OK);
+    let listed = read_json(list_response).await;
+
+    assert_eq!(listed.as_array().unwrap().len(), 2);
+    assert_eq!(listed[0]["favorite"], true);
+    assert_eq!(listed[0]["randomWeight"], 0);
+    assert_eq!(listed[0]["tags"], serde_json::json!(["cat", "reaction"]));
+    assert_eq!(listed[1]["favorite"], true);
+    assert_eq!(listed[1]["randomWeight"], 0);
+    assert_eq!(listed[1]["tags"], serde_json::json!(["reaction"]));
+}
+
+#[tokio::test]
+async fn bulk_update_images_rejects_cross_owner_images_without_partial_update() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let pools = PoolRepository::new(pool.clone());
+    let images = ImageRepository::new(pool.clone());
+    let alice = users
+        .upsert_by_discord_key("bulk-image-alice", None, None)
+        .await
+        .unwrap();
+    let bob = users
+        .upsert_by_discord_key("bulk-image-bob", None, None)
+        .await
+        .unwrap();
+    let alice_pool = pools.create(alice.id, "Alice").await.unwrap();
+    let bob_pool = pools.create(bob.id, "Bob").await.unwrap();
+    let alice_image = images
+        .create_with_metadata(
+            alice.id,
+            alice_pool.id,
+            "https://example.com/alice.gif",
+            None,
+            false,
+            1,
+            &["safe".to_string()],
+        )
+        .await
+        .unwrap();
+    let bob_image = images
+        .create_with_metadata(
+            bob.id,
+            bob_pool.id,
+            "https://example.com/bob.gif",
+            None,
+            false,
+            1,
+            &["private".to_string()],
+        )
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool);
+    let app = build_router_for_tests(state);
+    let mut request = Request::builder()
+        .method("PATCH")
+        .uri(format!("/api/pools/{}/images/bulk", alice_pool.id))
+        .header("content-type", "application/json")
+        .body(Body::from(format!(
+            r#"{{"imageIds":["{}","{}"],"favorite":true}}"#,
+            alice_image.id, bob_image.id
+        )))
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(AuthenticatedUser { user_id: alice.id });
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let listed = images.list_for_pool(alice.id, alice_pool.id).await.unwrap();
+    assert_eq!(listed.len(), 1);
+    assert!(!listed[0].favorite);
+    assert_eq!(listed[0].tags, vec!["safe".to_string()]);
+}
+
+#[tokio::test]
 async fn create_image_accepts_metadata_and_returns_normalized_fields() {
     let _local_ip_guard = LOCAL_IP_TEST_LOCK.lock().await;
     let _allow_local_ips = EnvVarGuard::set("EZGIF_ALLOW_LOCAL_IPS_IN_TESTS", "1");

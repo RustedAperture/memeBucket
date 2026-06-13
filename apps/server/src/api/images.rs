@@ -11,7 +11,10 @@ use crate::{
     auth::sessions::AuthenticatedUser,
     error::AppError,
     repositories::{
-        images::{ImageRepository, ImageSearchFilters, StoredImage, UpdateImageMetadataPatch},
+        images::{
+            BulkImageMetadataPatch, ImageRepository, ImageSearchFilters, StoredImage,
+            UpdateImageMetadataPatch,
+        },
         send_history::SendHistoryRepository,
     },
     services::images::resolve_image_url,
@@ -55,6 +58,19 @@ pub struct UpdateImageRequest {
 #[derive(Deserialize)]
 pub struct MoveImageRequest {
     pub new_pool_id: Uuid,
+}
+
+#[derive(Deserialize)]
+pub struct BulkUpdateImagesRequest {
+    #[serde(rename = "imageIds")]
+    pub image_ids: Vec<Uuid>,
+    pub favorite: Option<bool>,
+    #[serde(rename = "randomWeight")]
+    pub random_weight: Option<i64>,
+    #[serde(rename = "addTags", default)]
+    pub add_tags: Vec<String>,
+    #[serde(rename = "removeTags", default)]
+    pub remove_tags: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -224,6 +240,58 @@ pub async fn update_image(
     }
 
     Ok(Json(serde_json::json!({ "updated": true })))
+}
+
+pub async fn bulk_update_images(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Path(pool_id): Path<Uuid>,
+    Json(request): Json<BulkUpdateImagesRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if request.image_ids.is_empty() {
+        return Err(AppError::BadRequest("imageIds is required".to_string()));
+    }
+    if request.image_ids.len() > 100 {
+        return Err(AppError::BadRequest(
+            "imageIds must include 100 images or fewer".to_string(),
+        ));
+    }
+
+    let random_weight = request
+        .random_weight
+        .map(validate_random_weight)
+        .transpose()?;
+
+    if request.favorite.is_none()
+        && random_weight.is_none()
+        && request.add_tags.is_empty()
+        && request.remove_tags.is_empty()
+    {
+        return Err(AppError::BadRequest(
+            "at least one metadata change is required".to_string(),
+        ));
+    }
+
+    let repo = ImageRepository::new(state.pool);
+    let updated = repo
+        .update_metadata_bulk(
+            user.user_id,
+            pool_id,
+            &BulkImageMetadataPatch {
+                image_ids: request.image_ids,
+                favorite: request.favorite,
+                random_weight,
+                add_tags: request.add_tags,
+                remove_tags: request.remove_tags,
+            },
+        )
+        .await?;
+
+    if updated == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    Ok(Json(serde_json::json!({ "updated": updated })))
 }
 
 pub async fn move_image(

@@ -57,6 +57,10 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
             get(list_images).post(create_image),
         )
         .route(
+            "/api/pools/{pool_id}/images/bulk",
+            axum::routing::patch(crate::api::images::bulk_update_images),
+        )
+        .route(
             "/api/pools/{pool_id}/images/{image_id}",
             delete(delete_image).patch(update_image),
         )

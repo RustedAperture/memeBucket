@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
-import { Check, ExternalLink, ImageIcon, Trash2, Edit2, X, Star } from "lucide-react";
+import { Check, ExternalLink, ImageIcon, Trash2, Edit2, X, Star, Tags } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,8 @@ import {
 } from "@/components/ui/select";
 import type { ImageItem, Pool } from "@/lib/types";
 
+type BulkFavoriteValue = "unchanged" | "true" | "false";
+
 export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:columns-3 lg:columns-4", readonly = false, pools = [], onMoveImage }: { poolId: string; columnClass?: string; readonly?: boolean; pools?: Pool[]; onMoveImage?: () => void }) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +53,12 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
   const [randomWeightValue, setRandomWeightValue] = useState(1);
   const [tagsValue, setTagsValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [bulkFavorite, setBulkFavorite] = useState<BulkFavoriteValue>("unchanged");
+  const [bulkWeight, setBulkWeight] = useState("");
+  const [bulkAddTags, setBulkAddTags] = useState("");
+  const [bulkRemoveTags, setBulkRemoveTags] = useState("");
+  const [bulkSaving, setBulkSaving] = useState(false);
   const movePoolItems = pools.map((p) => ({
     label: `${p.name}${p.id === poolId ? " (Current)" : ""}`,
     value: p.id,
@@ -152,6 +160,68 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
     }
   }
 
+  function resetBulkForm() {
+    setBulkFavorite("unchanged");
+    setBulkWeight("");
+    setBulkAddTags("");
+    setBulkRemoveTags("");
+    setBulkSaving(false);
+  }
+
+  async function handleBulkSave() {
+    const imageIds = Array.from(selectedImageIds);
+    if (imageIds.length === 0) return;
+
+    const addTags = parseTagInput(bulkAddTags);
+    const removeTags = parseTagInput(bulkRemoveTags);
+    const payload: {
+      imageIds: string[];
+      favorite?: boolean;
+      randomWeight?: number;
+      addTags?: string[];
+      removeTags?: string[];
+    } = { imageIds };
+
+    if (bulkFavorite !== "unchanged") {
+      payload.favorite = bulkFavorite === "true";
+    }
+    if (bulkWeight.trim()) {
+      payload.randomWeight = clampRandomWeight(Number(bulkWeight));
+    }
+    if (addTags.length > 0) {
+      payload.addTags = addTags;
+    }
+    if (removeTags.length > 0) {
+      payload.removeTags = removeTags;
+    }
+
+    if (
+      payload.favorite === undefined
+      && payload.randomWeight === undefined
+      && !payload.addTags
+      && !payload.removeTags
+    ) {
+      toast.error("Choose at least one metadata change");
+      return;
+    }
+
+    setBulkSaving(true);
+    try {
+      const response = await apiPatch<typeof payload, { updated: number }>(
+        `/api/pools/${poolId}/images/bulk`,
+        payload
+      );
+      setBulkDialogOpen(false);
+      setSelectedImageIds(new Set());
+      resetBulkForm();
+      await load();
+      toast.success(`Updated ${response.updated} image${response.updated === 1 ? "" : "s"}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update images");
+      setBulkSaving(false);
+    }
+  }
+
   async function handleMoveToPool(newPoolId: string) {
     if (!selectedImage || newPoolId === poolId) return;
     try {
@@ -188,16 +258,28 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
             <span className="font-medium">
               {selectedImageIds.size} image{selectedImageIds.size === 1 ? "" : "s"} selected
             </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2"
-              onClick={() => setSelectedImageIds(new Set())}
-            >
-              <X className="h-3.5 w-3.5" />
-              Clear
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setBulkDialogOpen(true)}
+              >
+                <Tags className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setSelectedImageIds(new Set())}
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear
+              </Button>
+            </div>
           </div>
         ) : null}
         <div className={`gap-4 ${columnClass}`}>
@@ -298,6 +380,102 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
           })}
         </div>
       </div>
+
+      <Dialog
+        open={bulkDialogOpen}
+        onOpenChange={(open) => {
+          setBulkDialogOpen(open);
+          if (!open) {
+            resetBulkForm();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Bulk edit</DialogTitle>
+            <DialogDescription>
+              {selectedImageIds.size} image{selectedImageIds.size === 1 ? "" : "s"} selected
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Favorite</Label>
+              <Select
+                items={[
+                  { label: "No change", value: "unchanged" },
+                  { label: "Favorite", value: "true" },
+                  { label: "Not favorite", value: "false" },
+                ]}
+                value={bulkFavorite}
+                onValueChange={(value) => {
+                  if (value === "unchanged" || value === "true" || value === "false") {
+                    setBulkFavorite(value);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="unchanged">No change</SelectItem>
+                    <SelectItem value="true">Favorite</SelectItem>
+                    <SelectItem value="false">Not favorite</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-weight">Weight</Label>
+              <Input
+                id="bulk-weight"
+                type="number"
+                min={0}
+                max={10}
+                step={1}
+                value={bulkWeight}
+                onChange={(event) => setBulkWeight(event.target.value)}
+                placeholder="No change"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-add-tags">Add tags</Label>
+              <Input
+                id="bulk-add-tags"
+                value={bulkAddTags}
+                onChange={(event) => setBulkAddTags(event.target.value)}
+                placeholder="cat, reaction"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-remove-tags">Remove tags</Label>
+              <Input
+                id="bulk-remove-tags"
+                value={bulkRemoveTags}
+                onChange={(event) => setBulkRemoveTags(event.target.value)}
+                placeholder="old, duplicate"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkDialogOpen(false)}
+              disabled={bulkSaving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleBulkSave} disabled={bulkSaving}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!selectedImage} onOpenChange={(open) => !open && setSelectedImage(null)}>
         {selectedImage ? (

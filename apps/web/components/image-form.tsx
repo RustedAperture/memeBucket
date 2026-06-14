@@ -13,6 +13,7 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const creatingRef = useRef(false);
 
@@ -38,6 +39,16 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
     const trimmedUrl = url.trim();
     if (!trimmedUrl) return;
     setError(null);
+
+    // If it doesn't look like a URL, open search
+    try {
+      new URL(trimmedUrl);
+    } catch {
+      setSearchQuery(trimmedUrl);
+      setSearchOpen(true);
+      return;
+    }
+
     const payload = {
       url: trimmedUrl,
     };
@@ -73,7 +84,7 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
           <Input
             value={url}
             onChange={(event) => handleUrlChange(event.target.value)}
-            placeholder="Paste URL..."
+            placeholder="URL or search Klipy..."
             className="h-8 w-48 text-sm"
             disabled={isCreating}
           />
@@ -91,7 +102,10 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
             type="button"
             variant="default"
             size="icon"
-            onClick={() => setSearchOpen(true)}
+            onClick={() => {
+              setSearchQuery(url.trim());
+              setSearchOpen(true);
+            }}
             title="Search GIFs"
             disabled={isCreating}
           >
@@ -101,13 +115,18 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
       </form>
       {error ? <p className="absolute top-full mt-1 right-0 z-40 text-xs font-medium text-destructive whitespace-nowrap">{error}</p> : null}
     </div>
-    
-    <GifSearchModal 
-      open={searchOpen} 
-      onOpenChange={setSearchOpen} 
-      onSelect={handleGifSelect} 
-      disabled={isCreating}
-    />
+        <GifSearchModal
+        open={searchOpen}
+        onOpenChange={(open) => {
+          setSearchOpen(open);
+          if (!open) {
+            setSearchQuery(""); // Clear the initial query so it doesn't persist forever
+          }
+        }}
+        onSelect={handleGifSelect}
+        initialQuery={searchQuery}
+        disabled={isCreating}
+      />
   </>
   );
 }

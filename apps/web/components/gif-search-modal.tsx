@@ -52,13 +52,15 @@ export function GifSearchModal({
   onOpenChange,
   onSelect,
   disabled = false,
+  initialQuery,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (selection: GifSearchSelection) => void;
   disabled?: boolean;
+  initialQuery?: string;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery || "");
   const [results, setResults] = useState<GifResult[]>([]);
   const resultsRef = useRef<GifResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -114,6 +116,15 @@ export function GifSearchModal({
       setLoadingMore(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      if (initialQuery) {
+        setQuery(initialQuery);
+      }
+      // fetchGifs is triggered by the query dependency below
+    }
+  }, [open, initialQuery]);
 
   useEffect(() => {
     if (open) {

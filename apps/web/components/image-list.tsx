@@ -66,14 +66,28 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
 
   async function load() {
     try {
-      setImages(await apiGet<ImageItem[]>(`/api/pools/${poolId}/images`));
+      const loadedImages = await apiGet<ImageItem[]>(`/api/pools/${poolId}/images`);
+      setImages(loadedImages);
+      return loadedImages;
     } catch {
       // pool might be empty or deleted
+      return [];
     }
   }
 
   useEffect(() => {
     let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled) {
+        return;
+      }
+      setSelectedImage(null);
+      setSelectedImageIds(new Set());
+      setImageToDelete(null);
+      setBulkDialogOpen(false);
+      setEditingMetadata(false);
+      resetBulkForm();
+    });
     void apiGet<ImageItem[]>(`/api/pools/${poolId}/images`)
       .then((loadedImages) => {
         if (!cancelled) {
@@ -144,7 +158,8 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
         randomWeight: normalizedWeight,
         tags: normalizedTags,
       });
-      const updatedImage = {
+      const loadedImages = await load();
+      const updatedImage = loadedImages.find((image) => image.id === selectedImage.id) ?? {
         ...selectedImage,
         title: normalizedTitle,
         notes: normalizedNotes,
@@ -153,7 +168,6 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
         tags: normalizedTags,
       };
       setSelectedImage(updatedImage);
-      setImages(images.map(img => img.id === selectedImage.id ? updatedImage : img));
       setEditingMetadata(false);
     } catch {
       toast.error("Failed to save image details");
@@ -174,6 +188,12 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
 
     const addTags = parseTagInput(bulkAddTags);
     const removeTags = parseTagInput(bulkRemoveTags);
+    const parsedWeight = parseOptionalRandomWeight(bulkWeight);
+    if (!parsedWeight.ok) {
+      toast.error("Weight must be a whole number between 0 and 10");
+      return;
+    }
+
     const payload: {
       imageIds: string[];
       favorite?: boolean;
@@ -185,8 +205,8 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
     if (bulkFavorite !== "unchanged") {
       payload.favorite = bulkFavorite === "true";
     }
-    if (bulkWeight.trim()) {
-      payload.randomWeight = clampRandomWeight(Number(bulkWeight));
+    if (parsedWeight.value !== undefined) {
+      payload.randomWeight = parsedWeight.value;
     }
     if (addTags.length > 0) {
       payload.addTags = addTags;
@@ -211,6 +231,7 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
         `/api/pools/${poolId}/images/bulk`,
         payload
       );
+      setImages((currentImages) => applyBulkMetadataToImages(currentImages, imageIds, payload));
       setBulkDialogOpen(false);
       setSelectedImageIds(new Set());
       resetBulkForm();
@@ -748,7 +769,7 @@ function parseTagInput(value: string) {
   const seen = new Set<string>();
 
   for (const tag of value.split(",")) {
-    const normalized = tag.trim().replace(/\s+/g, " ");
+    const normalized = normalizeTag(tag);
     if (!normalized) {
       continue;
     }
@@ -761,4 +782,61 @@ function parseTagInput(value: string) {
   }
 
   return tags;
+}
+
+function normalizeTag(value: string) {
+  const normalized = value
+    .trim()
+    .replace(/^[^A-Za-z0-9_-]+|[^A-Za-z0-9_-]+$/g, "")
+    .replace(/\s+/g, " ");
+
+  return normalized || null;
+}
+
+function parseOptionalRandomWeight(value: string): { ok: true; value?: number } | { ok: false } {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { ok: true };
+  }
+  if (!/^(?:[0-9]|10)$/.test(trimmed)) {
+    return { ok: false };
+  }
+  return { ok: true, value: Number(trimmed) };
+}
+
+function applyBulkMetadataToImages(
+  images: ImageItem[],
+  imageIds: string[],
+  payload: {
+    favorite?: boolean;
+    randomWeight?: number;
+    addTags?: string[];
+    removeTags?: string[];
+  }
+) {
+  const selectedIds = new Set(imageIds);
+  const removeTagFolds = new Set((payload.removeTags ?? []).map((tag) => tag.toLowerCase()));
+
+  return images.map((image) => {
+    if (!selectedIds.has(image.id)) {
+      return image;
+    }
+
+    let tags = image.tags.filter((tag) => !removeTagFolds.has(tag.toLowerCase()));
+    const seenTagFolds = new Set(tags.map((tag) => tag.toLowerCase()));
+    for (const tag of payload.addTags ?? []) {
+      const folded = tag.toLowerCase();
+      if (!seenTagFolds.has(folded)) {
+        tags = [...tags, tag];
+        seenTagFolds.add(folded);
+      }
+    }
+
+    return {
+      ...image,
+      favorite: payload.favorite ?? image.favorite,
+      randomWeight: payload.randomWeight ?? image.randomWeight,
+      tags,
+    };
+  });
 }

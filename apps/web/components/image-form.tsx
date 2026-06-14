@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiPost } from "@/lib/api";
@@ -15,13 +15,26 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedGif, setSelectedGif] = useState<GifSearchSelection | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
+  const creatingRef = useRef(false);
 
   async function createImage(payload: { url: string; title?: string; tags?: string[] }) {
-    await apiPost(`/api/pools/${poolId}/images`, payload);
-    setUrl("");
-    setSelectedGif(null);
-    setSelectedTags([]);
-    onCreated();
+    if (creatingRef.current) {
+      return false;
+    }
+    creatingRef.current = true;
+    setIsCreating(true);
+    try {
+      await apiPost(`/api/pools/${poolId}/images`, payload);
+      setUrl("");
+      setSelectedGif(null);
+      setSelectedTags([]);
+      onCreated();
+      return true;
+    } finally {
+      creatingRef.current = false;
+      setIsCreating(false);
+    }
   }
 
   async function submit(event: React.FormEvent) {
@@ -79,18 +92,20 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
     <>
     <div className="relative">
       <form onSubmit={submit} className="flex items-center gap-2">
-        <Input
-          value={url}
-          onChange={(event) => handleUrlChange(event.target.value)}
-          placeholder="Paste URL..."
-          className="h-8 w-48 text-sm"
-        />
+          <Input
+            value={url}
+            onChange={(event) => handleUrlChange(event.target.value)}
+            placeholder="Paste URL..."
+            className="h-8 w-48 text-sm"
+            disabled={isCreating}
+          />
         <ButtonGroup>
           <Button
             type="submit"
             variant="default"
             size="icon"
             title="Add Image"
+            disabled={isCreating}
           >
             <Plus className="w-4 h-4" />
           </Button>
@@ -100,6 +115,7 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
             size="icon"
             onClick={() => setSearchOpen(true)}
             title="Search GIFs"
+            disabled={isCreating}
           >
             <Search className="w-4 h-4" />
           </Button>
@@ -135,6 +151,7 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
       open={searchOpen} 
       onOpenChange={setSearchOpen} 
       onSelect={handleGifSelect} 
+      disabled={isCreating}
     />
   </>
   );

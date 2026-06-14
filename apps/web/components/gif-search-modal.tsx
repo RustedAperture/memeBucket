@@ -51,10 +51,12 @@ export function GifSearchModal({
   open,
   onOpenChange,
   onSelect,
+  disabled = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (selection: GifSearchSelection, action: "add" | "stage") => void;
+  disabled?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GifResult[]>([]);
@@ -177,6 +179,13 @@ export function GifSearchModal({
     };
   }
 
+  function handleResultSelect(result: GifResult, imageUrl: string, action: "add" | "stage") {
+    if (disabled) {
+      return;
+    }
+    onSelect(buildSelection(result, imageUrl), action);
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl h-[80vh] flex flex-col">
@@ -210,23 +219,31 @@ export function GifSearchModal({
                   return (
                     <div
                       key={result.id || idx}
-                      className="relative cursor-pointer group rounded-md overflow-hidden bg-muted break-inside-avoid"
-                      onClick={() => onSelect(buildSelection(result, imgUrl), "add")}
+                      className="relative group rounded-md overflow-hidden bg-muted break-inside-avoid"
                     >
-                      <img
-                        src={previewUrl}
-                        alt={title || "GIF preview"}
-                        className="w-full h-auto object-cover transition-transform group-hover:scale-105"
-                      />
+                      <button
+                        type="button"
+                        className="block w-full cursor-pointer text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-wait disabled:opacity-70"
+                        onClick={() => handleResultSelect(result, imgUrl, "add")}
+                        disabled={disabled}
+                        aria-label={title ? `Add ${title}` : "Add GIF"}
+                      >
+                        <img
+                          src={previewUrl}
+                          alt={title || "GIF preview"}
+                          className="w-full h-auto object-cover transition-transform group-hover:scale-105"
+                        />
+                      </button>
                       <Button
                         type="button"
                         variant="secondary"
                         size="icon"
                         title="Edit metadata before adding"
                         className="absolute right-2 top-2 h-7 w-7 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus:opacity-100"
+                        disabled={disabled}
                         onClick={(event) => {
                           event.stopPropagation();
-                          onSelect(buildSelection(result, imgUrl), "stage");
+                          handleResultSelect(result, imgUrl, "stage");
                         }}
                       >
                         <Tags className="h-3.5 w-3.5" />
@@ -268,7 +285,7 @@ function normalizeTitle(value: unknown): string | null {
   if (!normalized) {
     return null;
   }
-  return normalized;
+  return normalized.replace(/\s+/g, " ").slice(0, 200);
 }
 
 function buildSuggestedTags(result: GifResult, query: string): string[] {

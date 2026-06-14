@@ -589,7 +589,7 @@ impl ImageRepository {
 
         for image_id in &valid_image_ids {
             if let Some(favorite) = patch.favorite {
-                sqlx::query(
+                let result = sqlx::query(
                     "UPDATE images
                      SET favorite = ?
                      WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
@@ -600,10 +600,14 @@ impl ImageRepository {
                 .bind(image_id.to_string())
                 .execute(&mut *tx)
                 .await?;
+                if result.rows_affected() != 1 {
+                    tx.rollback().await?;
+                    return Ok(0);
+                }
             }
 
             if let Some(random_weight) = patch.random_weight {
-                sqlx::query(
+                let result = sqlx::query(
                     "UPDATE images
                      SET random_weight = ?
                      WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
@@ -614,6 +618,10 @@ impl ImageRepository {
                 .bind(image_id.to_string())
                 .execute(&mut *tx)
                 .await?;
+                if result.rows_affected() != 1 {
+                    tx.rollback().await?;
+                    return Ok(0);
+                }
             }
 
             if should_update_tags {

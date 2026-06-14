@@ -45,6 +45,7 @@
   --sidebar: oklch(0.987 0.002 197.1);
   --background: oklch(1 0 0);
   --foreground: oklch(0.148 0.004 228.8);
+  --app-font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .dark {
@@ -115,7 +116,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--app-font-sans);
   --font-heading: var(--font-sans);
   --color-sidebar: var(--sidebar);
   --color-chart-5: var(--chart-5);

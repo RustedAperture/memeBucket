@@ -50,7 +50,8 @@ function SearchContent() {
   const [pools, setPools] = useState<Pool[]>([]);
   const [results, setResults] = useState<ImageSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [poolError, setPoolError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const poolItems = useMemo(
     () => [
@@ -73,7 +74,7 @@ function SearchContent() {
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Could not load pools");
+          setPoolError(err instanceof Error ? err.message : "Could not load pools");
         }
       });
 
@@ -86,7 +87,7 @@ function SearchContent() {
     let cancelled = false;
     const timeout = window.setTimeout(() => {
       setLoading(true);
-      setError(null);
+      setSearchError(null);
       void apiGet<ImageSearchResult[]>(`/api/images/search?${searchParams({
         query,
         tags,
@@ -101,7 +102,7 @@ function SearchContent() {
         })
         .catch((err) => {
           if (!cancelled) {
-            setError(err instanceof Error ? err.message : "Could not search images");
+            setSearchError(err instanceof Error ? err.message : "Could not search images");
             setResults([]);
           }
         })
@@ -130,8 +131,12 @@ function SearchContent() {
       <div className="flex flex-col gap-3 border-b pb-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1">
+            <Label htmlFor="global-search-query" className="sr-only">
+              Search images
+            </Label>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              id="global-search-query"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search title, tag, notes, pool, or URL"
@@ -167,7 +172,7 @@ function SearchContent() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Pool</Label>
+            <Label id="search-pool-label">Pool</Label>
             <Select
               items={poolItems}
               value={poolId}
@@ -177,7 +182,7 @@ function SearchContent() {
                 }
               }}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full" aria-labelledby="search-pool-label">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -195,7 +200,7 @@ function SearchContent() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Random</Label>
+            <Label id="search-random-label">Random</Label>
             <Select
               items={[
                 { label: "Any", value: "any" },
@@ -209,7 +214,7 @@ function SearchContent() {
                 }
               }}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full" aria-labelledby="search-random-label">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -238,8 +243,11 @@ function SearchContent() {
         </div>
       </div>
 
-      {error ? (
-        <p className="text-sm font-medium text-destructive">{error}</p>
+      {poolError ? (
+        <p className="text-sm font-medium text-destructive">{poolError}</p>
+      ) : null}
+      {searchError ? (
+        <p className="text-sm font-medium text-destructive">{searchError}</p>
       ) : null}
 
       <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -271,11 +279,16 @@ function SearchContent() {
 function SearchResultCard({ result }: { result: ImageSearchResult }) {
   const image = result.image;
   const isVideo = isVideoUrl(image.url);
+  const [mediaFailed, setMediaFailed] = useState(false);
 
   return (
     <article className="min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm">
       <div className="relative aspect-[4/3] bg-muted">
-        {isVideo ? (
+        {mediaFailed ? (
+          <div className="flex h-full w-full items-center justify-center">
+            <ImageIcon className="h-10 w-10 text-muted-foreground/50" />
+          </div>
+        ) : isVideo ? (
           <video
             src={image.url}
             autoPlay
@@ -283,12 +296,14 @@ function SearchResultCard({ result }: { result: ImageSearchResult }) {
             muted
             playsInline
             className="h-full w-full object-cover"
+            onError={() => setMediaFailed(true)}
           />
         ) : (
           <img
             src={image.url}
             alt={image.title || "Image preview"}
             className="h-full w-full object-cover"
+            onError={() => setMediaFailed(true)}
           />
         )}
       </div>

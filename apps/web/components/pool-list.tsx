@@ -79,7 +79,7 @@ export function PoolList({ onPoolsChange, onImageMoved, refreshKey }: { onPoolsC
     try {
       const [loaded, favoritesResult] = await Promise.all([
         apiGet<Pool[]>("/api/pools"),
-        apiGet<any[]>("/api/images/search?favoriteOnly=true&limit=1").catch(() => []),
+        apiGet<any[]>("/api/images/search?favorite=true&limit=1").catch(() => []),
       ]);
 
       let finalPools = [...loaded];

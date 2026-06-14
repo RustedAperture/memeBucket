@@ -69,8 +69,8 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
     try {
       let loadedImages: ImageItem[] = [];
       if (poolId === "favorites") {
-        const results = await apiGet<any[]>(`/api/images/search?favoriteOnly=true&limit=1000`);
-        loadedImages = results.map(r => r.image);
+        const results = await apiGet<any[]>(`/api/images/search?favorite=true&limit=1000`);
+        loadedImages = results.map(r => ({ ...r.image, poolId: r.poolId }));
       } else {
         loadedImages = await apiGet<ImageItem[]>(`/api/pools/${poolId}/images`);
       }
@@ -97,8 +97,8 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
     });
     let request: Promise<any>;
     if (poolId === "favorites") {
-      request = apiGet<any[]>(`/api/images/search?favoriteOnly=true&limit=1000`)
-        .then(results => results.map(r => r.image));
+      request = apiGet<any[]>(`/api/images/search?favorite=true&limit=1000`)
+        .then(results => results.map(r => ({ ...r.image, poolId: r.poolId })));
     } else {
       request = apiGet<ImageItem[]>(`/api/pools/${poolId}/images`);
     }

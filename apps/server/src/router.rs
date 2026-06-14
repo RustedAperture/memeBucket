@@ -32,16 +32,16 @@ pub fn build_router_for_tests(state: AppState) -> Router {
 fn build_router_internal(state: AppState, is_test: bool) -> Router {
     let global_governor_conf = Arc::new(
         GovernorConfigBuilder::default()
-            .per_second(5)
-            .burst_size(20)
+            .per_second(20)
+            .burst_size(100)
             .key_extractor(SmartIpKeyExtractor)
             .finish()
             .unwrap(),
     );
     let strict_governor_conf = Arc::new(
         GovernorConfigBuilder::default()
-            .per_second(1)
-            .burst_size(5)
+            .per_second(2)
+            .burst_size(10)
             .key_extractor(SmartIpKeyExtractor)
             .finish()
             .unwrap(),
@@ -123,12 +123,7 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
                 get(handle_discord_oauth_callback)
                     .layer(GovernorLayer::new(strict_governor_conf.clone())),
             )
-            .route(
-                "/api/pools",
-                get(list_pools)
-                    .post(create_pool)
-                    .layer(GovernorLayer::new(strict_governor_conf.clone())),
-            )
+            .route("/api/pools", get(list_pools).post(create_pool))
             .layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 csrf_middleware,

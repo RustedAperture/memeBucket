@@ -76,7 +76,7 @@ function PoolsContent() {
   };
 
   return (
-    <SidebarProvider className="flex flex-1 min-h-0 w-full overflow-hidden rounded-xl bg-muted/30 border relative">
+    <SidebarProvider className="h-full flex flex-1 min-h-0 w-full overflow-hidden rounded-xl bg-muted/30 border relative">
       {/* Sidebar Area */}
       <Sidebar className="absolute h-full bg-transparent border-r-0 hidden md:flex" collapsible="offcanvas" variant="inset">
         <PoolList onPoolsChange={setPools} onImageMoved={handleImageMoved} refreshKey={refreshKey} />

@@ -10,7 +10,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user } = useUser();
   
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
+    <div className="h-[100dvh] flex flex-col bg-background text-foreground overflow-hidden">
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <Link href="/" className="font-semibold text-lg hover:opacity-80 transition-opacity">
@@ -33,7 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-5xl px-4 pt-8 pb-4">
+      <main className="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-5xl px-4 pt-8 pb-4 overflow-y-auto overflow-x-hidden">
         {children}
       </main>
       <footer className="border-t">

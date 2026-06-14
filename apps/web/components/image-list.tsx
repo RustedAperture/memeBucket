@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
-import { Check, ExternalLink, ImageIcon, Trash2, Edit2, X, Star, Tags, HelpCircle } from "lucide-react";
+import { Check, ExternalLink, ImageIcon, Trash2, Edit2, X, Star, Tags, HelpCircle, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -479,6 +479,19 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
               />
             </div>
 
+            <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+              <Label htmlFor="bulk-weight-disable" className="flex items-center gap-2 cursor-pointer">
+                <Ban className={bulkWeight === "0" ? "h-4 w-4 text-destructive" : "h-4 w-4 text-muted-foreground"} />
+                Disable usage
+              </Label>
+              <Switch
+                id="bulk-weight-disable"
+                checked={bulkWeight === "0"}
+                onCheckedChange={(checked) => setBulkWeight(checked ? "0" : "")}
+                className="data-[state=checked]:bg-destructive"
+              />
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="bulk-add-tags">Add tags</Label>
               <Input
@@ -608,16 +621,31 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
-                      <Label htmlFor="image-favorite" className="gap-2">
-                        <Star className={favoriteValue ? "h-4 w-4 fill-current text-primary" : "h-4 w-4 text-muted-foreground"} />
-                        Favorite
-                      </Label>
-                      <Switch
-                        id="image-favorite"
-                        checked={favoriteValue}
-                        onCheckedChange={setFavoriteValue}
-                      />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                        <Label htmlFor="image-favorite" className="flex items-center gap-2 cursor-pointer">
+                          <Star className={favoriteValue ? "h-4 w-4 fill-current text-primary" : "h-4 w-4 text-muted-foreground"} />
+                          Favorite
+                        </Label>
+                        <Switch
+                          id="image-favorite"
+                          checked={favoriteValue}
+                          onCheckedChange={setFavoriteValue}
+                        />
+                      </div>
+                      
+                      <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                        <Label htmlFor="image-weight-disable" className="flex items-center gap-2 cursor-pointer">
+                          <Ban className={randomWeightValue === 0 ? "h-4 w-4 text-destructive" : "h-4 w-4 text-muted-foreground"} />
+                          Disable usage
+                        </Label>
+                        <Switch
+                          id="image-weight-disable"
+                          checked={randomWeightValue === 0}
+                          onCheckedChange={(checked) => setRandomWeightValue(checked ? 0 : 1)}
+                          className="data-[state=checked]:bg-destructive"
+                        />
+                      </div>
                     </div>
 
                     <div className="space-y-1.5">

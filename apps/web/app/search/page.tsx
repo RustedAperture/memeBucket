@@ -29,6 +29,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarInset,
+  SidebarTrigger,
+  SidebarHeader,
+} from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiGet } from "@/lib/api";
 import type { ImageSearchResult, Pool } from "@/lib/types";
@@ -132,58 +140,45 @@ function SearchContent() {
   ].filter(Boolean).length;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex flex-col gap-3 border-b pb-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Library</h1>
-          <p className="text-sm text-muted-foreground">
-            Search GIFs and images already saved in your pools.
-          </p>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 flex-1">
-            <Label htmlFor="global-search-query" className="sr-only">
-              Search saved images
-            </Label>
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="global-search-query"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search saved title, tag, notes, pool, or URL"
-              className="h-10 pl-9"
-            />
+    <SidebarProvider className="h-full flex flex-1 min-h-0 w-full overflow-hidden rounded-xl bg-muted/30 border relative">
+      {/* Sidebar Area for Filters */}
+      <Sidebar className="absolute h-full bg-transparent border-r-0 hidden md:flex" collapsible="offcanvas" variant="inset">
+        <SidebarHeader className="p-4 pb-2 border-b-0">
+          <div className="space-y-1">
+            <h1 className="text-xl font-semibold tracking-tight">Library</h1>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Search GIFs and images across all your saved pools.
+            </p>
           </div>
-          {activeFilterCount > 0 ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setTags("");
-                setFavoriteOnly(false);
-                setRandomFilter("any");
-                setPoolId("all");
-              }}
-            >
-              <X className="h-4 w-4" />
-              Clear
-            </Button>
-          ) : null}
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem_11rem_auto]">
+        </SidebarHeader>
+        <SidebarContent className="px-4 pt-2 pb-6 space-y-6 overflow-y-auto">
           <div className="space-y-1.5">
-            <Label htmlFor="search-tags">Tags</Label>
+            <Label htmlFor="global-search-query" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Search</Label>
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="global-search-query"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Title, notes, pool, URL..."
+                className="h-9 pl-9 text-sm bg-background"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="search-tags" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tags</Label>
             <Input
               id="search-tags"
               value={tags}
               onChange={(event) => setTags(event.target.value)}
               placeholder="cat, reaction"
+              className="h-9 text-sm bg-background"
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label id="search-pool-label">Pool</Label>
+            <Label id="search-pool-label" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pool</Label>
             <Select
               items={poolItems}
               value={poolId}
@@ -193,7 +188,7 @@ function SearchContent() {
                 }
               }}
             >
-              <SelectTrigger className="w-full" aria-labelledby="search-pool-label">
+              <SelectTrigger className="w-full h-9 text-sm bg-background" aria-labelledby="search-pool-label">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -212,10 +207,10 @@ function SearchContent() {
 
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5">
-              <Label id="search-random-label">Random</Label>
+              <Label id="search-random-label" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Random</Label>
               <Tooltip>
                 <TooltipTrigger className="cursor-help outline-none p-0 bg-transparent border-none inline-flex items-center justify-center">
-                  <HelpCircle className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <div className="flex flex-col gap-1.5">
@@ -241,7 +236,7 @@ function SearchContent() {
                 }
               }}
             >
-              <SelectTrigger className="w-full" aria-labelledby="search-random-label">
+              <SelectTrigger className="w-full h-9 text-sm bg-background" aria-labelledby="search-random-label">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -254,54 +249,81 @@ function SearchContent() {
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label id="favorite-label" className="invisible">Favorites</Label>
-            <div className="flex h-10 items-center gap-2 rounded-md border px-3">
-              <Switch
-                id="favorite-only"
-                checked={favoriteOnly}
-                onCheckedChange={setFavoriteOnly}
-                aria-labelledby="favorite-label"
-              />
-              <Label htmlFor="favorite-only" className="cursor-pointer whitespace-nowrap">
-                <Star className={favoriteOnly ? "h-4 w-4 fill-current text-primary -mt-0.5" : "h-4 w-4 text-muted-foreground -mt-0.5"} />
-                Favorites
-              </Label>
-            </div>
+          <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2.5 shadow-sm">
+            <Label htmlFor="favorite-only" className="flex items-center gap-2 cursor-pointer text-sm font-medium">
+              <Star className={favoriteOnly ? "h-4 w-4 fill-current text-primary" : "h-4 w-4 text-muted-foreground"} />
+              Favorites Only
+            </Label>
+            <Switch
+              id="favorite-only"
+              checked={favoriteOnly}
+              onCheckedChange={setFavoriteOnly}
+              className="scale-90"
+            />
           </div>
-        </div>
-      </div>
 
-      {poolError ? (
-        <p className="text-sm font-medium text-destructive">{poolError}</p>
-      ) : null}
-      {searchError ? (
-        <p className="text-sm font-medium text-destructive">{searchError}</p>
-      ) : null}
+          {activeFilterCount > 0 ? (
+            <div className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full bg-background"
+                onClick={() => {
+                  setTags("");
+                  setFavoriteOnly(false);
+                  setRandomFilter("any");
+                  setPoolId("all");
+                }}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Clear Filters
+              </Button>
+            </div>
+          ) : null}
+        </SidebarContent>
+      </Sidebar>
 
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span>{loading ? "Searching..." : `${results.length} result${results.length === 1 ? "" : "s"}`}</span>
-      </div>
+      {/* Inset Main Content Area for Results */}
+      <SidebarInset className="flex-1 flex flex-col m-2 rounded-xl bg-background shadow-sm border overflow-hidden">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear px-4 lg:px-6">
+          <SidebarTrigger className="h-8 w-8 -ml-2 text-muted-foreground" />
+          <div className="flex flex-1 items-center justify-between text-sm">
+            <span className="font-semibold text-foreground">Search Results</span>
+            <span className="text-muted-foreground">{loading ? "Searching..." : `${results.length} result${results.length === 1 ? "" : "s"}`}</span>
+          </div>
+        </header>
 
-      {loading ? (
-        <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="h-64 animate-pulse rounded-lg border bg-muted/40 break-inside-avoid mb-4" />
-          ))}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-muted/10">
+          {poolError ? (
+            <p className="text-sm font-medium text-destructive mb-4">{poolError}</p>
+          ) : null}
+          {searchError ? (
+            <p className="text-sm font-medium text-destructive mb-4">{searchError}</p>
+          ) : null}
+
+          {loading ? (
+            <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="h-64 animate-pulse rounded-lg border bg-muted/40 break-inside-avoid mb-4" />
+              ))}
+            </div>
+          ) : results.length === 0 ? (
+            <div className="flex min-h-[60vh] flex-col items-center justify-center rounded-lg border border-dashed bg-background/50 p-8 text-center">
+              <ImageIcon className="h-10 w-10 text-muted-foreground/50" />
+              <h2 className="mt-4 text-lg font-semibold">No images found</h2>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm">Try adjusting your filters or search terms.</p>
+            </div>
+          ) : (
+            <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
+              {results.map((result) => (
+                <SearchResultCard key={result.image.id} result={result} />
+              ))}
+            </div>
+          )}
         </div>
-      ) : results.length === 0 ? (
-        <div className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center">
-          <ImageIcon className="h-10 w-10 text-muted-foreground/50" />
-          <h2 className="mt-4 text-lg font-semibold">No images found</h2>
-        </div>
-      ) : (
-        <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
-          {results.map((result) => (
-            <SearchResultCard key={result.image.id} result={result} />
-          ))}
-        </div>
-      )}
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 

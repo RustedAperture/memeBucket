@@ -221,7 +221,7 @@ function PoolsContent() {
         <div className="flex-1 flex flex-col overflow-y-auto">
           {poolId ? (
             <div className="p-6 space-y-6 max-w-7xl mx-auto w-full">
-              <ImageList key={`${poolId}:${refreshKey}`} poolId={poolId} columnClass={columnClass} readonly={isReadOnly} pools={pools} onMoveImage={handleImageMoved} />
+              <ImageList key={`${poolId}:${refreshKey}`} poolId={poolId} columnClass={columnClass} readonly={isReadOnly} pools={pools} onMoveImage={handleImageMoved} onImageUpdated={handleImageMoved} />
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in-50">

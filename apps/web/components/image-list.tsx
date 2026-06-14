@@ -42,7 +42,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 type BulkFavoriteValue = "unchanged" | "true" | "false";
 
-export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:columns-3 lg:columns-4", readonly = false, pools = [], onMoveImage }: { poolId: string; columnClass?: string; readonly?: boolean; pools?: Pool[]; onMoveImage?: () => void }) {
+export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:columns-3 lg:columns-4", readonly = false, pools = [], onMoveImage, onImageUpdated }: { poolId: string; columnClass?: string; readonly?: boolean; pools?: Pool[]; onMoveImage?: () => void; onImageUpdated?: () => void }) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
@@ -252,6 +252,7 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
       resetBulkForm();
       await load();
       toast.success(`Updated ${response.updated} image${response.updated === 1 ? "" : "s"}`);
+      if (onImageUpdated) onImageUpdated();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update images");
       setBulkSaving(false);
@@ -417,6 +418,7 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                     try {
                       const patchPoolId = poolId === "favorites" ? (image as any).poolId : poolId;
                       await apiPatch(`/api/pools/${patchPoolId}/images/${image.id}`, { favorite: newFav });
+                      if (onImageUpdated) onImageUpdated();
                     } catch (err) {
                       // Revert on failure
                       setImages(prev => prev.map(img => img.id === image.id ? { ...img, favorite: !newFav } : img));

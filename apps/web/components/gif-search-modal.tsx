@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiGet } from "@/lib/api";
 import type { GifSearchSelection } from "@/lib/types";
-import { Loader2, Tags } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 type GifAsset = {
   url?: string;
@@ -55,7 +55,7 @@ export function GifSearchModal({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelect: (selection: GifSearchSelection, action: "add" | "stage") => void;
+  onSelect: (selection: GifSearchSelection) => void;
   disabled?: boolean;
 }) {
   const [query, setQuery] = useState("");
@@ -179,11 +179,11 @@ export function GifSearchModal({
     };
   }
 
-  function handleResultSelect(result: GifResult, imageUrl: string, action: "add" | "stage") {
+  function handleResultSelect(result: GifResult, imageUrl: string) {
     if (disabled) {
       return;
     }
-    onSelect(buildSelection(result, imageUrl), action);
+    onSelect(buildSelection(result, imageUrl));
   }
 
   return (
@@ -224,7 +224,7 @@ export function GifSearchModal({
                       <button
                         type="button"
                         className="block w-full cursor-pointer text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-wait disabled:opacity-70"
-                        onClick={() => handleResultSelect(result, imgUrl, "add")}
+                        onClick={() => handleResultSelect(result, imgUrl)}
                         disabled={disabled}
                         aria-label={title ? `Add ${title}` : "Add GIF"}
                       >
@@ -234,20 +234,6 @@ export function GifSearchModal({
                           className="w-full h-auto object-cover transition-transform group-hover:scale-105"
                         />
                       </button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="icon"
-                        title="Edit metadata before adding"
-                        className="absolute right-2 top-2 h-7 w-7 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 focus:opacity-100"
-                        disabled={disabled}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleResultSelect(result, imgUrl, "stage");
-                        }}
-                      >
-                        <Tags className="h-3.5 w-3.5" />
-                      </Button>
                     </div>
                   );
                 })}

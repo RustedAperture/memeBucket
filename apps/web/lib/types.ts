@@ -52,4 +52,6 @@ export type Pool = {
   is_subscribed: boolean;
   owner_username: string | null;
   whitelist_enabled: boolean;
+  image_count: number;
+  is_read_only: boolean;
 };

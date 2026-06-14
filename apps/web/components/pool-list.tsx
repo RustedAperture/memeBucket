@@ -76,33 +76,39 @@ export function PoolList({ onPoolsChange, onImageMoved, refreshKey }: { onPoolsC
   }
 
   async function load() {
-    const loaded = await apiGet<Pool[]>("/api/pools");
-    setPools(loaded);
-    if (onPoolsChange) onPoolsChange(loaded);
+    try {
+      const [loaded, favoritesResult] = await Promise.all([
+        apiGet<Pool[]>("/api/pools"),
+        apiGet<any[]>("/api/images/search?favoriteOnly=true&limit=1").catch(() => []),
+      ]);
+
+      let finalPools = [...loaded];
+
+      // Inject virtual Favorites pool at the top if there are favorites
+      if (favoritesResult.length > 0) {
+        finalPools.unshift({
+          id: "favorites",
+          name: "Favorites",
+          share_token: null,
+          subscriber_count: 0,
+          is_subscribed: false,
+          owner_username: null,
+          whitelist_enabled: false,
+          image_count: favoritesResult.length, // we only fetch 1 to know it's not empty
+          is_read_only: true,
+        });
+      }
+
+      setPools(finalPools);
+      if (onPoolsChange) onPoolsChange(finalPools);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load pools");
+    }
   }
 
   useEffect(() => {
     void load();
-  }, [refreshKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void apiGet<Pool[]>("/api/pools")
-      .then((loaded) => {
-        if (cancelled) return;
-        setPools(loaded);
-        if (onPoolsChange) onPoolsChange(loaded);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Could not load pools");
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [onPoolsChange]);
+  }, [refreshKey, onPoolsChange]);
 
 
 

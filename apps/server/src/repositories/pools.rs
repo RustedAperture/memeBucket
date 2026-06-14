@@ -15,6 +15,7 @@ pub struct StoredPool {
     pub subscriber_count: i64,
     pub owner_username: Option<String>,
     pub whitelist_enabled: bool,
+    pub image_count: i64,
 }
 
 impl PoolRepository {
@@ -50,6 +51,7 @@ impl PoolRepository {
             subscriber_count: 0,
             owner_username: None, // Not needed for newly created owned pool
             whitelist_enabled: false,
+            image_count: 0,
         })
     }
 
@@ -76,11 +78,12 @@ impl PoolRepository {
     }
 
     pub async fn list_for_user(&self, owner_user_id: Uuid) -> Result<Vec<StoredPool>, sqlx::Error> {
-        let rows = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool)>(
+        let rows = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool, i64)>(
             "SELECT p.id, p.owner_user_id, p.name, p.share_token, 
                (SELECT COUNT(*) FROM pool_subscriptions s WHERE s.pool_id = p.id) as subscriber_count,
                u.username as owner_username,
-               p.whitelist_enabled
+               p.whitelist_enabled,
+               (SELECT COUNT(*) FROM images i WHERE i.pool_id = p.id) as image_count
              FROM pools p 
              LEFT JOIN users u ON p.owner_user_id = u.id
              WHERE p.owner_user_id = ? ORDER BY p.name COLLATE NOCASE",
@@ -99,6 +102,7 @@ impl PoolRepository {
                     subscriber_count,
                     owner_username,
                     whitelist_enabled,
+                    image_count,
                 )| {
                     Ok(StoredPool {
                         id: Uuid::parse_str(&id)
@@ -110,6 +114,7 @@ impl PoolRepository {
                         subscriber_count,
                         owner_username,
                         whitelist_enabled,
+                        image_count,
                     })
                 },
             )
@@ -136,11 +141,12 @@ impl PoolRepository {
         name: &str,
     ) -> Result<Option<StoredPool>, sqlx::Error> {
         let name_folded = name.trim().to_lowercase();
-        let row = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool)>(
+        let row = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool, i64)>(
             "SELECT p.id, p.owner_user_id, p.name, p.share_token,
                (SELECT COUNT(*) FROM pool_subscriptions s WHERE s.pool_id = p.id) as subscriber_count,
                u.username as owner_username,
-               p.whitelist_enabled
+               p.whitelist_enabled,
+               (SELECT COUNT(*) FROM images i WHERE i.pool_id = p.id) as image_count
              FROM pools p 
              LEFT JOIN users u ON p.owner_user_id = u.id
              WHERE p.owner_user_id = ? AND p.name_folded = ?",
@@ -159,6 +165,7 @@ impl PoolRepository {
                 subscriber_count,
                 owner_username,
                 whitelist_enabled,
+                image_count,
             )| {
                 Ok(StoredPool {
                     id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
@@ -169,6 +176,7 @@ impl PoolRepository {
                     subscriber_count,
                     owner_username,
                     whitelist_enabled,
+                    image_count,
                 })
             },
         )
@@ -187,11 +195,12 @@ impl PoolRepository {
         }
 
         // Then try subscribed pools
-        let row = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool)>(
+        let row = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool, i64)>(
             "SELECT p.id, p.owner_user_id, p.name, p.share_token,
                (SELECT COUNT(*) FROM pool_subscriptions s2 WHERE s2.pool_id = p.id) as subscriber_count,
                u.username as owner_username,
-               p.whitelist_enabled
+               p.whitelist_enabled,
+               (SELECT COUNT(*) FROM images i WHERE i.pool_id = p.id) as image_count
              FROM pools p
              INNER JOIN pool_subscriptions ps ON p.id = ps.pool_id
              LEFT JOIN users u ON p.owner_user_id = u.id
@@ -221,6 +230,7 @@ impl PoolRepository {
                 subscriber_count,
                 owner_username,
                 whitelist_enabled,
+                image_count,
             )| {
                 Ok(StoredPool {
                     id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
@@ -231,6 +241,7 @@ impl PoolRepository {
                     subscriber_count,
                     owner_username,
                     whitelist_enabled,
+                    image_count,
                 })
             },
         )
@@ -238,11 +249,12 @@ impl PoolRepository {
     }
 
     pub async fn get_by_id(&self, pool_id: Uuid) -> Result<Option<StoredPool>, sqlx::Error> {
-        let row = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool)>(
+        let row = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool, i64)>(
             "SELECT p.id, p.owner_user_id, p.name, p.share_token,
                (SELECT COUNT(*) FROM pool_subscriptions s WHERE s.pool_id = p.id) as subscriber_count,
                u.username as owner_username,
-               p.whitelist_enabled
+               p.whitelist_enabled,
+               (SELECT COUNT(*) FROM images i WHERE i.pool_id = p.id) as image_count
              FROM pools p 
              LEFT JOIN users u ON p.owner_user_id = u.id
              WHERE p.id = ?",
@@ -260,6 +272,7 @@ impl PoolRepository {
                 subscriber_count,
                 owner_username,
                 whitelist_enabled,
+                image_count,
             )| {
                 Ok(StoredPool {
                     id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
@@ -270,6 +283,7 @@ impl PoolRepository {
                     subscriber_count,
                     owner_username,
                     whitelist_enabled,
+                    image_count,
                 })
             },
         )
@@ -277,11 +291,12 @@ impl PoolRepository {
     }
 
     pub async fn get_by_share_token(&self, token: &str) -> Result<Option<StoredPool>, sqlx::Error> {
-        let row = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool)>(
+        let row = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool, i64)>(
             "SELECT p.id, p.owner_user_id, p.name, p.share_token,
                (SELECT COUNT(*) FROM pool_subscriptions s WHERE s.pool_id = p.id) as subscriber_count,
                u.username as owner_username,
-               p.whitelist_enabled
+               p.whitelist_enabled,
+               (SELECT COUNT(*) FROM images i WHERE i.pool_id = p.id) as image_count
              FROM pools p 
              LEFT JOIN users u ON p.owner_user_id = u.id
              WHERE p.share_token = ?",
@@ -299,6 +314,7 @@ impl PoolRepository {
                 subscriber_count,
                 owner_username,
                 whitelist_enabled,
+                image_count,
             )| {
                 Ok(StoredPool {
                     id: Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
@@ -309,6 +325,7 @@ impl PoolRepository {
                     subscriber_count,
                     owner_username,
                     whitelist_enabled,
+                    image_count,
                 })
             },
         )
@@ -368,11 +385,12 @@ impl PoolRepository {
         &self,
         subscriber_user_id: Uuid,
     ) -> Result<Vec<StoredPool>, sqlx::Error> {
-        let rows = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool)>(
+        let rows = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool, i64)>(
             "SELECT p.id, p.owner_user_id, p.name, p.share_token,
                (SELECT COUNT(*) FROM pool_subscriptions s2 WHERE s2.pool_id = p.id) as subscriber_count,
                u.username as owner_username,
-               p.whitelist_enabled
+               p.whitelist_enabled,
+               (SELECT COUNT(*) FROM images i WHERE i.pool_id = p.id) as image_count
              FROM pools p
              JOIN pool_subscriptions s ON s.pool_id = p.id
              LEFT JOIN users u ON p.owner_user_id = u.id
@@ -402,6 +420,7 @@ impl PoolRepository {
                     subscriber_count,
                     owner_username,
                     whitelist_enabled,
+                    image_count,
                 )| {
                     Ok(StoredPool {
                         id: Uuid::parse_str(&id)
@@ -413,6 +432,7 @@ impl PoolRepository {
                         subscriber_count,
                         owner_username,
                         whitelist_enabled,
+                        image_count,
                     })
                 },
             )

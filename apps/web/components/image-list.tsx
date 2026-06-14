@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
-import { Check, ExternalLink, ImageIcon, Trash2, Edit2, X, Star, Tags, HelpCircle, Ban } from "lucide-react";
+import { ExternalLink, Info, Loader2, Tags, Trash2, Check, Download, Video, CheckSquare, Image as ImageIcon, Copy, Star, Edit2, X, HelpCircle, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -67,7 +67,13 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
 
   async function load() {
     try {
-      const loadedImages = await apiGet<ImageItem[]>(`/api/pools/${poolId}/images`);
+      let loadedImages: ImageItem[] = [];
+      if (poolId === "favorites") {
+        const results = await apiGet<any[]>(`/api/images/search?favoriteOnly=true&limit=1000`);
+        loadedImages = results.map(r => r.image);
+      } else {
+        loadedImages = await apiGet<ImageItem[]>(`/api/pools/${poolId}/images`);
+      }
       setImages(loadedImages);
       return loadedImages;
     } catch {
@@ -89,7 +95,15 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
       setEditingMetadata(false);
       resetBulkForm();
     });
-    void apiGet<ImageItem[]>(`/api/pools/${poolId}/images`)
+    let request: Promise<any>;
+    if (poolId === "favorites") {
+      request = apiGet<any[]>(`/api/images/search?favoriteOnly=true&limit=1000`)
+        .then(results => results.map(r => r.image));
+    } else {
+      request = apiGet<ImageItem[]>(`/api/pools/${poolId}/images`);
+    }
+
+    request
       .then((loadedImages) => {
         if (!cancelled) {
           setImages(loadedImages);
@@ -391,6 +405,32 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                     {isSelected ? <Check className="h-3.5 w-3.5" /> : null}
                   </button>
                 ) : null}
+
+                <button
+                  type="button"
+                  aria-label={image.favorite ? "Remove from favorites" : "Add to favorites"}
+                  onClick={async (event) => {
+                    event.stopPropagation();
+                    const newFav = !image.favorite;
+                    // Optimistic update
+                    setImages(prev => prev.map(img => img.id === image.id ? { ...img, favorite: newFav } : img));
+                    try {
+                      const patchPoolId = poolId === "favorites" ? (image as any).poolId : poolId;
+                      await apiPatch(`/api/pools/${patchPoolId}/images/${image.id}`, { favorite: newFav });
+                    } catch (err) {
+                      // Revert on failure
+                      setImages(prev => prev.map(img => img.id === image.id ? { ...img, favorite: !newFav } : img));
+                      toast.error(err instanceof Error ? err.message : "Failed to update favorite");
+                    }
+                  }}
+                  className={`absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
+                    image.favorite
+                      ? "text-yellow-400 bg-black/40 hover:scale-110 opacity-100"
+                      : "text-white/70 bg-black/40 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:scale-110 hover:text-white"
+                  }`}
+                >
+                  <Star className="h-4 w-4" fill={image.favorite ? "currentColor" : "none"} />
+                </button>
 
                 {!readonly && dragCount > 1 ? (
                   <div className="absolute bottom-2 right-2 z-20 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">

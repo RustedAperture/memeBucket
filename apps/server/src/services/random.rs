@@ -269,6 +269,7 @@ mod tests {
                 subscriber_count: 0,
                 owner_username: None,
                 whitelist_enabled: false,
+                image_count: 0,
             },
             image: StoredImage {
                 id: image_id,

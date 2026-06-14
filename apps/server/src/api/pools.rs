@@ -27,6 +27,8 @@ pub struct PoolResponse {
     pub is_subscribed: bool,
     pub owner_username: Option<String>,
     pub whitelist_enabled: bool,
+    pub image_count: i64,
+    pub is_read_only: bool,
 }
 
 impl From<StoredPool> for PoolResponse {
@@ -39,6 +41,8 @@ impl From<StoredPool> for PoolResponse {
             is_subscribed: false,
             owner_username: pool.owner_username,
             whitelist_enabled: pool.whitelist_enabled,
+            image_count: pool.image_count,
+            is_read_only: false,
         }
     }
 }
@@ -55,11 +59,25 @@ pub async fn list_pools(
     for pool in owned {
         let mut pr = PoolResponse::from(pool);
         pr.is_subscribed = false;
+        pr.is_read_only = pr.name == "Added from Discord";
+
+        if pr.is_read_only && pr.image_count == 0 {
+            continue;
+        }
+
         response.push(pr);
     }
     for pool in subscribed {
         let mut pr = PoolResponse::from(pool);
         pr.is_subscribed = true;
+        // Subscribed pools are inherently read-only for the subscriber anyway, but let's be explicit
+        // if it's the specific system pool.
+        pr.is_read_only = pr.name == "Added from Discord";
+
+        if pr.is_read_only && pr.image_count == 0 {
+            continue;
+        }
+
         response.push(pr);
     }
 
@@ -96,6 +114,8 @@ pub async fn create_pool(
         is_subscribed: false,
         owner_username: pool.owner_username,
         whitelist_enabled: pool.whitelist_enabled,
+        image_count: 0,
+        is_read_only: false,
     }))
 }
 

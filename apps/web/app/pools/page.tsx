@@ -45,6 +45,7 @@ function PoolsContent() {
 
   const activePool = pools.find(p => p.id === poolId);
   const isSubscribed = activePool?.is_subscribed;
+  const isReadOnly = isSubscribed || activePool?.is_read_only;
 
   const handleDeletePool = async (pool: Pool) => {
     try {
@@ -90,7 +91,7 @@ function PoolsContent() {
               <SidebarTrigger className="h-8 w-8 -ml-2 text-muted-foreground" />
               <h1 className="text-base font-medium flex items-center gap-2">
                 {activePool ? activePool.name : "Images"}
-                {activePool && (
+                {activePool && !isReadOnly && (
                   <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
                     <DialogTrigger render={<Button variant="ghost" size="icon" className="h-6 w-6 ml-1"><Settings className="h-4 w-4 text-muted-foreground hover:text-foreground"/></Button>} />
                     <DialogContent className="sm:max-w-md">
@@ -155,7 +156,7 @@ function PoolsContent() {
                 )}
               </h1>
             </div>
-            {poolId && !isSubscribed && activePool && (
+            {poolId && !isReadOnly && activePool && (
               <div className="flex items-center gap-2">
                 <Dialog>
                   <DialogTrigger render={<Button variant="default" size="sm" className="h-8 gap-1.5" />}>
@@ -207,7 +208,7 @@ function PoolsContent() {
                 </button>
               ))}
             </div>
-            {!isSubscribed && activePool && (
+            {!isReadOnly && activePool && (
               <div className="ml-auto">
                 <ImageForm 
                   poolId={poolId} 
@@ -220,7 +221,7 @@ function PoolsContent() {
         <div className="flex-1 flex flex-col overflow-y-auto">
           {poolId ? (
             <div className="p-6 space-y-6 max-w-7xl mx-auto w-full">
-              <ImageList key={`${poolId}:${refreshKey}`} poolId={poolId} columnClass={columnClass} readonly={isSubscribed} pools={pools} onMoveImage={handleImageMoved} />
+              <ImageList key={`${poolId}:${refreshKey}`} poolId={poolId} columnClass={columnClass} readonly={isReadOnly} pools={pools} onMoveImage={handleImageMoved} />
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in-50">

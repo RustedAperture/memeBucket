@@ -15,6 +15,10 @@ export default function ChangelogPage() {
           <li>Added metadata editing from image details and bulk editing for selected images.</li>
           <li>Added Klipy metadata suggestions so saved GIFs can start with a title and suggested tags.</li>
           <li>Added a Library card to the dashboard.</li>
+          <li>Added a "Disable usage" toggle to image pools.</li>
+          <li>Auto-injected a read-only "Favorites" pool containing all starred media.</li>
+          <li>Expanded the "Paste URL" field to natively double as a Klipy GIF search query.</li>
+          <li>Added a star when hovering over an image to easily toggle favorite status.</li>
         </LegalList>
 
         <h3 className="font-medium text-foreground mt-4">Changed</h3>
@@ -22,6 +26,8 @@ export default function ChangelogPage() {
           <li>Improved random image selection with per-image weights and stronger recent-repeat avoidance.</li>
           <li>Renamed the global saved-media search surface to Library to distinguish it from searching Klipy for new GIFs.</li>
           <li>Expanded access checks and tests for library search across owned, subscribed, public, private, and whitelisted pools.</li>
+          <li>Refactored pool view and search pages to share a unified responsive layout.</li>
+          <li>System pools (like Favorites or Added from Discord) are now automatically hidden when empty.</li>
         </LegalList>
       </LegalSection>
 

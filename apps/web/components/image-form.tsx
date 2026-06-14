@@ -84,7 +84,7 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
           <Input
             value={url}
             onChange={(event) => handleUrlChange(event.target.value)}
-            placeholder="URL or search Klipy..."
+            placeholder="URL or search KLIPY..."
             className="h-8 w-48 text-sm"
             disabled={isCreating}
           />

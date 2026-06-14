@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
-import { Check, ExternalLink, ImageIcon, Trash2, Edit2, X, Star, Tags } from "lucide-react";
+import { Check, ExternalLink, ImageIcon, Trash2, Edit2, X, Star, Tags, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ImageItem, Pool } from "@/lib/types";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type BulkFavoriteValue = "unchanged" | "true" | "false";
 
@@ -449,7 +450,23 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="bulk-weight">Weight</Label>
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="bulk-weight">Weight</Label>
+                <Tooltip>
+                  <TooltipTrigger className="cursor-help outline-none p-0 bg-transparent border-none inline-flex items-center justify-center">
+                    <HelpCircle className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <div className="flex flex-col gap-1.5">
+                      <p>Weight (0-10) determines how likely this image is to be picked randomly.</p>
+                      <ul className="list-disc pl-4 opacity-90">
+                        <li><strong>0</strong>: Disabled (never picked)</li>
+                        <li><strong>1-10</strong>: Higher = more likely</li>
+                      </ul>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <Input
                 id="bulk-weight"
                 type="number"
@@ -562,7 +579,23 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="image-weight">Weight</Label>
+                        <div className="flex items-center gap-1.5">
+                          <Label htmlFor="image-weight">Weight</Label>
+                          <Tooltip>
+                            <TooltipTrigger className="cursor-help outline-none p-0 bg-transparent border-none inline-flex items-center justify-center">
+                              <HelpCircle className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+                            </TooltipTrigger>
+                            <TooltipContent className="max-w-xs">
+                              <div className="flex flex-col gap-1.5">
+                                <p>Weight (0-10) determines how likely this image is to be picked randomly.</p>
+                                <ul className="list-disc pl-4 opacity-90">
+                                  <li><strong>0</strong>: Disabled (never picked)</li>
+                                  <li><strong>1-10</strong>: Higher = more likely</li>
+                                </ul>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
                         <Input
                           id="image-weight"
                           type="number"

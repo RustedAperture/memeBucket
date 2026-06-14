@@ -5,8 +5,26 @@ export default function ChangelogPage() {
     <LegalPage
       title="Changelog"
       description="Notable changes to ezGif."
-      updated="Jun 11, 2026"
+      updated="Jun 14, 2026"
     >
+      <LegalSection title="v0.1.3 - Jun 14, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added Library search for saved GIFs and images across accessible pools, with filters for tags, pool, favorites, and random-enabled state.</li>
+          <li>Added image metadata fields for title, tags, favorite status, random weight, and notes.</li>
+          <li>Added metadata editing from image details and bulk editing for selected images.</li>
+          <li>Added Klipy metadata suggestions so saved GIFs can start with a title and suggested tags.</li>
+          <li>Added a Library card to the dashboard.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Changed</h3>
+        <LegalList>
+          <li>Improved random image selection with per-image weights and stronger recent-repeat avoidance.</li>
+          <li>Renamed the global saved-media search surface to Library to distinguish it from searching Klipy for new GIFs.</li>
+          <li>Expanded access checks and tests for library search across owned, subscribed, public, private, and whitelisted pools.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.1.2 - Jun 11, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

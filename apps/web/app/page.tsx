@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Coffee, GitFork, Sparkles, Image as ImageIcon } from "lucide-react";
+import { Coffee, GitFork, Search, Sparkles, Image as ImageIcon } from "lucide-react";
 import Link from "next/link";
 
 export default function HomePage() {
@@ -66,6 +66,22 @@ export default function HomePage() {
               <CardContent>
                 <p className="text-sm text-muted-foreground">
                   View and manage all your saved media pools.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/search" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Library</CardTitle>
+                  <Search className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <CardDescription>Find saved media</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Search GIFs and images already saved in your pools.
                 </p>
               </CardContent>
             </Card>

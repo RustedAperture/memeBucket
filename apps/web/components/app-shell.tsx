@@ -27,7 +27,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
             <Link href="/search" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <Search className="w-4 h-4" />
-              <span className="hidden sm:inline">Search</span>
+              <span className="hidden sm:inline">Library</span>
             </Link>
             {user && <AccountModal />}
           </nav>

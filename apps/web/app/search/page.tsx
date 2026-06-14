@@ -377,14 +377,14 @@ function SearchResultCard({ result }: { result: ImageSearchResult }) {
           </div>
         ) : null}
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
             variant="secondary"
             size="sm"
             nativeButton={false}
             render={<Link href={`/pools?id=${result.poolId}`} />}
-            className="max-w-full"
+            className="min-w-0"
           >
             <FolderOpen className="h-4 w-4 shrink-0" />
             <span className="truncate">{result.poolName}</span>
@@ -394,6 +394,7 @@ function SearchResultCard({ result }: { result: ImageSearchResult }) {
             variant="outline"
             size="sm"
             onClick={handleCopy}
+            className="shrink-0"
           >
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             Copy
@@ -404,6 +405,7 @@ function SearchResultCard({ result }: { result: ImageSearchResult }) {
             size="sm"
             nativeButton={false}
             render={<a href={image.url} target="_blank" rel="noreferrer" />}
+            className="shrink-0"
           >
             <ExternalLink className="h-4 w-4" />
             Open

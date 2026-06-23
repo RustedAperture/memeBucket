@@ -206,6 +206,38 @@ pub fn plain_message(content: &str, private: bool) -> Value {
     })
 }
 
+pub async fn fetch_user_accent_color(state: &AppState, user_id: &str) -> Option<u32> {
+    if state.discord_bot_token().is_empty() {
+        return None;
+    }
+
+    let url = format!("https://discord.com/api/v10/users/{}", user_id);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(1500))
+        .build()
+        .ok()?;
+
+    let res = client
+        .get(&url)
+        .header(
+            "Authorization",
+            format!("Bot {}", state.discord_bot_token()),
+        )
+        .send()
+        .await
+        .ok()?;
+
+    if !res.status().is_success() {
+        return None;
+    }
+
+    let user_data: serde_json::Value = res.json().await.ok()?;
+    user_data
+        .get("accent_color")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32)
+}
+
 pub fn embed_message(content: &str, image_url: &str, private: bool, color: Option<u32>) -> Value {
     let mut data = json!({
         "content": content,
@@ -600,6 +632,9 @@ async fn handle_random_command(state: &AppState, user_id: Uuid, data: &Interacti
                     && let Some(user) = resolved.users.get(target_id)
                 {
                     target_color = user.accent_color;
+                }
+                if target_color.is_none() {
+                    target_color = fetch_user_accent_color(state, target_id).await;
                 }
                 format!("<@{target_id}>")
             } else {
@@ -1014,7 +1049,12 @@ async fn handle_reply_with_gif_command(
     };
 
     let author_id = &author.id;
-    let color_str = match author.accent_color {
+    let mut target_color = author.accent_color;
+    if target_color.is_none() {
+        target_color = fetch_user_accent_color(_state, author_id).await;
+    }
+
+    let color_str = match target_color {
         Some(c) => c.to_string(),
         None => String::new(),
     };

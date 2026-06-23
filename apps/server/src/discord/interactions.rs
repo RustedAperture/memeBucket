@@ -72,6 +72,7 @@ pub struct InteractionResolved {
 #[derive(Debug, Deserialize)]
 pub struct InteractionMessage {
     pub id: String,
+    #[serde(default)]
     pub content: String,
     #[serde(default)]
     pub embeds: Vec<InteractionEmbed>,
@@ -1041,18 +1042,23 @@ async fn handle_reply_with_gif_command(
         }));
     }
 
+    let mut text_input = json!({
+        "type": 4,
+        "custom_id": "search_term",
+        "label": if pools.is_empty() { "Pools or Search Term" } else { "Search Term (Optional)" },
+        "style": 1,
+        "max_length": 100,
+        "placeholder": "e.g. cat, dog",
+        "required": pools.is_empty()
+    });
+
+    if pools.is_empty() {
+        text_input["min_length"] = json!(1);
+    }
+
     components.push(json!({
         "type": 1,
-        "components": [{
-            "type": 4,
-            "custom_id": "search_term",
-            "label": if pools.is_empty() { "Pools or Search Term" } else { "Search Term (Optional)" },
-            "style": 1,
-            "min_length": if pools.is_empty() { 1 } else { 0 },
-            "max_length": 100,
-            "placeholder": "e.g. cat, dog",
-            "required": pools.is_empty()
-        }]
+        "components": [text_input]
     }));
 
     json!({

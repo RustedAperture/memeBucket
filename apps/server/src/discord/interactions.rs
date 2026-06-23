@@ -27,7 +27,9 @@ const PING: u8 = 1;
 const APPLICATION_COMMAND: u8 = 2;
 const APPLICATION_COMMAND_AUTOCOMPLETE: u8 = 4;
 const CHANNEL_MESSAGE_WITH_SOURCE: u8 = 4;
+const APPLICATION_MODAL_SUBMIT: u8 = 5;
 const APPLICATION_COMMAND_AUTOCOMPLETE_RESULT: u8 = 8;
+const APPLICATION_MODAL: u8 = 9;
 const EPHEMERAL_FLAG: u64 = 64;
 const AUTOCOMPLETE_CHOICE_LIMIT: usize = 100;
 
@@ -47,6 +49,7 @@ pub struct InteractionPayload {
 
 #[derive(Debug, Deserialize)]
 pub struct InteractionData {
+    #[serde(default)]
     pub name: String,
     #[serde(default)]
     pub options: Vec<InteractionOption>,
@@ -54,6 +57,10 @@ pub struct InteractionData {
     pub target_id: Option<String>,
     #[serde(default)]
     pub resolved: Option<InteractionResolved>,
+    #[serde(default)]
+    pub custom_id: Option<String>,
+    #[serde(default)]
+    pub components: Vec<InteractionComponent>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -70,6 +77,46 @@ pub struct InteractionMessage {
     pub embeds: Vec<InteractionEmbed>,
     #[serde(default)]
     pub attachments: Vec<InteractionAttachment>,
+    #[serde(default)]
+    pub author: Option<InteractionUser>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct InteractionComponent {
+    #[serde(rename = "type")]
+    pub kind: u8,
+    #[serde(default)]
+    pub custom_id: Option<String>,
+    #[serde(default)]
+    pub value: Option<String>,
+    #[serde(default)]
+    pub values: Vec<String>,
+    #[serde(default)]
+    pub components: Vec<InteractionComponent>,
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub style: Option<u8>,
+    #[serde(default)]
+    pub min_length: Option<usize>,
+    #[serde(default)]
+    pub max_length: Option<usize>,
+    #[serde(default)]
+    pub placeholder: Option<String>,
+    #[serde(default)]
+    pub required: Option<bool>,
+    #[serde(default)]
+    pub min_values: Option<usize>,
+    #[serde(default)]
+    pub max_values: Option<usize>,
+    #[serde(default)]
+    pub options: Vec<InteractionSelectOption>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct InteractionSelectOption {
+    pub label: String,
+    pub value: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -260,6 +307,9 @@ pub async fn handle_interaction(
         APPLICATION_COMMAND_AUTOCOMPLETE => {
             Json(dispatch_autocomplete(&state, &payload).await).into_response()
         }
+        APPLICATION_MODAL_SUBMIT => {
+            Json(dispatch_modal_submit(&state, &payload).await).into_response()
+        }
         _ => Json(ephemeral_message("Unsupported interaction.")).into_response(),
     }
 }
@@ -337,6 +387,7 @@ async fn dispatch_command(state: &AppState, payload: &InteractionPayload) -> Val
             handle_add_to_pool_message_command(state, user.id, data, payload.channel_id.as_deref())
                 .await
         }
+        "Reply with GIF" => handle_reply_with_gif_command(state, user.id, data).await,
         _ => ephemeral_message("Unsupported command."),
     }
 }
@@ -486,6 +537,12 @@ async fn handle_random_command(state: &AppState, user_id: Uuid, data: &Interacti
         return ephemeral_message("Pool is required.");
     }
 
+    let target = data
+        .option("target")
+        .and_then(InteractionOption::string_value)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
     let private = data
         .option("private")
         .and_then(InteractionOption::bool_value)
@@ -510,7 +567,14 @@ async fn handle_random_command(state: &AppState, user_id: Uuid, data: &Interacti
         )
         .await
     {
-        Ok(selection) => plain_message(&selection.url, private),
+        Ok(selection) => {
+            let msg = if let Some(target_id) = target {
+                format!("<@{target_id}> \n{}", selection.url)
+            } else {
+                selection.url
+            };
+            plain_message(&msg, private)
+        }
         Err(error) => ephemeral_message(error.user_message()),
     }
 }
@@ -872,4 +936,160 @@ async fn refetch_attachment_url(
     }
 
     None
+}
+
+async fn dispatch_modal_submit(state: &AppState, payload: &InteractionPayload) -> Value {
+    let Some(data) = payload.data.as_ref() else {
+        return ephemeral_message("Malformed modal submit payload.");
+    };
+
+    let user = match resolve_user(state, payload).await {
+        Ok(user) => user,
+        Err(error) => return ephemeral_message(error.user_message()),
+    };
+
+    let custom_id = data.custom_id.as_deref().unwrap_or("");
+    if custom_id.starts_with("reply_with_gif:") {
+        handle_reply_with_gif_submit(state, user.id, data, custom_id).await
+    } else {
+        ephemeral_message("Unknown modal submission.")
+    }
+}
+
+async fn handle_reply_with_gif_command(
+    state: &AppState,
+    user_id: Uuid,
+    data: &InteractionData,
+) -> Value {
+    let target_id = match &data.target_id {
+        Some(id) => id,
+        None => return ephemeral_message("Could not find the selected message."),
+    };
+
+    let resolved = match &data.resolved {
+        Some(res) => res,
+        None => return ephemeral_message("Could not find message details."),
+    };
+
+    let message = match resolved.messages.get(target_id) {
+        Some(msg) => msg,
+        None => return ephemeral_message("Could not find the selected message."),
+    };
+
+    let author_id = match &message.author {
+        Some(author) => &author.id,
+        None => return ephemeral_message("Could not find message author."),
+    };
+
+    let mut pools = PoolRepository::new(state.pool.clone())
+        .list_for_user(user_id)
+        .await
+        .unwrap_or_default();
+    if let Ok(subscribed) = PoolRepository::new(state.pool.clone())
+        .list_subscribed_for_user(user_id)
+        .await
+    {
+        pools.extend(subscribed);
+    }
+
+    let custom_id = format!("reply_with_gif:{}", author_id);
+    let mut components = vec![];
+
+    if !pools.is_empty() {
+        let max_values = std::cmp::min(pools.len(), 25);
+        let options: Vec<Value> = pools
+            .iter()
+            .take(25)
+            .map(|pool| {
+                json!({
+                    "label": pool.name.clone(),
+                    "value": pool.name.clone()
+                })
+            })
+            .collect();
+
+        components.push(json!({
+            "type": 1,
+            "components": [{
+                "type": 3,
+                "custom_id": "pools",
+                "placeholder": "Select pools",
+                "min_values": 0,
+                "max_values": max_values,
+                "options": options
+            }]
+        }));
+    }
+
+    components.push(json!({
+        "type": 1,
+        "components": [{
+            "type": 4,
+            "custom_id": "search_term",
+            "label": if pools.is_empty() { "Pools or Search Term" } else { "Search Term (Optional)" },
+            "style": 1,
+            "min_length": if pools.is_empty() { 1 } else { 0 },
+            "max_length": 100,
+            "placeholder": "e.g. cat, dog",
+            "required": pools.is_empty()
+        }]
+    }));
+
+    json!({
+        "type": APPLICATION_MODAL,
+        "data": {
+            "custom_id": custom_id,
+            "title": "Reply with GIF",
+            "components": components
+        }
+    })
+}
+
+async fn handle_reply_with_gif_submit(
+    state: &AppState,
+    user_id: Uuid,
+    data: &InteractionData,
+    custom_id: &str,
+) -> Value {
+    let author_id = custom_id.trim_start_matches("reply_with_gif:");
+
+    let mut selected_pools = Vec::new();
+    let mut search_term = String::new();
+
+    for row in &data.components {
+        for component in &row.components {
+            if component.custom_id.as_deref() == Some("pools") {
+                selected_pools.extend(component.values.iter().cloned());
+            } else if component.custom_id.as_deref() == Some("search_term")
+                && let Some(val) = &component.value
+            {
+                search_term = val.clone();
+            }
+        }
+    }
+
+    let mut pool_names = split_pool_names(&search_term);
+    pool_names.extend(selected_pools);
+
+    if pool_names.is_empty() {
+        return ephemeral_message("Please select at least one pool or provide a search term.");
+    }
+
+    let service = RandomService::new(
+        PoolRepository::new(state.pool.clone()),
+        ImageRepository::new(state.pool.clone()),
+        SendHistoryRepository::new(state.pool.clone()),
+    );
+    let pool_name_refs = pool_names.iter().map(String::as_str).collect::<Vec<_>>();
+
+    match service
+        .select_random_from_pools(user_id, &pool_name_refs, RandomVisibility::Public)
+        .await
+    {
+        Ok(selection) => {
+            let msg = format!("<@{author_id}> \n{}", selection.url);
+            plain_message(&msg, false)
+        }
+        Err(error) => ephemeral_message(error.user_message()),
+    }
 }

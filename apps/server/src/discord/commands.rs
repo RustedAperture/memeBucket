@@ -20,6 +20,12 @@ pub fn command_definitions() -> Vec<Value> {
                     "description": "Only show the response to you",
                     "type": 5,
                     "required": false
+                },
+                {
+                    "name": "target",
+                    "description": "User to ping with the GIF",
+                    "type": 6,
+                    "required": false
                 }
             ]
         }),
@@ -61,6 +67,12 @@ pub fn command_definitions() -> Vec<Value> {
         }),
         json!({
             "name": "Add to Pool",
+            "type": 3,
+            "integration_types": [1],
+            "contexts": [0, 1, 2]
+        }),
+        json!({
+            "name": "Reply with GIF",
             "type": 3,
             "integration_types": [1],
             "contexts": [0, 1, 2]

@@ -9,12 +9,18 @@
 - Added metadata editing from image details and bulk editing for selected images.
 - Added Klipy metadata suggestions so saved GIFs can start with a title and suggested tags.
 - Added a Library card to the dashboard.
+- Added a "Disable usage" toggle to image pools.
+- Auto-injected a read-only "Favorites" pool containing all starred media.
+- Expanded the "Paste URL" field to natively double as a Klipy GIF search query.
+- Added a star when hovering over an image to easily toggle favorite status.
 
 ### Changed
 
 - Improved random image selection with per-image weights and stronger recent-repeat avoidance.
 - Renamed the global saved-media search surface to Library to distinguish it from searching Klipy for new GIFs.
 - Expanded access checks and tests for library search across owned, subscribed, public, private, and whitelisted pools.
+- Refactored pool view and search pages to share a unified responsive layout.
+- System pools (like Favorites or Added from Discord) are now automatically hidden when empty.
 
 ## v0.1.2 - Jun 11, 2026
 

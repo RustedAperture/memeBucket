@@ -1059,24 +1059,16 @@ async fn handle_reply_with_gif_command(
     let custom_id = format!("reply_with_gif:{}:{}", author_id, color_str);
     let mut components = vec![];
 
-    let pools = PoolRepository::new(_state.pool.clone())
-        .list_pool_names_for_user(_user_id)
-        .await
-        .unwrap_or_default();
-
-    let mut text_input = json!({
+    let text_input = json!({
         "type": 4,
         "custom_id": "search_term",
-        "label": if pools.is_empty() { "Pools or Search Term" } else { "Search Term (Optional)" },
+        "label": "Pool Name",
         "style": 1,
+        "min_length": 1,
         "max_length": 100,
-        "placeholder": "e.g. cat, dog",
-        "required": pools.is_empty()
+        "placeholder": "e.g. animals, funny",
+        "required": true
     });
-
-    if pools.is_empty() {
-        text_input["min_length"] = json!(1);
-    }
 
     components.push(json!({
         "type": 1,
@@ -1127,7 +1119,7 @@ async fn handle_reply_with_gif_submit(
     pool_names.extend(selected_pools);
 
     if pool_names.is_empty() {
-        return ephemeral_message("Please select at least one pool or provide a search term.");
+        return ephemeral_message("Please provide a pool name.");
     }
 
     let service = RandomService::new(

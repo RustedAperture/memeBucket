@@ -201,6 +201,26 @@ pub fn plain_message(content: &str, private: bool) -> Value {
     })
 }
 
+pub fn embed_message(content: &str, image_url: &str, private: bool) -> Value {
+    let mut data = json!({
+        "content": content,
+        "embeds": [{
+            "image": {
+                "url": image_url
+            }
+        }]
+    });
+
+    if private {
+        data["flags"] = json!(EPHEMERAL_FLAG);
+    }
+
+    json!({
+        "type": CHANNEL_MESSAGE_WITH_SOURCE,
+        "data": data,
+    })
+}
+
 pub fn ephemeral_message(content: &str) -> Value {
     plain_message(content, true)
 }
@@ -568,12 +588,12 @@ async fn handle_random_command(state: &AppState, user_id: Uuid, data: &Interacti
         .await
     {
         Ok(selection) => {
-            let msg = if let Some(target_id) = target {
-                format!("<@{target_id}> \n{}", selection.url)
+            let content = if let Some(target_id) = target {
+                format!("<@{target_id}>")
             } else {
-                selection.url
+                String::new()
             };
-            plain_message(&msg, private)
+            embed_message(&content, &selection.url, private)
         }
         Err(error) => ephemeral_message(error.user_message()),
     }
@@ -1087,8 +1107,8 @@ async fn handle_reply_with_gif_submit(
         .await
     {
         Ok(selection) => {
-            let msg = format!("<@{author_id}> \n{}", selection.url);
-            plain_message(&msg, false)
+            let content = format!("<@{author_id}>");
+            embed_message(&content, &selection.url, false)
         }
         Err(error) => ephemeral_message(error.user_message()),
     }

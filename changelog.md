@@ -2,6 +2,11 @@
 
 ## v0.1.4 - Jun 22, 2026
 
+### Added
+
+- Added an optional `target` parameter to the `/ez` slash command to send the GIF directly to a specific user.
+- Added a "Reply with GIF" right-click message context menu command to instantly send a GIF directed at the author of the selected message.
+
 ### Fixed
 
 - Fixed an issue causing right-click "Reply with GIF" modals to time out due to slow database reads by enabling SQLite WAL mode.

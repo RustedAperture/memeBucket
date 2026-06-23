@@ -8,7 +8,13 @@ export default function ChangelogPage() {
       updated="Jun 22, 2026"
     >
       <LegalSection title="v0.1.4 - Jun 22, 2026">
-        <h3 className="font-medium text-foreground">Fixed</h3>
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added an optional <code>target</code> parameter to the <code>/ez</code> slash command to send the GIF directly to a specific user.</li>
+          <li>Added a "Reply with GIF" right-click message context menu command to instantly send a GIF directed at the author of the selected message.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Fixed</h3>
         <LegalList>
           <li>Fixed an issue causing right-click "Reply with GIF" modals to time out due to slow database reads by enabling SQLite WAL mode.</li>
           <li>Fixed a Discord API <code>400 Bad Request</code> error preventing the modal from opening by removing unsupported select menus.</li>

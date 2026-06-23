@@ -1064,32 +1064,6 @@ async fn handle_reply_with_gif_command(
         .await
         .unwrap_or_default();
 
-    if !pools.is_empty() {
-        let max_values = std::cmp::min(pools.len(), 25);
-        let options: Vec<Value> = pools
-            .iter()
-            .take(25)
-            .map(|pool_name| {
-                json!({
-                    "label": pool_name.clone(),
-                    "value": pool_name.clone()
-                })
-            })
-            .collect();
-
-        components.push(json!({
-            "type": 1,
-            "components": [{
-                "type": 3,
-                "custom_id": "pools",
-                "placeholder": "Select pools",
-                "min_values": 0,
-                "max_values": max_values,
-                "options": options
-            }]
-        }));
-    }
-
     let mut text_input = json!({
         "type": 4,
         "custom_id": "search_term",
@@ -1171,6 +1145,18 @@ async fn handle_reply_with_gif_submit(
             let content = format!("<@{author_id}>");
             embed_message(&content, &selection.url, false, target_color)
         }
-        Err(error) => ephemeral_message(error.user_message()),
+        Err(error) => {
+            let user_pools = PoolRepository::new(state.pool.clone())
+                .list_pool_names_for_user(user_id)
+                .await
+                .unwrap_or_default();
+
+            let mut msg = error.user_message().to_string();
+            if !user_pools.is_empty() {
+                let pool_list = user_pools.join(", ");
+                msg = format!("{}\n\n**Your available pools:** {}", msg, pool_list);
+            }
+            ephemeral_message(&msg)
+        }
     }
 }

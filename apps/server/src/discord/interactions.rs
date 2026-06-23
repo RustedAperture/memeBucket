@@ -67,6 +67,8 @@ pub struct InteractionData {
 pub struct InteractionResolved {
     #[serde(default)]
     pub messages: std::collections::HashMap<String, InteractionMessage>,
+    #[serde(default)]
+    pub users: std::collections::HashMap<String, InteractionUser>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -169,6 +171,8 @@ pub struct InteractionUser {
     pub username: Option<String>,
     #[serde(default)]
     pub global_name: Option<String>,
+    #[serde(default)]
+    pub accent_color: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -202,10 +206,11 @@ pub fn plain_message(content: &str, private: bool) -> Value {
     })
 }
 
-pub fn embed_message(content: &str, image_url: &str, private: bool) -> Value {
+pub fn embed_message(content: &str, image_url: &str, private: bool, color: Option<u32>) -> Value {
     let mut data = json!({
         "content": content,
         "embeds": [{
+            "color": color.unwrap_or(5793266), // 0x5865F2 fallback
             "image": {
                 "url": image_url
             }
@@ -589,12 +594,18 @@ async fn handle_random_command(state: &AppState, user_id: Uuid, data: &Interacti
         .await
     {
         Ok(selection) => {
+            let mut target_color = None;
             let content = if let Some(target_id) = target {
+                if let Some(resolved) = &data.resolved
+                    && let Some(user) = resolved.users.get(target_id)
+                {
+                    target_color = user.accent_color;
+                }
                 format!("<@{target_id}>")
             } else {
                 String::new()
             };
-            embed_message(&content, &selection.url, private)
+            embed_message(&content, &selection.url, private, target_color)
         }
         Err(error) => ephemeral_message(error.user_message()),
     }
@@ -997,12 +1008,18 @@ async fn handle_reply_with_gif_command(
         None => return ephemeral_message("Could not find the selected message."),
     };
 
-    let author_id = match &message.author {
-        Some(author) => &author.id,
+    let author = match &message.author {
+        Some(author) => author,
         None => return ephemeral_message("Could not find message author."),
     };
 
-    let custom_id = format!("reply_with_gif:{}", author_id);
+    let author_id = &author.id;
+    let color_str = match author.accent_color {
+        Some(c) => c.to_string(),
+        None => String::new(),
+    };
+
+    let custom_id = format!("reply_with_gif:{}:{}", author_id, color_str);
     let mut components = vec![];
 
     let text_input = json!({
@@ -1037,7 +1054,10 @@ async fn handle_reply_with_gif_submit(
     data: &InteractionData,
     custom_id: &str,
 ) -> Value {
-    let author_id = custom_id.trim_start_matches("reply_with_gif:");
+    let remainder = custom_id.trim_start_matches("reply_with_gif:");
+    let mut parts = remainder.splitn(2, ':');
+    let author_id = parts.next().unwrap_or("");
+    let target_color = parts.next().and_then(|s| s.parse::<u32>().ok());
 
     let mut selected_pools = Vec::new();
     let mut search_term = String::new();
@@ -1074,7 +1094,7 @@ async fn handle_reply_with_gif_submit(
     {
         Ok(selection) => {
             let content = format!("<@{author_id}>");
-            embed_message(&content, &selection.url, false)
+            embed_message(&content, &selection.url, false, target_color)
         }
         Err(error) => ephemeral_message(error.user_message()),
     }

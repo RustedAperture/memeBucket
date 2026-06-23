@@ -57,7 +57,10 @@ fn required_env(name: &str) -> anyhow::Result<String> {
 
 pub async fn connect_sqlite_pool(database_url: &str) -> anyhow::Result<SqlitePool> {
     ensure_sqlite_parent_dir(database_url)?;
-    let options = SqliteConnectOptions::from_str(database_url)?.create_if_missing(true);
+    let options = SqliteConnectOptions::from_str(database_url)?
+        .create_if_missing(true)
+        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal);
     Ok(SqlitePool::connect_with(options).await?)
 }
 

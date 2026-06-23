@@ -121,6 +121,25 @@ impl PoolRepository {
             .collect()
     }
 
+    pub async fn list_pool_names_for_user(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<String>, sqlx::Error> {
+        let rows = sqlx::query_as::<_, (String,)>(
+            "SELECT name FROM (
+                 SELECT name FROM pools WHERE owner_user_id = ?
+                 UNION
+                 SELECT p.name FROM pools p JOIN pool_subscriptions s ON s.pool_id = p.id WHERE s.subscriber_user_id = ?
+             ) ORDER BY name COLLATE NOCASE",
+        )
+        .bind(user_id.to_string())
+        .bind(user_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(|(name,)| name).collect())
+    }
+
     pub async fn delete_for_user(
         &self,
         owner_user_id: Uuid,

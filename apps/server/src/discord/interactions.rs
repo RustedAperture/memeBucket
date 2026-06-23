@@ -1062,16 +1062,50 @@ async fn handle_reply_with_gif_command(
     let custom_id = format!("reply_with_gif:{}:{}", author_id, color_str);
     let mut components = vec![];
 
-    let text_input = json!({
+    let pools = PoolRepository::new(_state.pool.clone())
+        .list_pool_names_for_user(_user_id)
+        .await
+        .unwrap_or_default();
+
+    if !pools.is_empty() {
+        let max_values = std::cmp::min(pools.len(), 25);
+        let options: Vec<Value> = pools
+            .iter()
+            .take(25)
+            .map(|pool_name| {
+                json!({
+                    "label": pool_name.clone(),
+                    "value": pool_name.clone()
+                })
+            })
+            .collect();
+
+        components.push(json!({
+            "type": 1,
+            "components": [{
+                "type": 3,
+                "custom_id": "pools",
+                "placeholder": "Select pools",
+                "min_values": 0,
+                "max_values": max_values,
+                "options": options
+            }]
+        }));
+    }
+
+    let mut text_input = json!({
         "type": 4,
         "custom_id": "search_term",
-        "label": "Pools or Search Term",
+        "label": if pools.is_empty() { "Pools or Search Term" } else { "Search Term (Optional)" },
         "style": 1,
         "max_length": 100,
-        "min_length": 1,
         "placeholder": "e.g. cat, dog",
-        "required": true
+        "required": pools.is_empty()
     });
+
+    if pools.is_empty() {
+        text_input["min_length"] = json!(1);
+    }
 
     components.push(json!({
         "type": 1,

@@ -5,8 +5,24 @@ export default function ChangelogPage() {
     <LegalPage
       title="Changelog"
       description="Notable changes to ezGif."
-      updated="Jun 14, 2026"
+      updated="Jun 22, 2026"
     >
+      <LegalSection title="v0.1.4 - Jun 22, 2026">
+        <h3 className="font-medium text-foreground">Fixed</h3>
+        <LegalList>
+          <li>Fixed an issue causing right-click "Reply with GIF" modals to time out due to slow database reads by enabling SQLite WAL mode.</li>
+          <li>Fixed a Discord API <code>400 Bad Request</code> error preventing the modal from opening by removing unsupported select menus.</li>
+          <li>Added a friendly error message listing available pools if an invalid pool name is entered in the modal.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Changed</h3>
+        <LegalList>
+          <li>Updated Discord integration to embed GIFs so URLs are hidden instead of using zero-width spaces.</li>
+          <li>Restored the user's specific Discord profile accent color to embeds sent from the bot.</li>
+          <li>Updated dependencies to patch security vulnerabilities.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.1.3 - Jun 14, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

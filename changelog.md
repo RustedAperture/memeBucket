@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.1.4 - Jun 22, 2026
+
+### Fixed
+
+- Fixed an issue causing right-click "Reply with GIF" modals to time out due to slow database reads by enabling SQLite WAL mode.
+- Fixed a Discord API `400 Bad Request` error preventing the modal from opening by removing unsupported select menus.
+- Added a friendly error message listing available pools if an invalid pool name is entered in the modal.
+
+### Changed
+
+- Updated Discord integration to embed GIFs so URLs are hidden instead of using zero-width spaces.
+- Restored the user's specific Discord profile accent color to embeds sent from the bot.
+- Updated dependencies to patch security vulnerabilities.
+
 ## v0.1.3 - Jun 14, 2026
 
 ### Added

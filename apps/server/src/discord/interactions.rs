@@ -978,8 +978,8 @@ async fn dispatch_modal_submit(state: &AppState, payload: &InteractionPayload) -
 }
 
 async fn handle_reply_with_gif_command(
-    state: &AppState,
-    user_id: Uuid,
+    _state: &AppState,
+    _user_id: Uuid,
     data: &InteractionData,
 ) -> Value {
     let target_id = match &data.target_id {
@@ -1002,59 +1002,19 @@ async fn handle_reply_with_gif_command(
         None => return ephemeral_message("Could not find message author."),
     };
 
-    let mut pools = PoolRepository::new(state.pool.clone())
-        .list_for_user(user_id)
-        .await
-        .unwrap_or_default();
-    if let Ok(subscribed) = PoolRepository::new(state.pool.clone())
-        .list_subscribed_for_user(user_id)
-        .await
-    {
-        pools.extend(subscribed);
-    }
-
     let custom_id = format!("reply_with_gif:{}", author_id);
     let mut components = vec![];
 
-    if !pools.is_empty() {
-        let max_values = std::cmp::min(pools.len(), 25);
-        let options: Vec<Value> = pools
-            .iter()
-            .take(25)
-            .map(|pool| {
-                json!({
-                    "label": pool.name.clone(),
-                    "value": pool.name.clone()
-                })
-            })
-            .collect();
-
-        components.push(json!({
-            "type": 1,
-            "components": [{
-                "type": 3,
-                "custom_id": "pools",
-                "placeholder": "Select pools",
-                "min_values": 0,
-                "max_values": max_values,
-                "options": options
-            }]
-        }));
-    }
-
-    let mut text_input = json!({
+    let text_input = json!({
         "type": 4,
         "custom_id": "search_term",
-        "label": if pools.is_empty() { "Pools or Search Term" } else { "Search Term (Optional)" },
+        "label": "Pools or Search Term",
         "style": 1,
         "max_length": 100,
+        "min_length": 1,
         "placeholder": "e.g. cat, dog",
-        "required": pools.is_empty()
+        "required": true
     });
-
-    if pools.is_empty() {
-        text_input["min_length"] = json!(1);
-    }
 
     components.push(json!({
         "type": 1,

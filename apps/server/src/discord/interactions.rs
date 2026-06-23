@@ -1049,10 +1049,7 @@ async fn handle_reply_with_gif_command(
     };
 
     let author_id = &author.id;
-    let mut target_color = author.accent_color;
-    if target_color.is_none() {
-        target_color = fetch_user_accent_color(_state, author_id).await;
-    }
+    let target_color = author.accent_color;
 
     let color_str = match target_color {
         Some(c) => c.to_string(),
@@ -1131,7 +1128,11 @@ async fn handle_reply_with_gif_submit(
     let remainder = custom_id.trim_start_matches("reply_with_gif:");
     let mut parts = remainder.splitn(2, ':');
     let author_id = parts.next().unwrap_or("");
-    let target_color = parts.next().and_then(|s| s.parse::<u32>().ok());
+    let mut target_color = parts.next().and_then(|s| s.parse::<u32>().ok());
+
+    if target_color.is_none() {
+        target_color = fetch_user_accent_color(state, author_id).await;
+    }
 
     let mut selected_pools = Vec::new();
     let mut search_term = String::new();

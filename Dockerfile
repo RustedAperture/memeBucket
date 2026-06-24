@@ -7,7 +7,8 @@ COPY apps/web ./
 RUN --mount=type=cache,target=/repo/apps/web/.next/cache \
     npm run build
 
-FROM rust:1-bookworm AS server-build
+FROM rust:1-alpine AS server-build
+RUN apk add --no-cache musl-dev gcc
 WORKDIR /repo
 COPY Cargo.toml Cargo.lock ./
 COPY apps/server ./apps/server
@@ -16,11 +17,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --release -p memebucket-server && \
     cp /repo/target/release/memebucket-server /repo/memebucket-server-binary
 
-FROM debian:bookworm-slim AS runtime
+FROM alpine:latest AS runtime
 WORKDIR /app
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache ca-certificates ffmpeg
 COPY --from=server-build /repo/memebucket-server-binary /app/memebucket-server
 COPY --from=web-build /repo/apps/web/out /app/web
 ENV STATIC_DIR=/app/web

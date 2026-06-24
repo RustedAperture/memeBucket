@@ -31,14 +31,14 @@ pub fn verify_csrf_token(session_secret: &str, token: &str, expected_hash: &str)
 
 pub fn session_cookie(value: &str) -> String {
     format!(
-        "session={}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=86400",
+        "session={}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=2592000",
         value
     )
 }
 
 pub fn csrf_cookie(value: &str) -> String {
     format!(
-        "csrf_token={}; Path=/; SameSite=Lax; Secure; Max-Age=86400",
+        "csrf_token={}; Path=/; SameSite=Lax; Secure; Max-Age=2592000",
         value
     )
 }
@@ -61,7 +61,7 @@ pub async fn create_session(
     let csrf_token_hash = hash_csrf_token(session_secret, &csrf_token);
 
     sqlx::query(
-        "INSERT INTO sessions (id, user_id, csrf_token_hash, expires_at) VALUES (?, ?, ?, datetime('now', '+24 hours'))",
+        "INSERT INTO sessions (id, user_id, csrf_token_hash, expires_at) VALUES (?, ?, ?, datetime('now', '+30 days'))",
     )
     .bind(session_id.to_string())
     .bind(user_id.to_string())

@@ -6,28 +6,28 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { apiPost, apiGet, apiDelete, apiPatch } from "@/lib/api";
-import { Pool } from "@/lib/types";
+import { Bucket } from "@/lib/types";
 import { Copy, KeyRound, Globe, Lock, Share2, Check, Users, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
-export function ShareDialog({ pool, onPoolChange }: { pool: Pool; onPoolChange: (pool: Pool) => void }) {
+export function ShareDialog({ bucket, onBucketChange }: { bucket: Bucket; onBucketChange: (bucket: Bucket) => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const [whitelistEnabled, setWhitelistEnabled] = useState(pool.whitelist_enabled);
+  const [whitelistEnabled, setWhitelistEnabled] = useState(bucket.whitelist_enabled);
   const [whitelistedUsers, setWhitelistedUsers] = useState<string[]>([]);
   const [newUsername, setNewUsername] = useState("");
   const [whitelistLoaded, setWhitelistLoaded] = useState(false);
 
   useEffect(() => {
-    if (whitelistEnabled && pool.share_token && !whitelistLoaded) {
+    if (whitelistEnabled && bucket.share_token && !whitelistLoaded) {
       void loadWhitelist();
     }
-  }, [whitelistEnabled, pool.share_token, whitelistLoaded]);
+  }, [whitelistEnabled, bucket.share_token, whitelistLoaded]);
 
   async function loadWhitelist() {
     try {
-      const users = await apiGet<string[]>(`/api/pools/${pool.id}/whitelist`);
+      const users = await apiGet<string[]>(`/api/buckets/${bucket.id}/whitelist`);
       setWhitelistedUsers(users);
       setWhitelistLoaded(true);
     } catch (err) {
@@ -37,12 +37,12 @@ export function ShareDialog({ pool, onPoolChange }: { pool: Pool; onPoolChange: 
 
   async function handleToggleWhitelist(checked: boolean) {
     setWhitelistEnabled(checked);
-    onPoolChange({ ...pool, whitelist_enabled: checked });
+    onBucketChange({ ...bucket, whitelist_enabled: checked });
     try {
-      await apiPatch(`/api/pools/${pool.id}/whitelist-enabled`, { enabled: checked });
+      await apiPatch(`/api/buckets/${bucket.id}/whitelist-enabled`, { enabled: checked });
     } catch (err) {
       setWhitelistEnabled(!checked);
-      onPoolChange({ ...pool, whitelist_enabled: !checked });
+      onBucketChange({ ...bucket, whitelist_enabled: !checked });
       toast.error("Failed to update whitelist setting");
     }
   }
@@ -51,7 +51,7 @@ export function ShareDialog({ pool, onPoolChange }: { pool: Pool; onPoolChange: 
     e.preventDefault();
     if (!newUsername.trim()) return;
     try {
-      await apiPost(`/api/pools/${pool.id}/whitelist`, { username: newUsername.trim() });
+      await apiPost(`/api/buckets/${bucket.id}/whitelist`, { username: newUsername.trim() });
       setNewUsername("");
       await loadWhitelist();
       toast.success("User added to whitelist");
@@ -62,7 +62,7 @@ export function ShareDialog({ pool, onPoolChange }: { pool: Pool; onPoolChange: 
 
   async function handleRemoveUser(username: string) {
     try {
-      await apiDelete(`/api/pools/${pool.id}/whitelist/${encodeURIComponent(username)}`);
+      await apiDelete(`/api/buckets/${bucket.id}/whitelist/${encodeURIComponent(username)}`);
       await loadWhitelist();
     } catch (err) {
       toast.error("Failed to remove user");
@@ -73,8 +73,8 @@ export function ShareDialog({ pool, onPoolChange }: { pool: Pool; onPoolChange: 
     setLoading(true);
     setError(null);
     try {
-      const res = await apiPost<unknown, { share_token: string }>(`/api/pools/${pool.id}/share`, {});
-      onPoolChange({ ...pool, share_token: res.share_token });
+      const res = await apiPost<unknown, { share_token: string }>(`/api/buckets/${bucket.id}/share`, {});
+      onBucketChange({ ...bucket, share_token: res.share_token });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to enable sharing");
     } finally {
@@ -87,8 +87,8 @@ export function ShareDialog({ pool, onPoolChange }: { pool: Pool; onPoolChange: 
     setLoading(true);
     setError(null);
     try {
-      await apiPost(`/api/pools/${pool.id}/unshare`, {});
-      onPoolChange({ ...pool, share_token: null });
+      await apiPost(`/api/buckets/${bucket.id}/unshare`, {});
+      onBucketChange({ ...bucket, share_token: null });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to disable sharing");
     } finally {
@@ -97,15 +97,15 @@ export function ShareDialog({ pool, onPoolChange }: { pool: Pool; onPoolChange: 
   }
 
   async function handleCopy() {
-    if (!pool.share_token) return;
-    const shareUrl = `${window.location.origin}/share?token=${pool.share_token}`;
+    if (!bucket.share_token) return;
+    const shareUrl = `${window.location.origin}/share?token=${bucket.share_token}`;
     await navigator.clipboard.writeText(shareUrl);
     toast.success("Share link copied to clipboard!");
   }
 
   async function handleCopyCode() {
-    if (!pool.share_token) return;
-    await navigator.clipboard.writeText(pool.share_token);
+    if (!bucket.share_token) return;
+    await navigator.clipboard.writeText(bucket.share_token);
     toast.success("Code copied to clipboard!");
   }
 
@@ -113,14 +113,14 @@ export function ShareDialog({ pool, onPoolChange }: { pool: Pool; onPoolChange: 
     <div className="flex flex-col gap-4 mt-2">
       {error && <div className="text-sm font-medium text-destructive">{error}</div>}
       
-      {!pool.share_token ? (
+      {!bucket.share_token ? (
         <div className="flex flex-col items-center text-center p-6 bg-muted/30 rounded-xl border border-dashed">
           <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
             <Lock className="w-6 h-6 text-muted-foreground" />
           </div>
           <h3 className="font-semibold text-lg mb-2">Sharing is disabled</h3>
           <p className="text-sm text-muted-foreground mb-6 max-w-sm">
-            Enable sharing to generate a short code that others can use to subscribe to this pool.
+            Enable sharing to generate a short code that others can use to subscribe to this bucket.
           </p>
           <Button onClick={handleEnable} disabled={loading} className="w-full">
             <Globe className="w-4 h-4 mr-2" />
@@ -133,7 +133,7 @@ export function ShareDialog({ pool, onPoolChange }: { pool: Pool; onPoolChange: 
             <h3 className="font-semibold">Share Settings</h3>
             <div className="flex items-center text-sm text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">
               <Users className="w-4 h-4 mr-1.5" />
-              {pool.subscriber_count} subscriber{pool.subscriber_count !== 1 ? 's' : ''}
+              {bucket.subscriber_count} subscriber{bucket.subscriber_count !== 1 ? 's' : ''}
             </div>
           </div>
           
@@ -144,7 +144,7 @@ export function ShareDialog({ pool, onPoolChange }: { pool: Pool; onPoolChange: 
                 <KeyRound className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input 
                   readOnly 
-                  value={pool.share_token} 
+                  value={bucket.share_token} 
                   className="pl-9 font-mono text-center tracking-wider text-lg font-bold" 
                 />
               </div>

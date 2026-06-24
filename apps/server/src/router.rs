@@ -11,9 +11,9 @@ use tower_governor::{
 use crate::{
     api::{
         account::{delete_account, export_account, get_profile, logout, update_username},
+        buckets::{create_bucket, delete_bucket, list_buckets, rename_bucket},
         gifs::search_gifs,
         images::{create_image, delete_image, list_images, search_images, update_image},
-        pools::{create_pool, delete_pool, list_pools, rename_pool},
     },
     app_state::AppState,
     auth::discord_oauth::{handle_discord_oauth_callback, start_discord_oauth},
@@ -53,57 +53,57 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
         .route("/api/gifs/search", get(search_gifs))
         .route("/api/images/search", get(search_images))
         .route(
-            "/api/pools/{pool_id}/images",
+            "/api/buckets/{bucket_id}/images",
             get(list_images).post(create_image),
         )
         .route(
-            "/api/pools/{pool_id}/images/bulk",
+            "/api/buckets/{bucket_id}/images/bulk",
             axum::routing::patch(crate::api::images::bulk_update_images),
         )
         .route(
-            "/api/pools/{pool_id}/images/{image_id}",
+            "/api/buckets/{bucket_id}/images/{image_id}",
             delete(delete_image).patch(update_image),
         )
         .route(
-            "/api/pools/{pool_id}/images/{image_id}/move",
+            "/api/buckets/{bucket_id}/images/{image_id}/move",
             post(crate::api::images::move_image),
         )
         .route(
-            "/api/pools/{pool_id}",
-            delete(delete_pool).patch(rename_pool),
+            "/api/buckets/{bucket_id}",
+            delete(delete_bucket).patch(rename_bucket),
         )
         .route(
-            "/api/pools/{pool_id}/share",
-            post(crate::api::pools::share_pool),
+            "/api/buckets/{bucket_id}/share",
+            post(crate::api::buckets::share_bucket),
         )
         .route(
-            "/api/pools/{pool_id}/unshare",
-            post(crate::api::pools::unshare_pool),
+            "/api/buckets/{bucket_id}/unshare",
+            post(crate::api::buckets::unshare_bucket),
         )
         .route(
             "/api/share/{token}",
-            get(crate::api::pools::get_shared_pool),
+            get(crate::api::buckets::get_shared_bucket),
         )
         .route(
             "/api/share/{token}/subscribe",
-            post(crate::api::pools::subscribe_pool),
+            post(crate::api::buckets::subscribe_bucket),
         )
         .route(
-            "/api/pools/{pool_id}/unsubscribe",
-            post(crate::api::pools::unsubscribe_pool),
+            "/api/buckets/{bucket_id}/unsubscribe",
+            post(crate::api::buckets::unsubscribe_bucket),
         )
         .route(
-            "/api/pools/{pool_id}/whitelist-enabled",
-            axum::routing::patch(crate::api::pools::set_whitelist_enabled),
+            "/api/buckets/{bucket_id}/whitelist-enabled",
+            axum::routing::patch(crate::api::buckets::set_whitelist_enabled),
         )
         .route(
-            "/api/pools/{pool_id}/whitelist",
-            get(crate::api::pools::list_whitelist_users)
-                .post(crate::api::pools::add_whitelist_user),
+            "/api/buckets/{bucket_id}/whitelist",
+            get(crate::api::buckets::list_whitelist_users)
+                .post(crate::api::buckets::add_whitelist_user),
         )
         .route(
-            "/api/pools/{pool_id}/whitelist/{username}",
-            delete(crate::api::pools::remove_whitelist_user),
+            "/api/buckets/{bucket_id}/whitelist/{username}",
+            delete(crate::api::buckets::remove_whitelist_user),
         )
         .route("/api/account/export", get(export_account))
         .route("/api/account", get(get_profile).delete(delete_account))
@@ -123,7 +123,7 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
                 get(handle_discord_oauth_callback)
                     .layer(GovernorLayer::new(strict_governor_conf.clone())),
             )
-            .route("/api/pools", get(list_pools).post(create_pool))
+            .route("/api/buckets", get(list_buckets).post(create_bucket))
             .layer(axum::middleware::from_fn_with_state(
                 state.clone(),
                 csrf_middleware,
@@ -133,7 +133,7 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
         api_routes = api_routes
             .route("/auth/discord/start", get(start_discord_oauth))
             .route("/auth/discord/callback", get(handle_discord_oauth_callback))
-            .route("/api/pools", get(list_pools).post(create_pool));
+            .route("/api/buckets", get(list_buckets).post(create_bucket));
     }
 
     Router::new()

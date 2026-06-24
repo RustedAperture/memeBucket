@@ -1,4 +1,4 @@
-use ezgif_server::{
+use memebucket_server::{
     app_state::AppState,
     config::{Config, connect_sqlite_pool},
     discord::commands::command_definitions,

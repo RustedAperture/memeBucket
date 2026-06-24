@@ -7,7 +7,7 @@ import { apiPost } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 
-export function PoolForm({ onCreated }: { onCreated: () => void }) {
+export function BucketForm({ onCreated }: { onCreated: () => void }) {
   const [mode, setMode] = useState<"create" | "join">("create");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -19,11 +19,11 @@ export function PoolForm({ onCreated }: { onCreated: () => void }) {
     if (!name.trim()) return;
     setError(null);
     try {
-      await apiPost("/api/pools", { name });
+      await apiPost("/api/buckets", { name });
       setName("");
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create pool");
+      setError(err instanceof Error ? err.message : "Could not create bucket");
     }
   }
 
@@ -60,7 +60,7 @@ export function PoolForm({ onCreated }: { onCreated: () => void }) {
             <Input 
               value={name} 
               onChange={(event) => setName(event.target.value)} 
-              placeholder="New pool name..." 
+              placeholder="New bucket name..." 
               className="w-full"
               autoFocus
             />
@@ -69,7 +69,7 @@ export function PoolForm({ onCreated }: { onCreated: () => void }) {
           <div className="flex justify-end">
             <Button type="submit">
               <Plus className="w-4 h-4 mr-2" />
-              Create Pool
+              Create Bucket
             </Button>
           </div>
         </form>
@@ -87,7 +87,7 @@ export function PoolForm({ onCreated }: { onCreated: () => void }) {
           </div>
           <div className="flex justify-end">
             <Button type="submit">
-              Preview Pool
+              Preview Bucket
             </Button>
           </div>
         </form>

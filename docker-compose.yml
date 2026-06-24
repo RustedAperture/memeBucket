@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  ezgif:
+  memebucket:
     platform: linux/amd64
-    image: ghcr.io/rustedaperture/ezgif:master
+    image: ghcr.io/rustedaperture/memebucket:master
     ports:
       - "8080:8080"
     volumes:

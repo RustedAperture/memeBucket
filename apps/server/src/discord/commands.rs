@@ -3,14 +3,14 @@ use serde_json::{Value, json};
 pub fn command_definitions() -> Vec<Value> {
     vec![
         json!({
-            "name": "ez",
-            "description": "Send a random image from one of your pools",
+            "name": "mb",
+            "description": "Send a random image from one of your buckets",
             "integration_types": [1],
             "contexts": [0, 1, 2],
             "options": [
                 {
-                    "name": "pool",
-                    "description": "Your pool, or comma-separated pools",
+                    "name": "bucket",
+                    "description": "Your bucket, or comma-separated buckets",
                     "type": 3,
                     "required": true,
                     "autocomplete": true
@@ -30,43 +30,43 @@ pub fn command_definitions() -> Vec<Value> {
             ]
         }),
         json!({
-            "name": "pool",
-            "description": "Manage your image pools",
+            "name": "bucket",
+            "description": "Manage your image buckets",
             "integration_types": [1],
             "contexts": [0, 1, 2],
             "options": [
                 {
                     "name": "create",
-                    "description": "Create a pool",
+                    "description": "Create a bucket",
                     "type": 1,
                     "options": [
-                        {"name": "name", "description": "Pool name", "type": 3, "required": true}
+                        {"name": "name", "description": "Bucket name", "type": 3, "required": true}
                     ]
                 },
                 {
                     "name": "add",
-                    "description": "Add an image URL to a pool",
+                    "description": "Add an image URL to a bucket",
                     "type": 1,
                     "options": [
-                        {"name": "pool", "description": "Your pool", "type": 3, "required": true, "autocomplete": true},
+                        {"name": "bucket", "description": "Your bucket", "type": 3, "required": true, "autocomplete": true},
                         {"name": "url", "description": "Image or GIF URL", "type": 3, "required": true}
                     ]
                 },
                 {
                     "name": "list",
-                    "description": "List your pools",
+                    "description": "List your buckets",
                     "type": 1
                 }
             ]
         }),
         json!({
             "name": "manage",
-            "description": "Open the web dashboard to manage your pools",
+            "description": "Open the web dashboard to manage your buckets",
             "integration_types": [1],
             "contexts": [0, 1, 2]
         }),
         json!({
-            "name": "Add to Pool",
+            "name": "Add to Bucket",
             "type": 3,
             "integration_types": [1],
             "contexts": [0, 1, 2]

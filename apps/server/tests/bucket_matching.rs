@@ -1,8 +1,8 @@
-use ezgif_server::repositories::{
-    images::ImageRepository, pools::PoolRepository, send_history::SendHistoryRepository,
+use memebucket_server::repositories::{
+    buckets::BucketRepository, images::ImageRepository, send_history::SendHistoryRepository,
     users::UserRepository,
 };
-use ezgif_server::services::{
+use memebucket_server::services::{
     images::validate_http_url,
     random::{RandomError, RandomService, RandomVisibility},
 };
@@ -15,10 +15,10 @@ async fn test_pool() -> SqlitePool {
 }
 
 #[tokio::test]
-async fn random_lookup_matches_category_case_insensitively() {
+async fn random_lookup_matches_bucket_case_insensitively() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
     let service = RandomService::new(pools.clone(), images.clone(), history);
@@ -37,18 +37,18 @@ async fn random_lookup_matches_category_case_insensitively() {
         .await
         .unwrap();
 
-    assert_eq!(selected.pool_name, "Cats");
+    assert_eq!(selected.bucket_name, "Cats");
     assert_eq!(selected.url, "https://example.com/cat.gif");
 
     let row = sqlx::query(
-        "SELECT pool_name, url, response_visibility FROM send_history WHERE owner_user_id = ?",
+        "SELECT bucket_name, url, response_visibility FROM send_history WHERE owner_user_id = ?",
     )
     .bind(user.id.to_string())
     .fetch_one(&pool)
     .await
     .unwrap();
 
-    assert_eq!(row.get::<String, _>("pool_name"), "Cats");
+    assert_eq!(row.get::<String, _>("bucket_name"), "Cats");
     assert_eq!(row.get::<String, _>("url"), "https://example.com/cat.gif");
     assert_eq!(row.get::<String, _>("response_visibility"), "private");
 }
@@ -57,7 +57,7 @@ async fn random_lookup_matches_category_case_insensitively() {
 async fn random_lookup_combines_images_from_multiple_pools() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
     let service = RandomService::new(pools.clone(), images.clone(), history);
@@ -73,22 +73,22 @@ async fn random_lookup_combines_images_from_multiple_pools() {
         .unwrap();
 
     let selected = service
-        .select_random_from_pools(user.id, &["cats", "dogs"], RandomVisibility::Public)
+        .select_random_from_buckets(user.id, &["cats", "dogs"], RandomVisibility::Public)
         .await
         .unwrap();
 
-    assert_eq!(selected.pool_name, "Dogs");
+    assert_eq!(selected.bucket_name, "Dogs");
     assert_eq!(selected.url, "https://example.com/dog.gif");
 
     let row = sqlx::query(
-        "SELECT pool_name, url, response_visibility FROM send_history WHERE owner_user_id = ?",
+        "SELECT bucket_name, url, response_visibility FROM send_history WHERE owner_user_id = ?",
     )
     .bind(user.id.to_string())
     .fetch_one(&pool)
     .await
     .unwrap();
 
-    assert_eq!(row.get::<String, _>("pool_name"), "Dogs");
+    assert_eq!(row.get::<String, _>("bucket_name"), "Dogs");
     assert_eq!(row.get::<String, _>("url"), "https://example.com/dog.gif");
     assert_eq!(row.get::<String, _>("response_visibility"), "public");
 }
@@ -97,7 +97,7 @@ async fn random_lookup_combines_images_from_multiple_pools() {
 async fn random_excludes_zero_weight_images() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
     let service = RandomService::new(pools.clone(), images.clone(), history);
@@ -144,7 +144,7 @@ async fn random_excludes_zero_weight_images() {
 async fn random_avoids_recent_image_when_alternative_exists() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
     let service = RandomService::new(pools.clone(), images.clone(), history.clone());
@@ -178,7 +178,7 @@ async fn random_avoids_recent_image_when_alternative_exists() {
 async fn random_returns_only_image_from_single_image_pool() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
     let service = RandomService::new(pools.clone(), images.clone(), history.clone());
@@ -208,7 +208,7 @@ async fn random_returns_only_image_from_single_image_pool() {
 async fn all_zero_weight_images_return_random_enabled_error() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
     let service = RandomService::new(pools.clone(), images.clone(), history);
@@ -250,16 +250,16 @@ async fn all_zero_weight_images_return_random_enabled_error() {
     assert!(matches!(err, RandomError::NoRandomEnabledImages));
     assert_eq!(
         err.user_message(),
-        "That pool has no random-enabled images yet."
+        "That bucket has no random-enabled images yet."
     );
     assert!(err.is_private());
 }
 
 #[tokio::test]
-async fn empty_category_returns_private_safe_error() {
+async fn empty_bucket_returns_private_safe_error() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
     let service = RandomService::new(pools.clone(), images, history);
@@ -274,7 +274,7 @@ async fn empty_category_returns_private_safe_error() {
         .await
         .unwrap_err();
 
-    assert_eq!(err.user_message(), "That pool has no saved images yet.");
+    assert_eq!(err.user_message(), "That bucket has no saved images yet.");
     assert!(err.is_private());
 }
 
@@ -282,7 +282,7 @@ async fn empty_category_returns_private_safe_error() {
 async fn send_history_record_rejects_cross_owner_inputs() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
 
@@ -309,10 +309,10 @@ async fn send_history_record_rejects_cross_owner_inputs() {
 }
 
 #[tokio::test]
-async fn recent_image_ids_for_pools_prefers_latest_insert_when_sent_at_ties() {
+async fn recent_image_ids_for_buckets_prefers_latest_insert_when_sent_at_ties() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
     let user = users
@@ -339,7 +339,7 @@ async fn recent_image_ids_for_pools_prefers_latest_insert_when_sent_at_ties() {
         .unwrap();
 
     let recent_ids = history
-        .recent_image_ids_for_pools(user.id, &[saved_pool.id], 1)
+        .recent_image_ids_for_buckets(user.id, &[saved_pool.id], 1)
         .await
         .unwrap();
 
@@ -350,7 +350,7 @@ async fn recent_image_ids_for_pools_prefers_latest_insert_when_sent_at_ties() {
 async fn subscribed_pool_random_selection_records_requesting_user_history() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
     let service = RandomService::new(pools.clone(), images.clone(), history);
@@ -368,7 +368,7 @@ async fn subscribed_pool_random_selection_records_requesting_user_history() {
         .await
         .unwrap();
     pools
-        .subscribe_user_to_pool(subscriber.id, saved_pool.id)
+        .subscribe_user_to_bucket(subscriber.id, saved_pool.id)
         .await
         .unwrap();
 
@@ -377,18 +377,18 @@ async fn subscribed_pool_random_selection_records_requesting_user_history() {
         .await
         .unwrap();
 
-    assert_eq!(selected.pool_name, "Cats");
+    assert_eq!(selected.bucket_name, "Cats");
     assert_eq!(selected.url, "https://example.com/cat.gif");
 
     let row = sqlx::query(
-        "SELECT pool_name, url, response_visibility FROM send_history WHERE owner_user_id = ?",
+        "SELECT bucket_name, url, response_visibility FROM send_history WHERE owner_user_id = ?",
     )
     .bind(subscriber.id.to_string())
     .fetch_one(&pool)
     .await
     .unwrap();
 
-    assert_eq!(row.get::<String, _>("pool_name"), "Cats");
+    assert_eq!(row.get::<String, _>("bucket_name"), "Cats");
     assert_eq!(row.get::<String, _>("url"), "https://example.com/cat.gif");
     assert_eq!(row.get::<String, _>("response_visibility"), "public");
 }
@@ -397,7 +397,7 @@ async fn subscribed_pool_random_selection_records_requesting_user_history() {
 async fn storage_failures_are_reported_as_storage_errors() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
     let service = RandomService::new(pools.clone(), images, history);

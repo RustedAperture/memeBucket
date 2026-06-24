@@ -1,6 +1,6 @@
-# ezGif
+# memeBucket
 
-Discord user app for personal random image/GIF categories.
+Discord user app for personal random image/GIF buckets.
 
 ## Architecture
 
@@ -12,7 +12,7 @@ Discord user app for personal random image/GIF categories.
 
 ```bash
 cargo test
-cargo run -p ezgif-server
+cargo run -p memebucket-server
 ```
 
 ## Web Build
@@ -26,8 +26,8 @@ npm run build
 ## Docker
 
 ```bash
-docker build -t ezgif .
-docker run --env-file .env -p 8080:8080 -v "$PWD/data:/app/data" ezgif
+docker build -t memebucket .
+docker run --env-file .env -p 8080:8080 -v "$PWD/data:/app/data" memebucket
 ```
 
 ## Discord Endpoint

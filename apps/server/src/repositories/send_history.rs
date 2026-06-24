@@ -2,7 +2,7 @@ use sqlx::SqlitePool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::repositories::{images::StoredImage, pools::StoredPool};
+use crate::repositories::{buckets::StoredBucket, images::StoredImage};
 
 #[derive(Clone)]
 pub struct SendHistoryRepository {
@@ -17,34 +17,34 @@ impl SendHistoryRepository {
     pub async fn record(
         &self,
         requester_user_id: Uuid,
-        pool: &StoredPool,
+        bucket: &StoredBucket,
         image: &StoredImage,
         visibility: &str,
     ) -> Result<(), sqlx::Error> {
         let result = sqlx::query(
             r#"
             INSERT INTO send_history
-                (id, owner_user_id, pool_id, image_id, pool_name, url, response_visibility)
-            SELECT ?, ?, pools.id, images.id, pools.name, images.url, ?
-            FROM pools
+                (id, owner_user_id, bucket_id, image_id, bucket_name, url, response_visibility)
+            SELECT ?, ?, buckets.id, images.id, buckets.name, images.url, ?
+            FROM buckets
             INNER JOIN images
                 ON images.id = ?
-               AND images.pool_id = pools.id
-               AND images.owner_user_id = pools.owner_user_id
-            WHERE pools.id = ?
+               AND images.bucket_id = buckets.id
+               AND images.owner_user_id = buckets.owner_user_id
+            WHERE buckets.id = ?
               AND (
-                pools.owner_user_id = ?
+                buckets.owner_user_id = ?
                 OR EXISTS (
                   SELECT 1
-                  FROM pool_subscriptions ps
-                  WHERE ps.pool_id = pools.id
+                  FROM bucket_subscriptions ps
+                  WHERE ps.bucket_id = buckets.id
                     AND ps.subscriber_user_id = ?
                     AND (
-                      pools.whitelist_enabled = 0
+                      buckets.whitelist_enabled = 0
                       OR EXISTS (
                         SELECT 1
-                        FROM pool_whitelists w
-                        WHERE w.pool_id = pools.id AND w.user_id = ?
+                        FROM bucket_whitelists w
+                        WHERE w.bucket_id = buckets.id AND w.user_id = ?
                       )
                     )
                 )
@@ -55,7 +55,7 @@ impl SendHistoryRepository {
         .bind(requester_user_id.to_string())
         .bind(visibility)
         .bind(image.id.to_string())
-        .bind(pool.id.to_string())
+        .bind(bucket.id.to_string())
         .bind(requester_user_id.to_string())
         .bind(requester_user_id.to_string())
         .bind(requester_user_id.to_string())
@@ -110,29 +110,29 @@ impl SendHistoryRepository {
         Ok(counts)
     }
 
-    pub async fn recent_image_ids_for_pools(
+    pub async fn recent_image_ids_for_buckets(
         &self,
         requester_user_id: Uuid,
-        pool_ids: &[Uuid],
+        bucket_ids: &[Uuid],
         limit: usize,
     ) -> Result<Vec<Uuid>, sqlx::Error> {
-        if pool_ids.is_empty() || limit == 0 {
+        if bucket_ids.is_empty() || limit == 0 {
             return Ok(Vec::new());
         }
 
-        let placeholders = vec!["?"; pool_ids.len()].join(", ");
+        let placeholders = vec!["?"; bucket_ids.len()].join(", ");
         let sql = format!(
             "SELECT image_id FROM send_history
              WHERE owner_user_id = ?
                AND image_id IS NOT NULL
-               AND pool_id IN ({placeholders})
+               AND bucket_id IN ({placeholders})
              ORDER BY sent_at DESC, rowid DESC
              LIMIT ?"
         );
 
         let mut query = sqlx::query_scalar::<_, String>(&sql).bind(requester_user_id.to_string());
-        for pool_id in pool_ids {
-            query = query.bind(pool_id.to_string());
+        for bucket_id in bucket_ids {
+            query = query.bind(bucket_id.to_string());
         }
         query = query.bind(limit as i64);
 

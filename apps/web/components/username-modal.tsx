@@ -42,7 +42,7 @@ export function UsernameModal() {
         <DialogHeader>
           <DialogTitle>Set your username</DialogTitle>
           <DialogDescription>
-            Please choose a unique username to continue. This will be used when collaborating on shared pools.
+            Please choose a unique username to continue. This will be used when collaborating on shared buckets.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 mt-4">

@@ -14,16 +14,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <Link href="/" className="font-semibold text-lg hover:opacity-80 transition-opacity">
-            ezGif
+            memeBucket
           </Link>
           <nav className="flex items-center gap-6 text-sm font-medium">
             <Link href="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <LayoutDashboard className="w-4 h-4" />
               <span className="hidden sm:inline">Dashboard</span>
             </Link>
-            <Link href="/pools" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/buckets" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <FolderOpen className="w-4 h-4" />
-              <span className="hidden sm:inline">Pools</span>
+              <span className="hidden sm:inline">Buckets</span>
             </Link>
             <Link href="/search" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <Search className="w-4 h-4" />
@@ -38,7 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
       <footer className="border-t">
         <div className="container mx-auto flex max-w-5xl flex-col gap-3 px-4 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <p>ezGif</p>
+          <p>memeBucket</p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
             <nav className="flex flex-wrap gap-x-4 gap-y-2">
               <Link href="/terms" className="hover:text-foreground transition-colors">

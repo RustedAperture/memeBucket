@@ -4,7 +4,7 @@ export default function LicensePage() {
   return (
     <LegalPage
       title="License"
-      description="ezGif is licensed under the GNU General Public License version 3."
+      description="memeBucket is licensed under the GNU General Public License version 3."
       updated="Jun 10, 2026"
     >
       <LegalSection title="GNU General Public License v3.0">

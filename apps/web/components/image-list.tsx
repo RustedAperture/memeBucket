@@ -37,12 +37,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ImageItem, Pool } from "@/lib/types";
+import type { ImageItem, Bucket } from "@/lib/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type BulkFavoriteValue = "unchanged" | "true" | "false";
 
-export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:columns-3 lg:columns-4", readonly = false, pools = [], onMoveImage, onImageUpdated }: { poolId: string; columnClass?: string; readonly?: boolean; pools?: Pool[]; onMoveImage?: () => void; onImageUpdated?: () => void }) {
+export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:columns-3 lg:columns-4", readonly = false, buckets = [], onMoveImage, onImageUpdated }: { bucketId: string; columnClass?: string; readonly?: boolean; buckets?: Bucket[]; onMoveImage?: () => void; onImageUpdated?: () => void }) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
@@ -60,24 +60,24 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
   const [bulkAddTags, setBulkAddTags] = useState("");
   const [bulkRemoveTags, setBulkRemoveTags] = useState("");
   const [bulkSaving, setBulkSaving] = useState(false);
-  const movePoolItems = pools.map((p) => ({
-    label: `${p.name}${p.id === poolId ? " (Current)" : ""}`,
+  const moveBucketItems = buckets.map((p) => ({
+    label: `${p.name}${p.id === bucketId ? " (Current)" : ""}`,
     value: p.id,
   }));
 
   async function load() {
     try {
       let loadedImages: ImageItem[] = [];
-      if (poolId === "favorites") {
+      if (bucketId === "favorites") {
         const results = await apiGet<any[]>(`/api/images/search?favorite=true&limit=1000`);
-        loadedImages = results.map(r => ({ ...r.image, poolId: r.poolId }));
+        loadedImages = results.map(r => ({ ...r.image, bucketId: r.bucketId }));
       } else {
-        loadedImages = await apiGet<ImageItem[]>(`/api/pools/${poolId}/images`);
+        loadedImages = await apiGet<ImageItem[]>(`/api/buckets/${bucketId}/images`);
       }
       setImages(loadedImages);
       return loadedImages;
     } catch {
-      // pool might be empty or deleted
+      // bucket might be empty or deleted
       return [];
     }
   }
@@ -96,11 +96,11 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
       resetBulkForm();
     });
     let request: Promise<any>;
-    if (poolId === "favorites") {
+    if (bucketId === "favorites") {
       request = apiGet<any[]>(`/api/images/search?favorite=true&limit=1000`)
-        .then(results => results.map(r => ({ ...r.image, poolId: r.poolId })));
+        .then(results => results.map(r => ({ ...r.image, bucketId: r.bucketId })));
     } else {
-      request = apiGet<ImageItem[]>(`/api/pools/${poolId}/images`);
+      request = apiGet<ImageItem[]>(`/api/buckets/${bucketId}/images`);
     }
 
     request
@@ -110,13 +110,13 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
         }
       })
       .catch(() => {
-        // pool might be empty or deleted
+        // bucket might be empty or deleted
       });
 
     return () => {
       cancelled = true;
     };
-  }, [poolId]);
+  }, [bucketId]);
 
   function toggleImageSelection(imageId: string) {
     setSelectedImageIds((current) => {
@@ -148,7 +148,7 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
     if (!imageToDelete) return;
     setError(null);
     try {
-      await apiDelete(`/api/pools/${poolId}/images/${imageToDelete}`);
+      await apiDelete(`/api/buckets/${bucketId}/images/${imageToDelete}`);
       if (selectedImage?.id === imageToDelete) {
         setSelectedImage(null);
       }
@@ -166,7 +166,7 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
     const normalizedNotes = notesValue.trim() || null;
     const normalizedWeight = clampRandomWeight(randomWeightValue);
     try {
-      await apiPatch(`/api/pools/${poolId}/images/${selectedImage.id}`, {
+      await apiPatch(`/api/buckets/${bucketId}/images/${selectedImage.id}`, {
         title: normalizedTitle,
         notes: normalizedNotes,
         favorite: favoriteValue,
@@ -243,7 +243,7 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
     setBulkSaving(true);
     try {
       const response = await apiPatch<typeof payload, { updated: number }>(
-        `/api/pools/${poolId}/images/bulk`,
+        `/api/buckets/${bucketId}/images/bulk`,
         payload
       );
       setImages((currentImages) => applyBulkMetadataToImages(currentImages, imageIds, payload));
@@ -259,10 +259,10 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
     }
   }
 
-  async function handleMoveToPool(newPoolId: string) {
-    if (!selectedImage || newPoolId === poolId) return;
+  async function handleMoveToBucket(newBucketId: string) {
+    if (!selectedImage || newBucketId === bucketId) return;
     try {
-      await apiPost(`/api/pools/${poolId}/images/${selectedImage.id}/move`, { new_pool_id: newPoolId });
+      await apiPost(`/api/buckets/${bucketId}/images/${selectedImage.id}/move`, { new_bucket_id: newBucketId });
       setSelectedImage(null);
       if (onMoveImage) {
         onMoveImage();
@@ -280,7 +280,7 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center animate-in fade-in-50">
         <ImageIcon className="mx-auto h-10 w-10 text-muted-foreground/50" />
         <h2 className="mt-4 text-lg font-semibold">No images</h2>
-        <p className="mb-4 mt-2 text-sm text-muted-foreground">No images in this pool yet. Add one above.</p>
+        <p className="mb-4 mt-2 text-sm text-muted-foreground">No images in this bucket yet. Add one above.</p>
       </div>
     );
   }
@@ -351,7 +351,7 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                 draggable={!readonly}
                 onDragStart={(event) => {
                   const imageIds = dragImageIdsFor(image.id);
-                  event.dataTransfer.setData("application/json", JSON.stringify({ imageId: image.id, imageIds, sourcePoolId: poolId }));
+                  event.dataTransfer.setData("application/json", JSON.stringify({ imageId: image.id, imageIds, sourceBucketId: bucketId }));
                   event.dataTransfer.effectAllowed = "move";
                 }}
                 className={`group relative overflow-hidden rounded-xl border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none break-inside-avoid mb-4 ${
@@ -416,8 +416,8 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                     // Optimistic update
                     setImages(prev => prev.map(img => img.id === image.id ? { ...img, favorite: newFav } : img));
                     try {
-                      const patchPoolId = poolId === "favorites" ? (image as any).poolId : poolId;
-                      await apiPatch(`/api/pools/${patchPoolId}/images/${image.id}`, { favorite: newFav });
+                      const patchBucketId = bucketId === "favorites" ? (image as any).bucketId : bucketId;
+                      await apiPatch(`/api/buckets/${patchBucketId}/images/${image.id}`, { favorite: newFav });
                       if (onImageUpdated) onImageUpdated();
                     } catch (err) {
                       // Revert on failure
@@ -777,15 +777,15 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                 </div>
               </div>
 
-              {pools.length > 1 && !readonly && (
+              {buckets.length > 1 && !readonly && (
                 <div className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Move to Pool</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Move to Bucket</p>
                   <Select
-                    items={movePoolItems}
-                    value={poolId}
-                    onValueChange={(newPoolId) => {
-                      if (typeof newPoolId === "string") {
-                        void handleMoveToPool(newPoolId);
+                    items={moveBucketItems}
+                    value={bucketId}
+                    onValueChange={(newBucketId) => {
+                      if (typeof newBucketId === "string") {
+                        void handleMoveToBucket(newBucketId);
                       }
                     }}
                   >
@@ -794,14 +794,14 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectLabel>Pools</SelectLabel>
-                        {pools.map((p) => (
+                        <SelectLabel>Buckets</SelectLabel>
+                        {buckets.map((p) => (
                           <SelectItem
                             key={p.id}
                             value={p.id}
-                            disabled={p.is_subscribed || p.id === poolId}
+                            disabled={p.is_subscribed || p.id === bucketId}
                           >
-                            {p.name}{p.id === poolId ? " (Current)" : ""}
+                            {p.name}{p.id === bucketId ? " (Current)" : ""}
                           </SelectItem>
                         ))}
                       </SelectGroup>
@@ -831,7 +831,7 @@ export function ImageList({ poolId, columnClass = "columns-2 sm:columns-2 md:col
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete this image from your pool. This action cannot be undone.
+              This will permanently delete this image from your bucket. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

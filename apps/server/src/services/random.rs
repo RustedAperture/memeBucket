@@ -2,8 +2,8 @@ use rand::Rng;
 use uuid::Uuid;
 
 use crate::repositories::{
+    buckets::{BucketRepository, StoredBucket},
     images::{ImageRepository, StoredImage},
-    pools::{PoolRepository, StoredPool},
     send_history::SendHistoryRepository,
 };
 
@@ -24,17 +24,17 @@ impl RandomVisibility {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RandomSelection {
-    pub pool_name: String,
+    pub bucket_name: String,
     pub url: String,
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum RandomError {
-    #[error("I could not find that pool.")]
-    MissingPool,
-    #[error("That pool has no saved images yet.")]
-    EmptyPool,
-    #[error("That pool has no random-enabled images yet.")]
+    #[error("I could not find that bucket.")]
+    MissingBucket,
+    #[error("That bucket has no saved images yet.")]
+    EmptyBucket,
+    #[error("That bucket has no random-enabled images yet.")]
     NoRandomEnabledImages,
     #[error("I hit a storage error while selecting media.")]
     Storage(#[source] sqlx::Error),
@@ -43,9 +43,9 @@ pub enum RandomError {
 impl RandomError {
     pub fn user_message(&self) -> &'static str {
         match self {
-            RandomError::MissingPool => "I could not find that pool.",
-            RandomError::EmptyPool => "That pool has no saved images yet.",
-            RandomError::NoRandomEnabledImages => "That pool has no random-enabled images yet.",
+            RandomError::MissingBucket => "I could not find that bucket.",
+            RandomError::EmptyBucket => "That bucket has no saved images yet.",
+            RandomError::NoRandomEnabledImages => "That bucket has no random-enabled images yet.",
             RandomError::Storage(_) => "I hit a storage error while selecting media.",
         }
     }
@@ -57,26 +57,26 @@ impl RandomError {
 
 #[derive(Clone)]
 pub struct RandomService {
-    pools: PoolRepository,
+    buckets: BucketRepository,
     images: ImageRepository,
     history: SendHistoryRepository,
 }
 
 #[derive(Clone, Debug)]
 struct WeightedChoice {
-    pool: StoredPool,
+    bucket: StoredBucket,
     image: StoredImage,
     weight: u32,
 }
 
 impl RandomService {
     pub fn new(
-        pools: PoolRepository,
+        buckets: BucketRepository,
         images: ImageRepository,
         history: SendHistoryRepository,
     ) -> Self {
         Self {
-            pools,
+            buckets,
             images,
             history,
         }
@@ -85,47 +85,47 @@ impl RandomService {
     pub async fn select_random(
         &self,
         requester_user_id: Uuid,
-        pool_name: &str,
+        bucket_name: &str,
         visibility: RandomVisibility,
     ) -> Result<RandomSelection, RandomError> {
-        self.select_random_from_pools(requester_user_id, &[pool_name], visibility)
+        self.select_random_from_buckets(requester_user_id, &[bucket_name], visibility)
             .await
     }
 
-    pub async fn select_random_from_pools(
+    pub async fn select_random_from_buckets(
         &self,
         requester_user_id: Uuid,
-        pool_names: &[&str],
+        bucket_names: &[&str],
         visibility: RandomVisibility,
     ) -> Result<RandomSelection, RandomError> {
         let mut all_choices = Vec::new();
         let mut eligible_choices = Vec::new();
-        let mut pool_ids = Vec::new();
+        let mut bucket_ids = Vec::new();
 
-        for pool_name in pool_names {
-            let pool = self
-                .pools
-                .find_accessible_by_name_folded(requester_user_id, pool_name)
+        for bucket_name in bucket_names {
+            let bucket = self
+                .buckets
+                .find_accessible_by_name_folded(requester_user_id, bucket_name)
                 .await
                 .map_err(RandomError::Storage)?
-                .ok_or(RandomError::MissingPool)?;
-            pool_ids.push(pool.id);
+                .ok_or(RandomError::MissingBucket)?;
+            bucket_ids.push(bucket.id);
 
             let images = self
                 .images
-                .list_for_pool(requester_user_id, pool.id)
+                .list_for_bucket(requester_user_id, bucket.id)
                 .await
                 .map_err(RandomError::Storage)?;
 
             all_choices.extend(images.iter().cloned().map(|image| WeightedChoice {
-                pool: pool.clone(),
+                bucket: bucket.clone(),
                 weight: effective_weight(&image),
                 image,
             }));
             eligible_choices.extend(images.into_iter().filter_map(|image| {
                 let weight = effective_weight(&image);
                 (weight > 0).then(|| WeightedChoice {
-                    pool: pool.clone(),
+                    bucket: bucket.clone(),
                     image,
                     weight,
                 })
@@ -133,7 +133,7 @@ impl RandomService {
         }
 
         if all_choices.is_empty() {
-            return Err(RandomError::EmptyPool);
+            return Err(RandomError::EmptyBucket);
         }
 
         if eligible_choices.is_empty() {
@@ -143,7 +143,7 @@ impl RandomService {
         let recent_limit = eligible_choices.len().saturating_sub(1).min(5);
         let recent_image_ids = self
             .history
-            .recent_image_ids_for_pools(requester_user_id, &pool_ids, recent_limit)
+            .recent_image_ids_for_buckets(requester_user_id, &bucket_ids, recent_limit)
             .await
             .map_err(RandomError::Storage)?;
         let candidate_choices = exclude_recent_if_possible(eligible_choices, &recent_image_ids);
@@ -154,7 +154,7 @@ impl RandomService {
         self.history
             .record(
                 requester_user_id,
-                &selected.pool,
+                &selected.bucket,
                 &selected.image,
                 visibility.as_str(),
             )
@@ -162,7 +162,7 @@ impl RandomService {
             .map_err(RandomError::Storage)?;
 
         Ok(RandomSelection {
-            pool_name: selected.pool.name.clone(),
+            bucket_name: selected.bucket.name.clone(),
             url: selected.image.url.clone(),
         })
     }
@@ -223,7 +223,7 @@ fn choose_weighted_image(choices: &[WeightedChoice]) -> Option<&WeightedChoice> 
 #[cfg(test)]
 mod tests {
     use super::{WeightedChoice, effective_weight, exclude_recent_if_possible};
-    use crate::repositories::{images::StoredImage, pools::StoredPool};
+    use crate::repositories::{buckets::StoredBucket, images::StoredImage};
     use uuid::Uuid;
 
     #[test]
@@ -261,7 +261,7 @@ mod tests {
 
     fn weighted_choice(image_id: Uuid, weight: u32) -> WeightedChoice {
         WeightedChoice {
-            pool: StoredPool {
+            bucket: StoredBucket {
                 id: Uuid::new_v4(),
                 owner_user_id: Uuid::new_v4(),
                 name: "cats".to_string(),
@@ -274,7 +274,7 @@ mod tests {
             image: StoredImage {
                 id: image_id,
                 owner_user_id: Uuid::new_v4(),
-                pool_id: Uuid::new_v4(),
+                bucket_id: Uuid::new_v4(),
                 url: "https://example.com/cat.gif".to_string(),
                 title: None,
                 favorite: false,
@@ -291,7 +291,7 @@ mod tests {
         StoredImage {
             id: Uuid::new_v4(),
             owner_user_id: Uuid::new_v4(),
-            pool_id: Uuid::new_v4(),
+            bucket_id: Uuid::new_v4(),
             url: "https://example.com/cat.gif".to_string(),
             title: None,
             favorite,

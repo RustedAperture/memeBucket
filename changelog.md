@@ -4,14 +4,14 @@
 
 ### Added
 
-- Added an optional `target` parameter to the `/ez` slash command to send the GIF directly to a specific user.
+- Added an optional `target` parameter to the `/mb` slash command to send the GIF directly to a specific user.
 - Added a "Reply with GIF" right-click message context menu command to instantly send a GIF directed at the author of the selected message.
 
 ### Fixed
 
 - Fixed an issue causing right-click "Reply with GIF" modals to time out due to slow database reads by enabling SQLite WAL mode.
 - Fixed a Discord API `400 Bad Request` error preventing the modal from opening by removing unsupported select menus.
-- Added a friendly error message listing available pools if an invalid pool name is entered in the modal.
+- Added a friendly error message listing available buckets if an invalid bucket name is entered in the modal.
 
 ### Changed
 
@@ -23,13 +23,13 @@
 
 ### Added
 
-- Added Library search for saved GIFs and images across accessible pools, with filters for tags, pool, favorites, and random-enabled state.
+- Added Library search for saved GIFs and images across accessible buckets, with filters for tags, bucket, favorites, and random-enabled state.
 - Added image metadata fields for title, tags, favorite status, random weight, and notes.
 - Added metadata editing from image details and bulk editing for selected images.
 - Added Klipy metadata suggestions so saved GIFs can start with a title and suggested tags.
 - Added a Library card to the dashboard.
-- Added a "Disable usage" toggle to image pools.
-- Auto-injected a read-only "Favorites" pool containing all starred media.
+- Added a "Disable usage" toggle to image buckets.
+- Auto-injected a read-only "Favorites" bucket containing all starred media.
 - Expanded the "Paste URL" field to natively double as a Klipy GIF search query.
 - Added a star when hovering over an image to easily toggle favorite status.
 
@@ -37,21 +37,21 @@
 
 - Improved random image selection with per-image weights and stronger recent-repeat avoidance.
 - Renamed the global saved-media search surface to Library to distinguish it from searching Klipy for new GIFs.
-- Expanded access checks and tests for library search across owned, subscribed, public, private, and whitelisted pools.
-- Refactored pool view and search pages to share a unified responsive layout.
-- System pools (like Favorites or Added from Discord) are now automatically hidden when empty.
+- Expanded access checks and tests for library search across owned, subscribed, public, private, and whitelisted buckets.
+- Refactored bucket view and search pages to share a unified responsive layout.
+- System buckets (like Favorites or Added from Discord) are now automatically hidden when empty.
 
 ## v0.1.2 - Jun 11, 2026
 
 ### Added
 
-- Added an "Add to Pool" Discord message context menu command to save images directly from messages into an "Added from Discord" pool.
-- Added the ability to rename image pools.
+- Added an "Add to Bucket" Discord message context menu command to save images directly from messages into an "Added from Discord" bucket.
+- Added the ability to rename image buckets.
 
 ### Changed
 
 - Migrated the web dashboard's sidebar layout to use standard Shadcn UI components.
-- Consolidated pool settings (rename, delete, unsubscribe) into a clean Settings modal.
+- Consolidated bucket settings (rename, delete, unsubscribe) into a clean Settings modal.
 
 ## v0.1.1 - Jun 11, 2026
 
@@ -59,8 +59,8 @@
 
 - Added homepage buttons for Ko-fi support and the GitHub repository.
 - Added a footer theme selector with Light, Dark, and Auto modes.
-- Added drag-and-drop support and a modal dropdown for moving images between pools.
-- Added a GIF search feature powered by the Klipy API, accessible directly from the pool image form.
+- Added drag-and-drop support and a modal dropdown for moving images between buckets.
+- Added a GIF search feature powered by the Klipy API, accessible directly from the bucket image form.
 
 ### Fixed
 
@@ -75,13 +75,13 @@
 
 ### Added
 
-- Initial ezGif Discord user app and web dashboard.
+- Initial memeBucket Discord user app and web dashboard.
 - Discord OAuth sign-in and session-backed account management.
-- Personal media pools for organizing image and GIF URLs.
-- Discord commands for creating pools, adding images, listing pools, opening the dashboard, and sending a random image from a selected pool.
-- Web dashboard for managing pools, images, notes, and account username.
-- Pool sharing with share links, subscriptions, subscriber counts, and optional whitelist access.
-- Account export endpoint for owned pools and image URLs.
+- Personal media buckets for organizing image and GIF URLs.
+- Discord commands for creating buckets, adding images, listing buckets, opening the dashboard, and sending a random image from a selected bucket.
+- Web dashboard for managing buckets, images, notes, and account username.
+- Bucket sharing with share links, subscriptions, subscriber counts, and optional whitelist access.
+- Account export endpoint for owned buckets and image URLs.
 - Account deletion endpoint for removing account-linked data.
 - Terms of Service, Privacy Policy, Changelog, and GPLv3 License pages.
 

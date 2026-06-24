@@ -39,12 +39,12 @@ export type GifSearchSelection = {
 };
 
 export type ImageSearchResult = {
-  poolId: string;
-  poolName: string;
+  bucketId: string;
+  bucketName: string;
   image: ImageItem;
 };
 
-export type Pool = {
+export type Bucket = {
   id: string;
   name: string;
   share_token: string | null;

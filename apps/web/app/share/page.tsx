@@ -9,7 +9,7 @@ import { AppShell } from "@/components/app-shell";
 function ShareContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
-  const [pool, setPool] = useState<{ id: string; name: string; subscriber_count: number; images: { id: string; url: string }[] } | null>(null);
+  const [bucket, setBucket] = useState<{ id: string; name: string; subscriber_count: number; images: { id: string; url: string }[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [subscribing, setSubscribing] = useState(false);
   const router = useRouter();
@@ -17,7 +17,7 @@ function ShareContent() {
   useEffect(() => {
     if (!token) return;
     apiGet<{ id: string; name: string; subscriber_count: number; images: { id: string; url: string }[] }>(`/api/share/${token}`)
-      .then(setPool)
+      .then(setBucket)
       .catch((err) => setError(err.message));
   }, [token]);
 
@@ -26,7 +26,7 @@ function ShareContent() {
     setSubscribing(true);
     try {
       await apiPost(`/api/share/${token}/subscribe`, {});
-      router.push(`/pools?id=${pool?.id}`);
+      router.push(`/buckets?id=${bucket?.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to subscribe");
       setSubscribing(false);
@@ -45,21 +45,21 @@ function ShareContent() {
     <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-background min-h-[50vh] rounded-xl border m-2 shadow-sm">
       {error ? (
         <div className="text-destructive font-medium">{error}</div>
-      ) : pool ? (
+      ) : bucket ? (
         <div className="space-y-8 max-w-4xl w-full animate-in fade-in zoom-in-95">
           <div className="space-y-2 flex flex-col items-center">
-            <h1 className="text-2xl font-bold tracking-tight text-center">Subscribe to Pool</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-center">Subscribe to Bucket</h1>
             <p className="text-muted-foreground text-lg flex items-center justify-center gap-2 text-center">
-              &quot;{pool.name}&quot;
+              &quot;{bucket.name}&quot;
               <span className="text-sm bg-muted px-2 py-0.5 rounded-full flex items-center justify-center gap-1">
-                {pool.subscriber_count} subscriber{pool.subscriber_count !== 1 ? 's' : ''}
+                {bucket.subscriber_count} subscriber{bucket.subscriber_count !== 1 ? 's' : ''}
               </span>
             </p>
           </div>
           
           <div className="p-6 bg-muted/50 rounded-xl border space-y-4 max-w-md mx-auto">
             <p className="text-sm text-muted-foreground text-center">
-              Subscribing to this pool will add it to your Discord <code className="bg-muted px-1.5 py-0.5 rounded">/ez</code> command autocomplete. You will be able to send random images from this pool, but you cannot add or remove images yourself.
+              Subscribing to this bucket will add it to your Discord <code className="bg-muted px-1.5 py-0.5 rounded">/ez</code> command autocomplete. You will be able to send random images from this bucket, but you cannot add or remove images yourself.
             </p>
             
             <Button 
@@ -68,15 +68,15 @@ function ShareContent() {
               className="w-full"
               size="lg"
             >
-              {subscribing ? "Subscribing..." : "Subscribe to Pool"}
+              {subscribing ? "Subscribing..." : "Subscribe to Bucket"}
             </Button>
           </div>
 
-          {pool.images && pool.images.length > 0 && (
+          {bucket.images && bucket.images.length > 0 && (
             <div className="space-y-4 text-center mt-8">
               <h2 className="text-xl font-semibold">Preview Images</h2>
               <div className="flex flex-wrap gap-4 items-center justify-center">
-                {pool.images.slice(0, 50).map((image) => (
+                {bucket.images.slice(0, 50).map((image) => (
                   <div
                     key={image.id}
                     className="relative overflow-hidden rounded-xl border border-border/70 flex w-max"
@@ -92,9 +92,9 @@ function ShareContent() {
                     />
                   </div>
                 ))}
-                {pool.images.length > 50 && (
+                {bucket.images.length > 50 && (
                   <div className="flex items-center justify-center h-[128px] px-4 rounded-xl border border-dashed border-border/70 text-muted-foreground">
-                    + {pool.images.length - 50} more
+                    + {bucket.images.length - 50} more
                   </div>
                 )}
               </div>
@@ -102,7 +102,7 @@ function ShareContent() {
           )}
         </div>
       ) : (
-        <div className="text-muted-foreground animate-pulse">Loading pool details...</div>
+        <div className="text-muted-foreground animate-pulse">Loading bucket details...</div>
       )}
     </div>
   );

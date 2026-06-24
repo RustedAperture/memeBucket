@@ -12,7 +12,7 @@ pub struct ImageRepository {
 pub struct StoredImage {
     pub id: Uuid,
     pub owner_user_id: Uuid,
-    pub pool_id: Uuid,
+    pub bucket_id: Uuid,
     pub url: String,
     pub title: Option<String>,
     pub favorite: bool,
@@ -43,7 +43,7 @@ pub struct BulkImageMetadataPatch {
 #[derive(Clone, Debug, Default)]
 pub struct ImageSearchFilters {
     pub query: Option<String>,
-    pub pool_id: Option<Uuid>,
+    pub bucket_id: Option<Uuid>,
     pub favorite: Option<bool>,
     pub random_enabled: Option<bool>,
     pub tags: Vec<String>,
@@ -52,7 +52,7 @@ pub struct ImageSearchFilters {
 
 #[derive(Clone, Debug)]
 pub struct StoredImageSearchResult {
-    pub pool_name: String,
+    pub bucket_name: String,
     pub image: StoredImage,
 }
 
@@ -89,10 +89,10 @@ impl ImageRepository {
     pub async fn create(
         &self,
         owner_user_id: Uuid,
-        pool_id: Uuid,
+        bucket_id: Uuid,
         url: &str,
     ) -> Result<StoredImage, sqlx::Error> {
-        self.create_with_metadata(owner_user_id, pool_id, url, None, false, 1, &[])
+        self.create_with_metadata(owner_user_id, bucket_id, url, None, false, 1, &[])
             .await
     }
 
@@ -100,7 +100,7 @@ impl ImageRepository {
     pub async fn create_with_metadata(
         &self,
         owner_user_id: Uuid,
-        pool_id: Uuid,
+        bucket_id: Uuid,
         url: &str,
         title: Option<&str>,
         favorite: bool,
@@ -124,11 +124,11 @@ impl ImageRepository {
             ),
         >(
                 r#"
-                INSERT INTO images (id, owner_user_id, pool_id, url, title, favorite, random_weight, notes)
+                INSERT INTO images (id, owner_user_id, bucket_id, url, title, favorite, random_weight, notes)
                 SELECT ?, ?, id, ?, ?, ?, ?, NULL
-                FROM pools
+                FROM buckets
                 WHERE id = ? AND owner_user_id = ?
-                RETURNING id, owner_user_id, pool_id, url, title, favorite, random_weight, created_at, notes
+                RETURNING id, owner_user_id, bucket_id, url, title, favorite, random_weight, created_at, notes
                 "#,
             )
             .bind(id.to_string())
@@ -137,7 +137,7 @@ impl ImageRepository {
             .bind(title)
             .bind(favorite)
             .bind(random_weight)
-            .bind(pool_id.to_string())
+            .bind(bucket_id.to_string())
             .bind(owner_user_id.to_string())
             .fetch_one(&mut *tx)
             .await?;
@@ -148,10 +148,10 @@ impl ImageRepository {
         Self::stored_image_from_row(row, normalized_tags)
     }
 
-    pub async fn list_for_pool(
+    pub async fn list_for_bucket(
         &self,
         user_id: Uuid,
-        pool_id: Uuid,
+        bucket_id: Uuid,
     ) -> Result<Vec<StoredImage>, sqlx::Error> {
         let rows = sqlx::query_as::<
             _,
@@ -167,30 +167,30 @@ impl ImageRepository {
                 Option<String>,
             ),
         >(
-            "SELECT id, owner_user_id, pool_id, url, title, favorite, random_weight, created_at, notes
+            "SELECT id, owner_user_id, bucket_id, url, title, favorite, random_weight, created_at, notes
              FROM images
-             WHERE pool_id = ?
+             WHERE bucket_id = ?
                AND (
                  owner_user_id = ?
                  OR EXISTS (
                    SELECT 1
-                   FROM pool_subscriptions ps
-                   JOIN pools p ON p.id = ps.pool_id
-                   WHERE ps.pool_id = images.pool_id
+                   FROM bucket_subscriptions ps
+                   JOIN buckets p ON p.id = ps.bucket_id
+                   WHERE ps.bucket_id = images.bucket_id
                      AND ps.subscriber_user_id = ?
                      AND (
                        p.whitelist_enabled = 0
                        OR EXISTS (
                          SELECT 1
-                         FROM pool_whitelists w
-                         WHERE w.pool_id = p.id AND w.user_id = ?
+                         FROM bucket_whitelists w
+                         WHERE w.bucket_id = p.id AND w.user_id = ?
                        )
                      )
                  )
                )
              ORDER BY created_at",
         )
-        .bind(pool_id.to_string())
+        .bind(bucket_id.to_string())
         .bind(user_id.to_string())
         .bind(user_id.to_string())
         .bind(user_id.to_string())
@@ -217,11 +217,11 @@ impl ImageRepository {
         filters: &ImageSearchFilters,
     ) -> Result<Vec<StoredImageSearchResult>, sqlx::Error> {
         let mut builder: QueryBuilder<'_, Sqlite> = QueryBuilder::new(
-            "SELECT p.name, images.id, images.owner_user_id, images.pool_id, images.url,
+            "SELECT p.name, images.id, images.owner_user_id, images.bucket_id, images.url,
                     images.title, images.favorite, images.random_weight, images.created_at, images.notes
              FROM images
-             INNER JOIN pools p
-                ON p.id = images.pool_id
+             INNER JOIN buckets p
+                ON p.id = images.bucket_id
                AND p.owner_user_id = images.owner_user_id
              WHERE (
                  images.owner_user_id = ",
@@ -231,8 +231,8 @@ impl ImageRepository {
             "
                  OR EXISTS (
                    SELECT 1
-                   FROM pool_subscriptions ps
-                   WHERE ps.pool_id = images.pool_id
+                   FROM bucket_subscriptions ps
+                   WHERE ps.bucket_id = images.bucket_id
                      AND ps.subscriber_user_id = ",
         );
         builder.push_bind(user_id.to_string());
@@ -242,8 +242,8 @@ impl ImageRepository {
                        p.whitelist_enabled = 0
                        OR EXISTS (
                          SELECT 1
-                         FROM pool_whitelists w
-                         WHERE w.pool_id = p.id AND w.user_id = ",
+                         FROM bucket_whitelists w
+                         WHERE w.bucket_id = p.id AND w.user_id = ",
         );
         builder.push_bind(user_id.to_string());
         builder.push(
@@ -254,9 +254,9 @@ impl ImageRepository {
              )",
         );
 
-        if let Some(pool_id) = filters.pool_id {
-            builder.push(" AND images.pool_id = ");
-            builder.push_bind(pool_id.to_string());
+        if let Some(bucket_id) = filters.bucket_id {
+            builder.push(" AND images.bucket_id = ");
+            builder.push_bind(bucket_id.to_string());
         }
 
         if let Some(favorite) = filters.favorite {
@@ -331,7 +331,7 @@ impl ImageRepository {
                     row.1, row.2, row.3, row.4, row.5, row.6, row.7, row.8, row.9,
                 );
                 Ok(StoredImageSearchResult {
-                    pool_name: row.0,
+                    bucket_name: row.0,
                     image: Self::stored_image_from_row(
                         image_row,
                         tags_by_image.get(&image_id).cloned().unwrap_or_default(),
@@ -344,7 +344,7 @@ impl ImageRepository {
     pub async fn get_for_owner(
         &self,
         owner_user_id: Uuid,
-        pool_id: Uuid,
+        bucket_id: Uuid,
         image_id: Uuid,
     ) -> Result<Option<StoredImage>, sqlx::Error> {
         let row = sqlx::query_as::<
@@ -361,12 +361,12 @@ impl ImageRepository {
                 Option<String>,
             ),
         >(
-            "SELECT id, owner_user_id, pool_id, url, title, favorite, random_weight, created_at, notes
+            "SELECT id, owner_user_id, bucket_id, url, title, favorite, random_weight, created_at, notes
              FROM images
-             WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+             WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
         )
         .bind(owner_user_id.to_string())
-        .bind(pool_id.to_string())
+        .bind(bucket_id.to_string())
         .bind(image_id.to_string())
         .fetch_optional(&self.pool)
         .await?;
@@ -385,13 +385,13 @@ impl ImageRepository {
     pub async fn delete_for_user(
         &self,
         owner_user_id: Uuid,
-        pool_id: Uuid,
+        bucket_id: Uuid,
         image_id: Uuid,
     ) -> Result<bool, sqlx::Error> {
         let result =
-            sqlx::query("DELETE FROM images WHERE owner_user_id = ? AND pool_id = ? AND id = ?")
+            sqlx::query("DELETE FROM images WHERE owner_user_id = ? AND bucket_id = ? AND id = ?")
                 .bind(owner_user_id.to_string())
-                .bind(pool_id.to_string())
+                .bind(bucket_id.to_string())
                 .bind(image_id.to_string())
                 .execute(&self.pool)
                 .await?;
@@ -402,16 +402,16 @@ impl ImageRepository {
     pub async fn update_notes(
         &self,
         owner_user_id: Uuid,
-        pool_id: Uuid,
+        bucket_id: Uuid,
         image_id: Uuid,
         notes: Option<&str>,
     ) -> Result<bool, sqlx::Error> {
         let result = sqlx::query(
-            "UPDATE images SET notes = ? WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+            "UPDATE images SET notes = ? WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
         )
         .bind(notes)
         .bind(owner_user_id.to_string())
-        .bind(pool_id.to_string())
+        .bind(bucket_id.to_string())
         .bind(image_id.to_string())
         .execute(&self.pool)
         .await?;
@@ -423,7 +423,7 @@ impl ImageRepository {
     pub async fn update_metadata(
         &self,
         owner_user_id: Uuid,
-        pool_id: Uuid,
+        bucket_id: Uuid,
         image_id: Uuid,
         title: Option<&str>,
         notes: Option<&str>,
@@ -435,14 +435,14 @@ impl ImageRepository {
         let result = sqlx::query(
             "UPDATE images
              SET title = ?, notes = ?, favorite = ?, random_weight = ?
-             WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+             WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
         )
         .bind(title)
         .bind(notes)
         .bind(favorite)
         .bind(random_weight)
         .bind(owner_user_id.to_string())
-        .bind(pool_id.to_string())
+        .bind(bucket_id.to_string())
         .bind(image_id.to_string())
         .execute(&mut *tx)
         .await?;
@@ -461,16 +461,16 @@ impl ImageRepository {
     pub async fn update_metadata_partial(
         &self,
         owner_user_id: Uuid,
-        pool_id: Uuid,
+        bucket_id: Uuid,
         image_id: Uuid,
         patch: &UpdateImageMetadataPatch,
     ) -> Result<bool, sqlx::Error> {
         let mut tx = self.pool.begin().await?;
         let exists = sqlx::query_scalar::<_, i64>(
-            "SELECT 1 FROM images WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+            "SELECT 1 FROM images WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
         )
         .bind(owner_user_id.to_string())
-        .bind(pool_id.to_string())
+        .bind(bucket_id.to_string())
         .bind(image_id.to_string())
         .fetch_optional(&mut *tx)
         .await?
@@ -483,11 +483,11 @@ impl ImageRepository {
 
         if let Some(title) = &patch.title {
             sqlx::query(
-                "UPDATE images SET title = ? WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+                "UPDATE images SET title = ? WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
             )
             .bind(title.as_deref())
             .bind(owner_user_id.to_string())
-            .bind(pool_id.to_string())
+            .bind(bucket_id.to_string())
             .bind(image_id.to_string())
             .execute(&mut *tx)
             .await?;
@@ -495,11 +495,11 @@ impl ImageRepository {
 
         if let Some(notes) = &patch.notes {
             sqlx::query(
-                "UPDATE images SET notes = ? WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+                "UPDATE images SET notes = ? WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
             )
             .bind(notes.as_deref())
             .bind(owner_user_id.to_string())
-            .bind(pool_id.to_string())
+            .bind(bucket_id.to_string())
             .bind(image_id.to_string())
             .execute(&mut *tx)
             .await?;
@@ -509,11 +509,11 @@ impl ImageRepository {
             sqlx::query(
                 "UPDATE images
                  SET favorite = ?
-                 WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+                 WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
             )
             .bind(favorite)
             .bind(owner_user_id.to_string())
-            .bind(pool_id.to_string())
+            .bind(bucket_id.to_string())
             .bind(image_id.to_string())
             .execute(&mut *tx)
             .await?;
@@ -523,11 +523,11 @@ impl ImageRepository {
             sqlx::query(
                 "UPDATE images
                  SET random_weight = ?
-                 WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+                 WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
             )
             .bind(random_weight)
             .bind(owner_user_id.to_string())
-            .bind(pool_id.to_string())
+            .bind(bucket_id.to_string())
             .bind(image_id.to_string())
             .execute(&mut *tx)
             .await?;
@@ -545,7 +545,7 @@ impl ImageRepository {
     pub async fn update_metadata_bulk(
         &self,
         owner_user_id: Uuid,
-        pool_id: Uuid,
+        bucket_id: Uuid,
         patch: &BulkImageMetadataPatch,
     ) -> Result<usize, sqlx::Error> {
         let mut unique_image_ids = Vec::new();
@@ -564,10 +564,10 @@ impl ImageRepository {
         let mut valid_image_ids = Vec::new();
         for image_id in &unique_image_ids {
             let exists = sqlx::query_scalar::<_, i64>(
-                "SELECT 1 FROM images WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+                "SELECT 1 FROM images WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
             )
             .bind(owner_user_id.to_string())
-            .bind(pool_id.to_string())
+            .bind(bucket_id.to_string())
             .bind(image_id.to_string())
             .fetch_optional(&mut *tx)
             .await?
@@ -592,11 +592,11 @@ impl ImageRepository {
                 let result = sqlx::query(
                     "UPDATE images
                      SET favorite = ?
-                     WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+                     WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
                 )
                 .bind(favorite)
                 .bind(owner_user_id.to_string())
-                .bind(pool_id.to_string())
+                .bind(bucket_id.to_string())
                 .bind(image_id.to_string())
                 .execute(&mut *tx)
                 .await?;
@@ -610,11 +610,11 @@ impl ImageRepository {
                 let result = sqlx::query(
                     "UPDATE images
                      SET random_weight = ?
-                     WHERE owner_user_id = ? AND pool_id = ? AND id = ?",
+                     WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
                 )
                 .bind(random_weight)
                 .bind(owner_user_id.to_string())
-                .bind(pool_id.to_string())
+                .bind(bucket_id.to_string())
                 .bind(image_id.to_string())
                 .execute(&mut *tx)
                 .await?;
@@ -664,30 +664,30 @@ impl ImageRepository {
         Ok(valid_image_ids.len())
     }
 
-    pub async fn move_to_pool(
+    pub async fn move_to_bucket(
         &self,
         owner_user_id: Uuid,
-        pool_id: Uuid,
+        bucket_id: Uuid,
         image_id: Uuid,
-        new_pool_id: Uuid,
+        new_bucket_id: Uuid,
     ) -> Result<bool, sqlx::Error> {
         let result = sqlx::query(
             "UPDATE images
-             SET pool_id = ?
+             SET bucket_id = ?
              WHERE owner_user_id = ?
-               AND pool_id = ?
+               AND bucket_id = ?
                AND id = ?
                AND EXISTS (
                  SELECT 1
-                 FROM pools
+                 FROM buckets
                  WHERE id = ? AND owner_user_id = ?
                )",
         )
-        .bind(new_pool_id.to_string())
+        .bind(new_bucket_id.to_string())
         .bind(owner_user_id.to_string())
-        .bind(pool_id.to_string())
+        .bind(bucket_id.to_string())
         .bind(image_id.to_string())
-        .bind(new_pool_id.to_string())
+        .bind(new_bucket_id.to_string())
         .bind(owner_user_id.to_string())
         .execute(&self.pool)
         .await?;
@@ -829,7 +829,7 @@ impl ImageRepository {
         let (
             stored_id,
             stored_owner_user_id,
-            stored_pool_id,
+            stored_bucket_id,
             stored_url,
             stored_title,
             stored_favorite,
@@ -842,7 +842,7 @@ impl ImageRepository {
             id: Uuid::parse_str(&stored_id).map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
             owner_user_id: Uuid::parse_str(&stored_owner_user_id)
                 .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
-            pool_id: Uuid::parse_str(&stored_pool_id)
+            bucket_id: Uuid::parse_str(&stored_bucket_id)
                 .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
             url: stored_url,
             title: stored_title,

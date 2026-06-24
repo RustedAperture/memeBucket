@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { PoolList } from "@/components/pool-list";
+import { BucketList } from "@/components/bucket-list";
 import { ImageForm } from "@/components/image-form";
 import { ImageList } from "@/components/image-list";
 import { Folder, Plus, PanelLeft, Info, Link as LinkIcon, Settings, Trash2, Check, X, Pencil } from "lucide-react";
@@ -13,16 +13,16 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarProvider, Sidebar, SidebarContent, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { Pool } from "@/lib/types";
+import { Bucket } from "@/lib/types";
 import { ShareDialog } from "@/components/share-dialog";
 import { RequireAuth } from "@/components/require-auth";
 import { apiDelete, apiPost, apiPatch } from "@/lib/api";
 
-function PoolsContent() {
+function BucketsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const poolId = searchParams.get("id");
-  const [pools, setPools] = useState<Pool[]>([]);
+  const bucketId = searchParams.get("id");
+  const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sizeIndex, setSizeIndex] = useState(2);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -43,36 +43,36 @@ function PoolsContent() {
     setRefreshKey((k) => k + 1);
   };
 
-  const activePool = pools.find(p => p.id === poolId);
-  const isSubscribed = activePool?.is_subscribed;
-  const isReadOnly = isSubscribed || activePool?.is_read_only;
+  const activeBucket = buckets.find(p => p.id === bucketId);
+  const isSubscribed = activeBucket?.is_subscribed;
+  const isReadOnly = isSubscribed || activeBucket?.is_read_only;
 
-  const handleDeletePool = async (pool: Pool) => {
+  const handleDeleteBucket = async (bucket: Bucket) => {
     try {
-      if (pool.is_subscribed) {
-        await apiPost(`/api/pools/${pool.id}/unsubscribe`, {});
+      if (bucket.is_subscribed) {
+        await apiPost(`/api/buckets/${bucket.id}/unsubscribe`, {});
       } else {
-        await apiDelete(`/api/pools/${pool.id}`);
+        await apiDelete(`/api/buckets/${bucket.id}`);
       }
       setInfoOpen(false);
       setRefreshKey((k) => k + 1);
-      router.push("/pools");
+      router.push("/buckets");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not process request.");
     }
   };
 
-  const handleRenamePool = async () => {
-    if (!activePool || !newName.trim() || newName.trim() === activePool.name) {
+  const handleRenameBucket = async () => {
+    if (!activeBucket || !newName.trim() || newName.trim() === activeBucket.name) {
       setEditingName(false);
       return;
     }
     try {
-      await apiPatch(`/api/pools/${activePool.id}`, { name: newName.trim() });
+      await apiPatch(`/api/buckets/${activeBucket.id}`, { name: newName.trim() });
       setEditingName(false);
       setRefreshKey((k) => k + 1);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not rename pool.");
+      toast.error(err instanceof Error ? err.message : "Could not rename bucket.");
     }
   };
 
@@ -80,7 +80,7 @@ function PoolsContent() {
     <SidebarProvider className="h-full flex flex-1 min-h-0 w-full overflow-hidden rounded-xl bg-muted/30 border relative">
       {/* Sidebar Area */}
       <Sidebar className="absolute h-full bg-transparent border-r-0 hidden md:flex" collapsible="offcanvas" variant="inset">
-        <PoolList onPoolsChange={setPools} onImageMoved={handleImageMoved} refreshKey={refreshKey} />
+        <BucketList onBucketsChange={setBuckets} onImageMoved={handleImageMoved} refreshKey={refreshKey} />
       </Sidebar>
       
       {/* Inset Main Content Area */}
@@ -90,17 +90,17 @@ function PoolsContent() {
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-8 w-8 -ml-2 text-muted-foreground" />
               <h1 className="text-base font-medium flex items-center gap-2">
-                {activePool ? activePool.name : "Images"}
-                {activePool && !isReadOnly && (
+                {activeBucket ? activeBucket.name : "Images"}
+                {activeBucket && !isReadOnly && (
                   <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
                     <DialogTrigger render={<Button variant="ghost" size="icon" className="h-6 w-6 ml-1"><Settings className="h-4 w-4 text-muted-foreground hover:text-foreground"/></Button>} />
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
-                        <DialogTitle>Pool Settings</DialogTitle>
+                        <DialogTitle>Bucket Settings</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4 text-sm mt-4">
                         <div className="flex justify-between items-center border-b pb-2">
-                          <span className="text-muted-foreground">Pool Name</span>
+                          <span className="text-muted-foreground">Bucket Name</span>
                           {editingName ? (
                             <div className="flex items-center gap-1">
                               <Input 
@@ -109,11 +109,11 @@ function PoolsContent() {
                                 className="h-7 py-1 px-2 text-sm w-40"
                                 autoFocus
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleRenamePool();
+                                  if (e.key === 'Enter') handleRenameBucket();
                                   if (e.key === 'Escape') setEditingName(false);
                                 }}
                               />
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleRenamePool}>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleRenameBucket}>
                                 <Check className="h-4 w-4 text-green-500" />
                               </Button>
                               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingName(false)}>
@@ -122,9 +122,9 @@ function PoolsContent() {
                             </div>
                           ) : (
                             <div className="flex items-center gap-2 font-medium">
-                              <span>{activePool.name}</span>
+                              <span>{activeBucket.name}</span>
                               {!isSubscribed && (
-                                <Button variant="ghost" size="icon" className="h-5 w-5 ml-1" onClick={() => { setNewName(activePool.name); setEditingName(true); }}>
+                                <Button variant="ghost" size="icon" className="h-5 w-5 ml-1" onClick={() => { setNewName(activeBucket.name); setEditingName(true); }}>
                                   <Pencil className="h-3 w-3 text-muted-foreground" />
                                 </Button>
                               )}
@@ -133,21 +133,21 @@ function PoolsContent() {
                         </div>
                         <div className="flex justify-between border-b pb-2">
                           <span className="text-muted-foreground">Owner</span>
-                          <span className="font-medium">{activePool.owner_username || "Unknown"}</span>
+                          <span className="font-medium">{activeBucket.owner_username || "Unknown"}</span>
                         </div>
                         <div className="flex justify-between border-b pb-2">
                           <span className="text-muted-foreground">Subscribers</span>
-                          <span className="font-medium">{activePool.subscriber_count}</span>
+                          <span className="font-medium">{activeBucket.subscriber_count}</span>
                         </div>
                         <div className="flex justify-between border-b pb-2">
                           <span className="text-muted-foreground">Role</span>
-                          <span className="font-medium">{activePool.is_subscribed ? "Subscriber" : "Owner"}</span>
+                          <span className="font-medium">{activeBucket.is_subscribed ? "Subscriber" : "Owner"}</span>
                         </div>
                         
                         <div className="pt-4 flex justify-end">
-                          <Button variant="destructive" onClick={() => handleDeletePool(activePool)}>
+                          <Button variant="destructive" onClick={() => handleDeleteBucket(activeBucket)}>
                             <Trash2 className="w-4 h-4 mr-2" />
-                            {activePool.is_subscribed ? "Unsubscribe" : "Delete Pool"}
+                            {activeBucket.is_subscribed ? "Unsubscribe" : "Delete Bucket"}
                           </Button>
                         </div>
                       </div>
@@ -156,7 +156,7 @@ function PoolsContent() {
                 )}
               </h1>
             </div>
-            {poolId && !isReadOnly && activePool && (
+            {bucketId && !isReadOnly && activeBucket && (
               <div className="flex items-center gap-2">
                 <Dialog>
                   <DialogTrigger render={<Button variant="default" size="sm" className="h-8 gap-1.5" />}>
@@ -165,11 +165,11 @@ function PoolsContent() {
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Share Pool</DialogTitle>
+                      <DialogTitle>Share Bucket</DialogTitle>
                     </DialogHeader>
                     <ShareDialog 
-                      pool={activePool} 
-                      onPoolChange={(updated) => setPools(pools.map(p => p.id === updated.id ? updated : p))}
+                      bucket={activeBucket} 
+                      onBucketChange={(updated) => setBuckets(buckets.map(p => p.id === updated.id ? updated : p))}
                     />
                   </DialogContent>
                 </Dialog>
@@ -178,7 +178,7 @@ function PoolsContent() {
           </div>
         </header>
         {/* Size toolbar */}
-        {poolId && (
+        {bucketId && (
           <div className="flex items-center gap-3 px-4 lg:px-6 h-12 shrink-0 border-b bg-muted/30">
             <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
               Size
@@ -208,10 +208,10 @@ function PoolsContent() {
                 </button>
               ))}
             </div>
-            {!isReadOnly && activePool && (
+            {!isReadOnly && activeBucket && (
               <div className="ml-auto">
                 <ImageForm 
-                  poolId={poolId} 
+                  bucketId={bucketId} 
                   onCreated={() => setRefreshKey((k) => k + 1)} 
                 />
               </div>
@@ -219,18 +219,18 @@ function PoolsContent() {
           </div>
         )}
         <div className="flex-1 flex flex-col overflow-y-auto">
-          {poolId ? (
+          {bucketId ? (
             <div className="p-6 space-y-6 max-w-7xl mx-auto w-full">
-              <ImageList key={`${poolId}:${refreshKey}`} poolId={poolId} columnClass={columnClass} readonly={isReadOnly} pools={pools} onMoveImage={handleImageMoved} onImageUpdated={handleImageMoved} />
+              <ImageList key={`${bucketId}:${refreshKey}`} bucketId={bucketId} columnClass={columnClass} readonly={isReadOnly} buckets={buckets} onMoveImage={handleImageMoved} onImageUpdated={handleImageMoved} />
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in-50">
               <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
                 <Folder className="h-8 w-8 text-muted-foreground/50" />
               </div>
-              <h2 className="text-xl font-semibold">Select a pool</h2>
+              <h2 className="text-xl font-semibold">Select a bucket</h2>
               <p className="text-muted-foreground mt-2 max-w-sm">
-                Choose a pool from the sidebar to view and manage its images.
+                Choose a bucket from the sidebar to view and manage its images.
               </p>
             </div>
           )}
@@ -240,12 +240,12 @@ function PoolsContent() {
   );
 }
 
-export default function PoolsPage() {
+export default function BucketsPage() {
   return (
     <AppShell>
       <Suspense fallback={<div className="flex items-center justify-center h-full min-h-screen">Loading...</div>}>
         <RequireAuth>
-          <PoolsContent />
+          <BucketsContent />
         </RequireAuth>
       </Suspense>
     </AppShell>

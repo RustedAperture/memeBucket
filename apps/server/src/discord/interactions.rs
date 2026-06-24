@@ -14,7 +14,7 @@ use crate::{
     discord::signatures::verify_interaction_signature,
     domain::user_key::DiscordUserKey,
     repositories::{
-        images::ImageRepository, pools::PoolRepository, send_history::SendHistoryRepository,
+        buckets::BucketRepository, images::ImageRepository, send_history::SendHistoryRepository,
         users::UserRepository,
     },
     services::{
@@ -296,15 +296,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn split_pool_names_accepts_comma_separated_values_with_optional_spaces() {
-        assert_eq!(split_pool_names("cat,dog"), vec!["cat", "dog"]);
-        assert_eq!(split_pool_names("cat, dog"), vec!["cat", "dog"]);
-        assert_eq!(split_pool_names(" cat,  dog ,, "), vec!["cat", "dog"]);
+    fn split_bucket_names_accepts_comma_separated_values_with_optional_spaces() {
+        assert_eq!(split_bucket_names("cat,dog"), vec!["cat", "dog"]);
+        assert_eq!(split_bucket_names("cat, dog"), vec!["cat", "dog"]);
+        assert_eq!(split_bucket_names(" cat,  dog ,, "), vec!["cat", "dog"]);
     }
 
     #[test]
-    fn pool_autocomplete_context_completes_last_comma_separated_segment() {
-        let context = pool_autocomplete_context("cat, do");
+    fn bucket_autocomplete_context_completes_last_comma_separated_segment() {
+        let context = bucket_autocomplete_context("cat, do");
 
         assert_eq!(context.query, "do");
         assert_eq!(context.value_for("Dogs"), "cat, Dogs");
@@ -315,8 +315,8 @@ mod tests {
     }
 
     #[test]
-    fn pool_autocomplete_context_completes_first_segment_without_prefix() {
-        let context = pool_autocomplete_context("do");
+    fn bucket_autocomplete_context_completes_first_segment_without_prefix() {
+        let context = bucket_autocomplete_context("do");
 
         assert_eq!(context.query, "do");
         assert_eq!(context.value_for("Dogs"), "Dogs");
@@ -438,12 +438,17 @@ async fn dispatch_command(state: &AppState, payload: &InteractionPayload) -> Val
     };
 
     match data.name.as_str() {
-        "ez" => handle_random_command(state, user.id, data).await,
-        "pool" => handle_pool_command(state, user.id, data).await,
+        "mb" => handle_random_command(state, user.id, data).await,
+        "bucket" => handle_bucket_command(state, user.id, data).await,
         "manage" => handle_manage_command().await,
-        "Add to Pool" => {
-            handle_add_to_pool_message_command(state, user.id, data, payload.channel_id.as_deref())
-                .await
+        "Add to Bucket" => {
+            handle_add_to_bucket_message_command(
+                state,
+                user.id,
+                data,
+                payload.channel_id.as_deref(),
+            )
+            .await
         }
         "Reply with GIF" => handle_reply_with_gif_command(state, user.id, data).await,
         _ => ephemeral_message("Unsupported command."),
@@ -460,45 +465,45 @@ async fn dispatch_autocomplete(state: &AppState, payload: &InteractionPayload) -
         Err(_) => return autocomplete_choices(Vec::new()),
     };
 
-    let Some(focused) = find_focused_option(data, "pool") else {
+    let Some(focused) = find_focused_option(data, "bucket") else {
         return autocomplete_choices(Vec::new());
     };
-    if !supports_pool_autocomplete(data) {
+    if !supports_bucket_autocomplete(data) {
         return autocomplete_choices(Vec::new());
     }
 
     let focused_value = focused.string_value().unwrap_or_default();
-    let autocomplete = if data.name == "ez" {
-        pool_autocomplete_context(focused_value)
+    let autocomplete = if data.name == "mb" {
+        bucket_autocomplete_context(focused_value)
     } else {
-        PoolAutocompleteContext::single(focused_value)
+        BucketAutocompleteContext::single(focused_value)
     };
-    let mut pools = PoolRepository::new(state.pool.clone())
+    let mut buckets = BucketRepository::new(state.pool.clone())
         .list_for_user(user.id)
         .await
         .unwrap_or_default();
 
-    if data.name == "ez"
-        && let Ok(subscribed) = PoolRepository::new(state.pool.clone())
+    if data.name == "mb"
+        && let Ok(subscribed) = BucketRepository::new(state.pool.clone())
             .list_subscribed_for_user(user.id)
             .await
     {
-        pools.extend(subscribed);
+        buckets.extend(subscribed);
     }
 
-    let choices = pools
+    let choices = buckets
         .into_iter()
-        .filter(|pool| {
+        .filter(|bucket| {
             autocomplete.query.is_empty()
-                || pool
+                || bucket
                     .name
                     .to_lowercase()
                     .contains(autocomplete.query.as_str())
         })
-        .filter(|pool| !autocomplete.already_completed(&pool.name))
+        .filter(|bucket| !autocomplete.already_completed(&bucket.name))
         .take(25)
-        .map(|pool| {
-            let name = pool.name;
+        .map(|bucket| {
+            let name = bucket.name;
             autocomplete.choice_for(&name)
         })
         .collect();
@@ -506,10 +511,10 @@ async fn dispatch_autocomplete(state: &AppState, payload: &InteractionPayload) -
     autocomplete_choices(choices)
 }
 
-fn supports_pool_autocomplete(data: &InteractionData) -> bool {
+fn supports_bucket_autocomplete(data: &InteractionData) -> bool {
     match data.name.as_str() {
-        "ez" => true,
-        "pool" => data
+        "mb" => true,
+        "bucket" => data
             .subcommand()
             .map(|subcommand| subcommand.name == "add")
             .unwrap_or(false),
@@ -524,13 +529,13 @@ fn find_focused_option<'a>(data: &'a InteractionData, name: &str) -> Option<&'a 
 }
 
 #[derive(Debug, Eq, PartialEq)]
-struct PoolAutocompleteContext {
+struct BucketAutocompleteContext {
     prefix: String,
     query: String,
     completed_names: Vec<String>,
 }
 
-impl PoolAutocompleteContext {
+impl BucketAutocompleteContext {
     fn single(value: &str) -> Self {
         Self {
             prefix: String::new(),
@@ -539,40 +544,40 @@ impl PoolAutocompleteContext {
         }
     }
 
-    fn value_for(&self, pool_name: &str) -> String {
+    fn value_for(&self, bucket_name: &str) -> String {
         if self.prefix.is_empty() {
-            pool_name.to_string()
+            bucket_name.to_string()
         } else {
-            format!("{}, {pool_name}", self.prefix)
+            format!("{}, {bucket_name}", self.prefix)
         }
     }
 
-    fn choice_for(&self, pool_name: &str) -> (String, String) {
-        let value = self.value_for(pool_name);
+    fn choice_for(&self, bucket_name: &str) -> (String, String) {
+        let value = self.value_for(bucket_name);
         (value.clone(), value)
     }
 
-    fn already_completed(&self, pool_name: &str) -> bool {
+    fn already_completed(&self, bucket_name: &str) -> bool {
         self.completed_names
             .iter()
-            .any(|name| name.eq_ignore_ascii_case(pool_name))
+            .any(|name| name.eq_ignore_ascii_case(bucket_name))
     }
 }
 
-fn pool_autocomplete_context(value: &str) -> PoolAutocompleteContext {
+fn bucket_autocomplete_context(value: &str) -> BucketAutocompleteContext {
     let Some((prefix, query)) = value.rsplit_once(',') else {
-        return PoolAutocompleteContext::single(value);
+        return BucketAutocompleteContext::single(value);
     };
 
-    let completed_names = split_pool_names(prefix);
-    PoolAutocompleteContext {
+    let completed_names = split_bucket_names(prefix);
+    BucketAutocompleteContext {
         prefix: completed_names.join(", "),
         query: query.trim().to_lowercase(),
         completed_names,
     }
 }
 
-fn split_pool_names(value: &str) -> Vec<String> {
+fn split_bucket_names(value: &str) -> Vec<String> {
     value
         .split(',')
         .map(str::trim)
@@ -582,17 +587,17 @@ fn split_pool_names(value: &str) -> Vec<String> {
 }
 
 async fn handle_random_command(state: &AppState, user_id: Uuid, data: &InteractionData) -> Value {
-    let Some(pool_names_value) = data
-        .option("pool")
+    let Some(bucket_names_value) = data
+        .option("bucket")
         .and_then(InteractionOption::string_value)
         .map(str::trim)
         .filter(|value| !value.is_empty())
     else {
-        return ephemeral_message("Pool is required.");
+        return ephemeral_message("Bucket is required.");
     };
-    let pool_names = split_pool_names(pool_names_value);
-    if pool_names.is_empty() {
-        return ephemeral_message("Pool is required.");
+    let bucket_names = split_bucket_names(bucket_names_value);
+    if bucket_names.is_empty() {
+        return ephemeral_message("Bucket is required.");
     }
 
     let target = data
@@ -607,16 +612,16 @@ async fn handle_random_command(state: &AppState, user_id: Uuid, data: &Interacti
         .unwrap_or(false);
 
     let service = RandomService::new(
-        PoolRepository::new(state.pool.clone()),
+        BucketRepository::new(state.pool.clone()),
         ImageRepository::new(state.pool.clone()),
         SendHistoryRepository::new(state.pool.clone()),
     );
-    let pool_name_refs = pool_names.iter().map(String::as_str).collect::<Vec<_>>();
+    let bucket_name_refs = bucket_names.iter().map(String::as_str).collect::<Vec<_>>();
 
     match service
-        .select_random_from_pools(
+        .select_random_from_buckets(
             user_id,
-            &pool_name_refs,
+            &bucket_name_refs,
             if private {
                 RandomVisibility::Private
             } else {
@@ -646,20 +651,20 @@ async fn handle_random_command(state: &AppState, user_id: Uuid, data: &Interacti
     }
 }
 
-async fn handle_pool_command(state: &AppState, user_id: Uuid, data: &InteractionData) -> Value {
+async fn handle_bucket_command(state: &AppState, user_id: Uuid, data: &InteractionData) -> Value {
     let Some(subcommand) = data.subcommand() else {
         return ephemeral_message("Unsupported command.");
     };
 
     match subcommand.name.as_str() {
-        "create" => handle_pool_create(state, user_id, subcommand).await,
-        "add" => handle_pool_add(state, user_id, subcommand).await,
-        "list" => handle_pool_list(state, user_id).await,
+        "create" => handle_bucket_create(state, user_id, subcommand).await,
+        "add" => handle_bucket_add(state, user_id, subcommand).await,
+        "list" => handle_bucket_list(state, user_id).await,
         _ => ephemeral_message("Unsupported command."),
     }
 }
 
-async fn handle_pool_create(
+async fn handle_bucket_create(
     state: &AppState,
     user_id: Uuid,
     subcommand: &InteractionOption,
@@ -670,29 +675,33 @@ async fn handle_pool_create(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     else {
-        return ephemeral_message("Pool name cannot be blank.");
+        return ephemeral_message("Bucket name cannot be blank.");
     };
 
-    match PoolRepository::new(state.pool.clone())
+    match BucketRepository::new(state.pool.clone())
         .create(user_id, name)
         .await
     {
-        Ok(pool) => ephemeral_message(&format!("Created pool \"{}\".", pool.name)),
+        Ok(bucket) => ephemeral_message(&format!("Created bucket \"{}\".", bucket.name)),
         Err(sqlx::Error::RowNotFound) => {
-            ephemeral_message("You already have a pool with that name.")
+            ephemeral_message("You already have a bucket with that name.")
         }
-        Err(_) => ephemeral_message("I hit a storage error while creating pool."),
+        Err(_) => ephemeral_message("I hit a storage error while creating bucket."),
     }
 }
 
-async fn handle_pool_add(state: &AppState, user_id: Uuid, subcommand: &InteractionOption) -> Value {
-    let Some(pool_name) = subcommand
-        .option("pool")
+async fn handle_bucket_add(
+    state: &AppState,
+    user_id: Uuid,
+    subcommand: &InteractionOption,
+) -> Value {
+    let Some(bucket_name) = subcommand
+        .option("bucket")
         .and_then(InteractionOption::string_value)
         .map(str::trim)
         .filter(|value| !value.is_empty())
     else {
-        return ephemeral_message("Pool is required.");
+        return ephemeral_message("Bucket is required.");
     };
 
     let Some(url) = subcommand
@@ -709,40 +718,40 @@ async fn handle_pool_add(state: &AppState, user_id: Uuid, subcommand: &Interacti
         Err(err) => return ephemeral_message(err.user_message()),
     };
 
-    let pools = PoolRepository::new(state.pool.clone());
+    let buckets = BucketRepository::new(state.pool.clone());
     let images = ImageRepository::new(state.pool.clone());
-    let Some(pool) = (match pools.find_by_name_folded(user_id, pool_name).await {
-        Ok(pool) => pool,
-        Err(_) => return ephemeral_message("I hit a storage error while finding pool."),
+    let Some(bucket) = (match buckets.find_by_name_folded(user_id, bucket_name).await {
+        Ok(bucket) => bucket,
+        Err(_) => return ephemeral_message("I hit a storage error while finding bucket."),
     }) else {
-        return ephemeral_message("I could not find that pool.");
+        return ephemeral_message("I could not find that bucket.");
     };
 
-    match images.create(user_id, pool.id, &resolved_url).await {
-        Ok(_) => ephemeral_message(&format!("Added image to \"{}\".", pool.name)),
-        Err(sqlx::Error::RowNotFound) => ephemeral_message("I could not find that pool."),
+    match images.create(user_id, bucket.id, &resolved_url).await {
+        Ok(_) => ephemeral_message(&format!("Added image to \"{}\".", bucket.name)),
+        Err(sqlx::Error::RowNotFound) => ephemeral_message("I could not find that bucket."),
         Err(_) => ephemeral_message("I hit a storage error while saving image."),
     }
 }
 
-async fn handle_pool_list(state: &AppState, user_id: Uuid) -> Value {
-    match PoolRepository::new(state.pool.clone())
+async fn handle_bucket_list(state: &AppState, user_id: Uuid) -> Value {
+    match BucketRepository::new(state.pool.clone())
         .list_for_user(user_id)
         .await
     {
-        Ok(pools) if pools.is_empty() => ephemeral_message("You have no pools yet."),
-        Ok(pools) => {
+        Ok(buckets) if buckets.is_empty() => ephemeral_message("You have no buckets yet."),
+        Ok(buckets) => {
             let content = format!(
-                "Your pools:\n{}",
-                pools
+                "Your buckets:\n{}",
+                buckets
                     .into_iter()
-                    .map(|pool| format!("- {}", pool.name))
+                    .map(|bucket| format!("- {}", bucket.name))
                     .collect::<Vec<_>>()
                     .join("\n")
             );
             ephemeral_message(&content)
         }
-        Err(_) => ephemeral_message("I hit a storage error while listing pools."),
+        Err(_) => ephemeral_message("I hit a storage error while listing buckets."),
     }
 }
 
@@ -754,7 +763,7 @@ async fn handle_manage_command() -> Value {
         base_url
     };
     ephemeral_message(&format!(
-        "Manage your pools at: {}/pools",
+        "Manage your buckets at: {}/buckets",
         url.trim_end_matches('/')
     ))
 }
@@ -795,7 +804,7 @@ async fn resolve_user(
     Ok(AppUser { id: stored_user.id })
 }
 
-async fn handle_add_to_pool_message_command(
+async fn handle_add_to_bucket_message_command(
     state: &AppState,
     user_id: Uuid,
     data: &InteractionData,
@@ -822,9 +831,6 @@ async fn handle_add_to_pool_message_command(
         let ct = a.content_type.as_deref().unwrap_or("");
         ct.starts_with("image/") || ct.starts_with("video/")
     }) {
-        // Prefer proxy_url for Discord CDN attachments — the primary url often
-        // arrives without the required auth query params (ex, is, hm) in
-        // interaction resolved data, causing 404s.
         image_url = attachment
             .proxy_url
             .clone()
@@ -851,8 +857,6 @@ async fn handle_add_to_pool_message_command(
         }
     }
 
-    // Discord sometimes strips auth query parameters (ex, is, hm) from embed URLs.
-    // If we extracted a Discord CDN URL without auth parameters, check the message content for the full URL.
     if let Some(url) = &image_url
         && url.contains("discordapp.")
         && !url.contains("ex=")
@@ -871,9 +875,6 @@ async fn handle_add_to_pool_message_command(
 
     tracing::debug!(extracted_url = %url, "URL extracted from Discord message");
 
-    // Discord interaction resolved data often strips auth query params (ex, is, hm)
-    // from CDN attachment URLs. When detected, re-fetch the message via the REST API
-    // to obtain a fresh URL with valid auth tokens.
     let url = if url.contains("cdn.discordapp.com") && !url.contains("ex=") {
         tracing::debug!("Discord CDN URL missing auth params, attempting API re-fetch");
         let bot_token = state.discord_bot_token();
@@ -884,7 +885,6 @@ async fn handle_add_to_pool_message_command(
                 tracing::debug!(refreshed_url = %fresh, "Got fresh attachment URL from Discord API");
                 fresh
             } else {
-                // Fallback: try media.discordapp.net proxy which may work without auth params
                 let proxy_url = url.replace("cdn.discordapp.com", "media.discordapp.net");
                 tracing::debug!(proxy_url = %proxy_url, "Trying media.discordapp.net proxy as fallback");
                 proxy_url
@@ -921,29 +921,27 @@ async fn handle_add_to_pool_message_command(
         }
     }
 
-    let pools = PoolRepository::new(state.pool.clone());
-    let pool_name = "Added from Discord";
+    let buckets = BucketRepository::new(state.pool.clone());
+    let bucket_name = "Added from Discord";
 
-    let pool = match pools.create(user_id, pool_name).await {
-        Ok(pool) => pool,
+    let bucket = match buckets.create(user_id, bucket_name).await {
+        Ok(bucket) => bucket,
         Err(sqlx::Error::RowNotFound) => {
-            match pools.find_by_name_folded(user_id, pool_name).await {
-                Ok(Some(pool)) => pool,
-                _ => return ephemeral_message("I hit a storage error while finding your pool."),
+            match buckets.find_by_name_folded(user_id, bucket_name).await {
+                Ok(Some(bucket)) => bucket,
+                _ => return ephemeral_message("I hit a storage error while finding your bucket."),
             }
         }
-        Err(_) => return ephemeral_message("I hit a storage error while creating the pool."),
+        Err(_) => return ephemeral_message("I hit a storage error while creating the bucket."),
     };
 
     let images = ImageRepository::new(state.pool.clone());
-    match images.create(user_id, pool.id, &resolved_url).await {
-        Ok(_) => ephemeral_message(&format!("Added image to \"{}\".", pool.name)),
+    match images.create(user_id, bucket.id, &resolved_url).await {
+        Ok(_) => ephemeral_message(&format!("Added image to \"{}\".", bucket.name)),
         Err(_) => ephemeral_message("I hit a storage error while saving the image."),
     }
 }
 
-/// Re-fetch a message via the Discord REST API to obtain fresh attachment URLs
-/// with valid authentication query parameters.
 async fn refetch_attachment_url(
     bot_token: &str,
     channel_id: Option<&str>,
@@ -959,7 +957,7 @@ async fn refetch_attachment_url(
     let resp = client
         .get(&api_url)
         .header("Authorization", format!("Bot {bot_token}"))
-        .header("User-Agent", "ezGifBot/1.0")
+        .header("User-Agent", "memeBucketBot/1.0")
         .send()
         .await
         .ok()?;
@@ -977,13 +975,11 @@ async fn refetch_attachment_url(
 
     let body: Value = resp.json().await.ok()?;
 
-    // Extract the filename from the original URL to match the right attachment.
     let original_filename = original_url.rsplit('/').next().unwrap_or("");
 
     if let Some(attachments) = body["attachments"].as_array() {
         for attachment in attachments {
             if let Some(url) = attachment["url"].as_str() {
-                // Match by filename — the path segment before query params
                 let attachment_filename = url
                     .split('?')
                     .next()
@@ -994,7 +990,6 @@ async fn refetch_attachment_url(
                 }
             }
         }
-        // If no filename match, return the first attachment URL as fallback
         if let Some(first) = attachments.first()
             && let Some(url) = first["url"].as_str()
         {
@@ -1062,7 +1057,7 @@ async fn handle_reply_with_gif_command(
     let text_input = json!({
         "type": 4,
         "custom_id": "search_term",
-        "label": "Pool Name",
+        "label": "Bucket Name",
         "style": 1,
         "min_length": 1,
         "max_length": 100,
@@ -1100,13 +1095,15 @@ async fn handle_reply_with_gif_submit(
         target_color = fetch_user_accent_color(state, author_id).await;
     }
 
-    let mut selected_pools = Vec::new();
+    let mut selected_buckets = Vec::new();
     let mut search_term = String::new();
 
     for row in &data.components {
         for component in &row.components {
-            if component.custom_id.as_deref() == Some("pools") {
-                selected_pools.extend(component.values.iter().cloned());
+            if component.custom_id.as_deref() == Some("buckets")
+                || component.custom_id.as_deref() == Some("pools")
+            {
+                selected_buckets.extend(component.values.iter().cloned());
             } else if component.custom_id.as_deref() == Some("search_term")
                 && let Some(val) = &component.value
             {
@@ -1115,22 +1112,22 @@ async fn handle_reply_with_gif_submit(
         }
     }
 
-    let mut pool_names = split_pool_names(&search_term);
-    pool_names.extend(selected_pools);
+    let mut bucket_names = split_bucket_names(&search_term);
+    bucket_names.extend(selected_buckets);
 
-    if pool_names.is_empty() {
-        return ephemeral_message("Please provide a pool name.");
+    if bucket_names.is_empty() {
+        return ephemeral_message("Please provide a bucket name.");
     }
 
     let service = RandomService::new(
-        PoolRepository::new(state.pool.clone()),
+        BucketRepository::new(state.pool.clone()),
         ImageRepository::new(state.pool.clone()),
         SendHistoryRepository::new(state.pool.clone()),
     );
-    let pool_name_refs = pool_names.iter().map(String::as_str).collect::<Vec<_>>();
+    let bucket_name_refs = bucket_names.iter().map(String::as_str).collect::<Vec<_>>();
 
     match service
-        .select_random_from_pools(user_id, &pool_name_refs, RandomVisibility::Public)
+        .select_random_from_buckets(user_id, &bucket_name_refs, RandomVisibility::Public)
         .await
     {
         Ok(selection) => {
@@ -1138,15 +1135,15 @@ async fn handle_reply_with_gif_submit(
             embed_message(&content, &selection.url, false, target_color)
         }
         Err(error) => {
-            let user_pools = PoolRepository::new(state.pool.clone())
-                .list_pool_names_for_user(user_id)
+            let user_buckets = BucketRepository::new(state.pool.clone())
+                .list_bucket_names_for_user(user_id)
                 .await
                 .unwrap_or_default();
 
             let mut msg = error.user_message().to_string();
-            if !user_pools.is_empty() {
-                let pool_list = user_pools.join(", ");
-                msg = format!("{}\n\n**Your available pools:** {}", msg, pool_list);
+            if !user_buckets.is_empty() {
+                let bucket_list = user_buckets.join(", ");
+                msg = format!("{}\n\n**Your available buckets:** {}", msg, bucket_list);
             }
             ephemeral_message(&msg)
         }

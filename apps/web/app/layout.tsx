@@ -7,7 +7,7 @@ import { UsernameModal } from "@/components/username-modal";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ezGif",
+  title: "memeBucket",
   description: "Personal Discord media categories.",
 };
 

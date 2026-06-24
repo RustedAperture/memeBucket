@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiGet } from "@/lib/api";
-import type { ImageSearchResult, Pool } from "@/lib/types";
+import type { ImageSearchResult, Bucket } from "@/lib/types";
 import { toast } from "sonner";
 
 type RandomFilter = "any" | "enabled" | "disabled";
@@ -59,35 +59,35 @@ function SearchContent() {
   const [tags, setTags] = useState("");
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [randomFilter, setRandomFilter] = useState<RandomFilter>("any");
-  const [poolId, setPoolId] = useState("all");
-  const [pools, setPools] = useState<Pool[]>([]);
+  const [bucketId, setBucketId] = useState("all");
+  const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [results, setResults] = useState<ImageSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const [poolError, setPoolError] = useState<string | null>(null);
+  const [bucketError, setBucketError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  const poolItems = useMemo(
+  const bucketItems = useMemo(
     () => [
-      { label: "All pools", value: "all" },
-      ...pools.map((pool) => ({
-        label: `${pool.name}${pool.is_subscribed ? " (Subscribed)" : ""}`,
-        value: pool.id,
+      { label: "All buckets", value: "all" },
+      ...buckets.map((bucket) => ({
+        label: `${bucket.name}${bucket.is_subscribed ? " (Subscribed)" : ""}`,
+        value: bucket.id,
       })),
     ],
-    [pools]
+    [buckets]
   );
 
   useEffect(() => {
     let cancelled = false;
-    void apiGet<Pool[]>("/api/pools")
+    void apiGet<Bucket[]>("/api/buckets")
       .then((loaded) => {
         if (!cancelled) {
-          setPools(loaded);
+          setBuckets(loaded);
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setPoolError(err instanceof Error ? err.message : "Could not load pools");
+          setBucketError(err instanceof Error ? err.message : "Could not load buckets");
         }
       });
 
@@ -106,7 +106,7 @@ function SearchContent() {
         tags,
         favoriteOnly,
         randomFilter,
-        poolId,
+        bucketId,
       })}`)
         .then((loaded) => {
           if (!cancelled) {
@@ -130,13 +130,13 @@ function SearchContent() {
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [query, tags, favoriteOnly, randomFilter, poolId]);
+  }, [query, tags, favoriteOnly, randomFilter, bucketId]);
 
   const activeFilterCount = [
     tags.trim(),
     favoriteOnly,
     randomFilter !== "any",
-    poolId !== "all",
+    bucketId !== "all",
   ].filter(Boolean).length;
 
   return (
@@ -147,7 +147,7 @@ function SearchContent() {
           <div className="space-y-1">
             <h1 className="text-xl font-semibold tracking-tight">Library</h1>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Search GIFs and images across all your saved pools.
+              Search GIFs and images across all your saved buckets.
             </p>
           </div>
         </SidebarHeader>
@@ -160,7 +160,7 @@ function SearchContent() {
                 id="global-search-query"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Title, notes, pool, URL..."
+                placeholder="Title, notes, bucket, URL..."
                 className="h-9 pl-9 text-sm bg-background"
               />
             </div>
@@ -178,26 +178,26 @@ function SearchContent() {
           </div>
 
           <div className="space-y-1.5">
-            <Label id="search-pool-label" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Pool</Label>
+            <Label id="search-bucket-label" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bucket</Label>
             <Select
-              items={poolItems}
-              value={poolId}
+              items={bucketItems}
+              value={bucketId}
               onValueChange={(value) => {
                 if (typeof value === "string") {
-                  setPoolId(value);
+                  setBucketId(value);
                 }
               }}
             >
-              <SelectTrigger className="w-full h-9 text-sm bg-background" aria-labelledby="search-pool-label">
+              <SelectTrigger className="w-full h-9 text-sm bg-background" aria-labelledby="search-bucket-label">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectLabel>Pools</SelectLabel>
-                  <SelectItem value="all">All pools</SelectItem>
-                  {pools.map((pool) => (
-                    <SelectItem key={pool.id} value={pool.id}>
-                      {pool.name}{pool.is_subscribed ? " (Subscribed)" : ""}
+                  <SelectLabel>Buckets</SelectLabel>
+                  <SelectItem value="all">All buckets</SelectItem>
+                  {buckets.map((bucket) => (
+                    <SelectItem key={bucket.id} value={bucket.id}>
+                      {bucket.name}{bucket.is_subscribed ? " (Subscribed)" : ""}
                     </SelectItem>
                   ))}
                 </SelectGroup>
@@ -273,7 +273,7 @@ function SearchContent() {
                   setTags("");
                   setFavoriteOnly(false);
                   setRandomFilter("any");
-                  setPoolId("all");
+                  setBucketId("all");
                 }}
               >
                 <X className="h-4 w-4 mr-2" />
@@ -295,8 +295,8 @@ function SearchContent() {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-muted/10">
-          {poolError ? (
-            <p className="text-sm font-medium text-destructive mb-4">{poolError}</p>
+          {bucketError ? (
+            <p className="text-sm font-medium text-destructive mb-4">{bucketError}</p>
           ) : null}
           {searchError ? (
             <p className="text-sm font-medium text-destructive mb-4">{searchError}</p>
@@ -405,11 +405,11 @@ function SearchResultCard({ result }: { result: ImageSearchResult }) {
             variant="secondary"
             size="sm"
             nativeButton={false}
-            render={<Link href={`/pools?id=${result.poolId}`} />}
+            render={<Link href={`/buckets?id=${result.bucketId}`} />}
             className="min-w-0"
           >
             <FolderOpen className="h-4 w-4 shrink-0" />
-            <span className="truncate">{result.poolName}</span>
+            <span className="truncate">{result.bucketName}</span>
           </Button>
           <Button
             type="button"
@@ -443,13 +443,13 @@ function searchParams({
   tags,
   favoriteOnly,
   randomFilter,
-  poolId,
+  bucketId,
 }: {
   query: string;
   tags: string;
   favoriteOnly: boolean;
   randomFilter: RandomFilter;
-  poolId: string;
+  bucketId: string;
 }) {
   const params = new URLSearchParams();
   params.set("limit", "60");
@@ -466,8 +466,8 @@ function searchParams({
   if (randomFilter !== "any") {
     params.set("randomEnabled", String(randomFilter === "enabled"));
   }
-  if (poolId !== "all") {
-    params.set("poolId", poolId);
+  if (bucketId !== "all") {
+    params.set("bucketId", bucketId);
   }
 
   return params.toString();

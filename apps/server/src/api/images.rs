@@ -57,7 +57,8 @@ pub struct UpdateImageRequest {
 
 #[derive(Deserialize)]
 pub struct MoveImageRequest {
-    pub new_pool_id: Uuid,
+    #[serde(rename = "bucketId")]
+    pub new_bucket_id: Uuid,
 }
 
 #[derive(Deserialize)]
@@ -76,8 +77,8 @@ pub struct BulkUpdateImagesRequest {
 #[derive(Deserialize)]
 pub struct SearchImagesQuery {
     pub q: Option<String>,
-    #[serde(rename = "poolId")]
-    pub pool_id: Option<Uuid>,
+    #[serde(rename = "bucketId")]
+    pub bucket_id: Option<Uuid>,
     pub favorite: Option<bool>,
     #[serde(rename = "randomEnabled")]
     pub random_enabled: Option<bool>,
@@ -87,20 +88,20 @@ pub struct SearchImagesQuery {
 
 #[derive(Serialize)]
 pub struct ImageSearchResponse {
-    #[serde(rename = "poolId")]
-    pub pool_id: String,
-    #[serde(rename = "poolName")]
-    pub pool_name: String,
+    #[serde(rename = "bucketId")]
+    pub bucket_id: String,
+    #[serde(rename = "bucketName")]
+    pub bucket_name: String,
     pub image: ImageResponse,
 }
 
 pub async fn list_images(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Path(pool_id): Path<Uuid>,
+    Path(bucket_id): Path<Uuid>,
 ) -> Result<Json<Vec<ImageResponse>>, AppError> {
     let repo = ImageRepository::new(state.pool.clone());
-    let images = repo.list_for_pool(user.user_id, pool_id).await?;
+    let images = repo.list_for_bucket(user.user_id, bucket_id).await?;
     Ok(Json(
         build_image_responses(state.pool, Some(user.user_id), images).await?,
     ))
@@ -114,7 +115,7 @@ pub async fn search_images(
     let repo = ImageRepository::new(state.pool.clone());
     let filters = ImageSearchFilters {
         query: query.q,
-        pool_id: query.pool_id,
+        bucket_id: query.bucket_id,
         favorite: query.favorite,
         random_enabled: query.random_enabled,
         tags: parse_tag_filter(query.tags),
@@ -138,8 +139,8 @@ pub async fn search_images(
                     .copied()
                     .unwrap_or_default();
                 ImageSearchResponse {
-                    pool_id: result.image.pool_id.to_string(),
-                    pool_name: result.pool_name,
+                    bucket_id: result.image.bucket_id.to_string(),
+                    bucket_name: result.bucket_name,
                     image: image_response_from_stored(result.image, send_count),
                 }
             })
@@ -150,7 +151,7 @@ pub async fn search_images(
 pub async fn create_image(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Path(pool_id): Path<Uuid>,
+    Path(bucket_id): Path<Uuid>,
     Json(request): Json<CreateImageRequest>,
 ) -> Result<Json<ImageResponse>, AppError> {
     let url = request.url.trim();
@@ -183,7 +184,7 @@ pub async fn create_image(
     let image = repo
         .create_with_metadata(
             user.user_id,
-            pool_id,
+            bucket_id,
             &resolved_url,
             title.as_deref(),
             false,
@@ -197,11 +198,11 @@ pub async fn create_image(
 pub async fn delete_image(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Path((pool_id, image_id)): Path<(Uuid, Uuid)>,
+    Path((bucket_id, image_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let repo = ImageRepository::new(state.pool);
     let deleted = repo
-        .delete_for_user(user.user_id, pool_id, image_id)
+        .delete_for_user(user.user_id, bucket_id, image_id)
         .await?;
     Ok(Json(serde_json::json!({ "deleted": deleted })))
 }
@@ -209,11 +210,11 @@ pub async fn delete_image(
 pub async fn update_image(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Path((pool_id, image_id)): Path<(Uuid, Uuid)>,
+    Path((bucket_id, image_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<UpdateImageRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let repo = ImageRepository::new(state.pool.clone());
-    repo.get_for_owner(user.user_id, pool_id, image_id)
+    repo.get_for_owner(user.user_id, bucket_id, image_id)
         .await?
         .ok_or(AppError::NotFound)?;
 
@@ -232,7 +233,7 @@ pub async fn update_image(
     };
 
     let updated = repo
-        .update_metadata_partial(user.user_id, pool_id, image_id, &patch)
+        .update_metadata_partial(user.user_id, bucket_id, image_id, &patch)
         .await?;
 
     if !updated {
@@ -245,7 +246,7 @@ pub async fn update_image(
 pub async fn bulk_update_images(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Path(pool_id): Path<Uuid>,
+    Path(bucket_id): Path<Uuid>,
     Json(request): Json<BulkUpdateImagesRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     if request.image_ids.is_empty() {
@@ -278,7 +279,7 @@ pub async fn bulk_update_images(
     let updated = repo
         .update_metadata_bulk(
             user.user_id,
-            pool_id,
+            bucket_id,
             &BulkImageMetadataPatch {
                 image_ids: request.image_ids,
                 favorite: request.favorite,
@@ -299,12 +300,12 @@ pub async fn bulk_update_images(
 pub async fn move_image(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Path((pool_id, image_id)): Path<(Uuid, Uuid)>,
+    Path((bucket_id, image_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<MoveImageRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let repo = ImageRepository::new(state.pool);
     let updated = repo
-        .move_to_pool(user.user_id, pool_id, image_id, request.new_pool_id)
+        .move_to_bucket(user.user_id, bucket_id, image_id, request.new_bucket_id)
         .await?;
 
     if !updated {

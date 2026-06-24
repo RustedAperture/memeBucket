@@ -116,7 +116,7 @@ fn is_safe_ip(ip: &IpAddr) -> bool {
         return true;
     }
 
-    if ip.is_loopback() && std::env::var("EZGIF_ALLOW_LOCAL_IPS_IN_TESTS").is_ok() {
+    if ip.is_loopback() && std::env::var("MEMEBUCKET_ALLOW_LOCAL_IPS_IN_TESTS").is_ok() {
         return true;
     }
 
@@ -194,7 +194,7 @@ async fn fetch_success(value: &str) -> Result<reqwest::Response, ImageUrlValidat
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .redirect(reqwest::redirect::Policy::none())
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 ezGifBot/1.0")
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 memeBucketBot/1.0")
             .resolve(host, safe_addr)
             .build()
             .map_err(|e| {

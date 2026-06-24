@@ -5,16 +5,16 @@ use axum::{
     response::{IntoResponse, Response},
     routing::get,
 };
-use ezgif_server::{
+use http_body_util::BodyExt;
+use memebucket_server::{
     app_state::AppState,
     auth::sessions::AuthenticatedUser,
     repositories::{
-        images::ImageRepository, pools::PoolRepository, send_history::SendHistoryRepository,
+        buckets::BucketRepository, images::ImageRepository, send_history::SendHistoryRepository,
         users::UserRepository,
     },
     router::build_router_for_tests,
 };
-use http_body_util::BodyExt;
 use sqlx::SqlitePool;
 use std::ffi::OsString;
 use tokio::net::TcpListener;
@@ -58,10 +58,10 @@ async fn test_pool() -> SqlitePool {
 }
 
 #[tokio::test]
-async fn delete_category_requires_owner_scope() {
+async fn delete_bucket_requires_owner_scope() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let alice = users
         .upsert_by_discord_key("alice", None, None)
         .await
@@ -79,7 +79,7 @@ async fn delete_category_requires_owner_scope() {
 }
 
 #[tokio::test]
-async fn category_routes_support_owner_scoped_crud() {
+async fn bucket_routes_support_owner_scoped_crud() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let user = users
@@ -91,7 +91,7 @@ async fn category_routes_support_owner_scoped_crud() {
 
     let mut create_request = Request::builder()
         .method("POST")
-        .uri("/api/pools")
+        .uri("/api/buckets")
         .header("content-type", "application/json")
         .body(Body::from(r#"{"name":"  Cats  "}"#))
         .unwrap();
@@ -109,10 +109,10 @@ async fn category_routes_support_owner_scoped_crud() {
         .to_bytes();
     let created: serde_json::Value = serde_json::from_slice(&create_body).unwrap();
     assert_eq!(created["name"], "Cats");
-    let pool_id = created["id"].as_str().unwrap().to_string();
+    let bucket_id = created["id"].as_str().unwrap().to_string();
 
     let mut list_request = Request::builder()
-        .uri("/api/pools")
+        .uri("/api/buckets")
         .body(Body::empty())
         .unwrap();
     list_request
@@ -133,7 +133,7 @@ async fn category_routes_support_owner_scoped_crud() {
 
     let mut delete_request = Request::builder()
         .method("DELETE")
-        .uri(format!("/api/pools/{pool_id}"))
+        .uri(format!("/api/buckets/{bucket_id}"))
         .body(Body::empty())
         .unwrap();
     delete_request
@@ -153,7 +153,7 @@ async fn category_routes_support_owner_scoped_crud() {
 }
 
 #[tokio::test]
-async fn create_category_rejects_blank_name() {
+async fn create_bucket_rejects_blank_name() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let user = users
@@ -165,7 +165,7 @@ async fn create_category_rejects_blank_name() {
 
     let mut request = Request::builder()
         .method("POST")
-        .uri("/api/pools")
+        .uri("/api/buckets")
         .header("content-type", "application/json")
         .body(Body::from(r#"{"name":"   "}"#))
         .unwrap();
@@ -176,11 +176,11 @@ async fn create_category_rejects_blank_name() {
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body = response.into_body().collect().await.unwrap().to_bytes();
-    assert_eq!(&body[..], b"bad request: pool name is required");
+    assert_eq!(&body[..], b"bad request: bucket name is required");
 }
 
 #[tokio::test]
-async fn create_category_rejects_duplicate_name_for_same_owner() {
+async fn create_bucket_rejects_duplicate_name_for_same_owner() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let user = users
@@ -192,7 +192,7 @@ async fn create_category_rejects_duplicate_name_for_same_owner() {
 
     let mut first_request = Request::builder()
         .method("POST")
-        .uri("/api/pools")
+        .uri("/api/buckets")
         .header("content-type", "application/json")
         .body(Body::from(r#"{"name":"Cats"}"#))
         .unwrap();
@@ -205,7 +205,7 @@ async fn create_category_rejects_duplicate_name_for_same_owner() {
 
     let mut duplicate_request = Request::builder()
         .method("POST")
-        .uri("/api/pools")
+        .uri("/api/buckets")
         .header("content-type", "application/json")
         .body(Body::from(r#"{"name":"  cAtS  "}"#))
         .unwrap();
@@ -221,11 +221,11 @@ async fn create_category_rejects_duplicate_name_for_same_owner() {
         .await
         .unwrap()
         .to_bytes();
-    assert_eq!(&body[..], b"bad request: pool already exists");
+    assert_eq!(&body[..], b"bad request: bucket already exists");
 }
 
 #[tokio::test]
-async fn create_category_allows_same_name_for_different_owners() {
+async fn create_bucket_allows_same_name_for_different_owners() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let alice = users
@@ -241,7 +241,7 @@ async fn create_category_allows_same_name_for_different_owners() {
 
     let mut alice_request = Request::builder()
         .method("POST")
-        .uri("/api/pools")
+        .uri("/api/buckets")
         .header("content-type", "application/json")
         .body(Body::from(r#"{"name":"Cats"}"#))
         .unwrap();
@@ -254,7 +254,7 @@ async fn create_category_allows_same_name_for_different_owners() {
 
     let mut bob_request = Request::builder()
         .method("POST")
-        .uri("/api/pools")
+        .uri("/api/buckets")
         .header("content-type", "application/json")
         .body(Body::from(r#"{"name":"  cats  "}"#))
         .unwrap();
@@ -269,7 +269,7 @@ async fn create_category_allows_same_name_for_different_owners() {
 #[tokio::test]
 async fn create_image_stores_resolved_metadata_image_url() {
     let _local_ip_guard = LOCAL_IP_TEST_LOCK.lock().await;
-    let _allow_local_ips = EnvVarGuard::set("EZGIF_ALLOW_LOCAL_IPS_IN_TESTS", "1");
+    let _allow_local_ips = EnvVarGuard::set("MEMEBUCKET_ALLOW_LOCAL_IPS_IN_TESTS", "1");
 
     async fn page(address: String) -> Response {
         (
@@ -303,7 +303,7 @@ async fn create_image_stores_resolved_metadata_image_url() {
 
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let user = users
         .upsert_by_discord_key("owner", None, None)
         .await
@@ -316,7 +316,7 @@ async fn create_image_stores_resolved_metadata_image_url() {
 
     let mut request = Request::builder()
         .method("POST")
-        .uri(format!("/api/pools/{}/images", saved_pool.id))
+        .uri(format!("/api/buckets/{}/images", saved_pool.id))
         .header("content-type", "application/json")
         .body(Body::from(format!(r#"{{"url":"{page_url}"}}"#)))
         .unwrap();
@@ -336,7 +336,7 @@ async fn create_image_stores_resolved_metadata_image_url() {
 async fn whitelist_enabled_blocks_existing_subscriber_image_access() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let owner = users
         .upsert_by_discord_key("owner-whitelist", None, None)
@@ -352,13 +352,13 @@ async fn whitelist_enabled_blocks_existing_subscriber_image_access() {
         .await
         .unwrap();
     pools
-        .subscribe_user_to_pool(subscriber.id, saved_pool.id)
+        .subscribe_user_to_bucket(subscriber.id, saved_pool.id)
         .await
         .unwrap();
 
     assert_eq!(
         images
-            .list_for_pool(subscriber.id, saved_pool.id)
+            .list_for_bucket(subscriber.id, saved_pool.id)
             .await
             .unwrap()
             .len(),
@@ -372,7 +372,7 @@ async fn whitelist_enabled_blocks_existing_subscriber_image_access() {
 
     assert!(
         images
-            .list_for_pool(subscriber.id, saved_pool.id)
+            .list_for_bucket(subscriber.id, saved_pool.id)
             .await
             .unwrap()
             .is_empty()
@@ -383,7 +383,7 @@ async fn whitelist_enabled_blocks_existing_subscriber_image_access() {
 async fn shared_pool_preview_uses_viewer_send_count_and_anonymous_gets_zero() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
-    let pools = PoolRepository::new(pool.clone());
+    let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let send_history = SendHistoryRepository::new(pool.clone());
     let owner = users
@@ -408,7 +408,7 @@ async fn shared_pool_preview_uses_viewer_send_count_and_anonymous_gets_zero() {
         .await
         .unwrap();
     pools
-        .subscribe_user_to_pool(subscriber.id, saved_pool.id)
+        .subscribe_user_to_bucket(subscriber.id, saved_pool.id)
         .await
         .unwrap();
     pools

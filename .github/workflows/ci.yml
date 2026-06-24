@@ -41,7 +41,7 @@ jobs:
       - name: Run Rust tests
         run: cargo test
         env:
-          EZGIF_ALLOW_LOCAL_IPS_IN_TESTS: "true"
+          MEMEBUCKET_ALLOW_LOCAL_IPS_IN_TESTS: "true"
 
       - name: Install cargo-audit
         uses: taiki-e/install-action@cargo-audit

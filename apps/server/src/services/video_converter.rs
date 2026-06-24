@@ -20,7 +20,7 @@ struct ImgBBData {
 pub async fn convert_and_upload_mp4(url: &str, imgbb_api_key: &str) -> Result<String> {
     info!("Downloading MP4 from {} for conversion", url);
     let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 ezGifBot/1.0")
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 memeBucketBot/1.0")
         .build()
         .context("Failed to build HTTP client")?;
     let mp4_data = client

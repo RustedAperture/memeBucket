@@ -9,7 +9,7 @@ import { Plus, Search, X } from "lucide-react";
 import { GifSearchModal } from "./gif-search-modal";
 import { ButtonGroup } from "@/components/ui/button-group";
 
-export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: () => void }) {
+export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated: () => void }) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -24,7 +24,7 @@ export function ImageForm({ poolId, onCreated }: { poolId: string; onCreated: ()
     creatingRef.current = true;
     setIsCreating(true);
     try {
-      await apiPost(`/api/pools/${poolId}/images`, payload);
+      await apiPost(`/api/buckets/${bucketId}/images`, payload);
       setUrl("");
       onCreated();
       return true;

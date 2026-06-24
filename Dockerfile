@@ -11,9 +11,18 @@ FROM rust:1-alpine AS server-build
 RUN apk add --no-cache musl-dev gcc
 WORKDIR /repo
 COPY Cargo.toml Cargo.lock ./
+COPY apps/server/Cargo.toml ./apps/server/Cargo.toml
+RUN mkdir -p apps/server/src && \
+    echo "fn main() {}" > apps/server/src/main.rs && \
+    echo "pub fn dummy() {}" > apps/server/src/lib.rs
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/repo/target \
+    cargo build --release -p memebucket-server
 COPY apps/server ./apps/server
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/repo/target \
+    touch apps/server/src/main.rs && \
+    if [ -f apps/server/src/lib.rs ]; then touch apps/server/src/lib.rs; fi && \
     cargo build --release -p memebucket-server && \
     cp /repo/target/release/memebucket-server /repo/memebucket-server-binary
 

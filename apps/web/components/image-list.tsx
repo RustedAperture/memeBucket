@@ -39,11 +39,23 @@ import {
 } from "@/components/ui/select";
 import type { ImageItem, Bucket } from "@/lib/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useTouchHold } from "@/hooks/use-touch-hold";
 
 type BulkFavoriteValue = "unchanged" | "true" | "false";
 
 export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:columns-3 lg:columns-4", readonly = false, buckets = [], onMoveImage, onImageUpdated }: { bucketId: string; columnClass?: string; readonly?: boolean; buckets?: Bucket[]; onMoveImage?: () => void; onImageUpdated?: () => void }) {
   const [images, setImages] = useState<ImageItem[]>([]);
+  const isMobile = useIsMobile();
+
+  const handleCopyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied to clipboard");
+    } catch (err) {
+      toast.error("Failed to copy link");
+    }
+  };
   const [error, setError] = useState<string | null>(null);
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageItem | null>(null);
@@ -325,121 +337,21 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
             const dragCount = dragImageIdsFor(image.id).length;
 
             return (
-              <div
+              <ImageCard
                 key={image.id}
-                role="button"
-                tabIndex={0}
-                aria-pressed={isSelected}
-                onClick={(event) => {
-                  if (!readonly && (event.metaKey || event.ctrlKey || event.shiftKey)) {
-                    toggleImageSelection(image.id);
-                    return;
-                  }
-                  openImageDetails(image);
-                }}
-                onKeyDown={(event) => {
-                  if (!readonly && event.key === " ") {
-                    event.preventDefault();
-                    toggleImageSelection(image.id);
-                    return;
-                  }
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    openImageDetails(image);
-                  }
-                }}
-                draggable={!readonly}
-                onDragStart={(event) => {
-                  const imageIds = dragImageIdsFor(image.id);
-                  event.dataTransfer.setData("application/json", JSON.stringify({ imageId: image.id, imageIds, sourceBucketId: bucketId }));
-                  event.dataTransfer.effectAllowed = "move";
-                }}
-                className={`group relative overflow-hidden rounded-xl border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none break-inside-avoid mb-4 ${
-                  isSelected
-                    ? "border-primary ring-2 ring-primary"
-                    : "border-border/70 hover:ring-2 hover:ring-ring"
-                }`}
-              >
-                {image.url.split('?')[0].toLowerCase().endsWith('.mp4') || image.url.split('?')[0].toLowerCase().endsWith('.webm') ? (
-                  <video
-                    src={image.url}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="w-full h-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
-                    onError={(e) => {
-                      (e.target as HTMLVideoElement).style.display = 'none';
-                      (e.target as HTMLVideoElement).nextElementSibling?.classList.remove('hidden');
-                    }}
-                  />
-                ) : (
-                  <img
-                    src={image.url}
-                    alt={image.title || "Image preview"}
-                    className="w-full h-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02]"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                      (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                    }}
-                  />
-                )}
-                <ImageIcon className="hidden w-10 h-10 text-muted-foreground/50 absolute z-0" />
-
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10" />
-
-                {!readonly ? (
-                  <button
-                    type="button"
-                    aria-label={isSelected ? "Deselect image" : "Select image"}
-                    aria-pressed={isSelected}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      toggleImageSelection(image.id);
-                    }}
-                    className={`absolute left-2 top-2 z-20 flex h-6 w-6 items-center justify-center rounded-full border text-xs transition-opacity ${
-                      isSelected
-                        ? "border-primary bg-primary text-primary-foreground opacity-100"
-                        : "border-white/70 bg-black/45 text-white opacity-0 group-hover:opacity-100 focus:opacity-100"
-                    }`}
-                  >
-                    {isSelected ? <Check className="h-3.5 w-3.5" /> : null}
-                  </button>
-                ) : null}
-
-                <button
-                  type="button"
-                  aria-label={image.favorite ? "Remove from favorites" : "Add to favorites"}
-                  onClick={async (event) => {
-                    event.stopPropagation();
-                    const newFav = !image.favorite;
-                    // Optimistic update
-                    setImages(prev => prev.map(img => img.id === image.id ? { ...img, favorite: newFav } : img));
-                    try {
-                      const patchBucketId = bucketId === "favorites" ? (image as any).bucketId : bucketId;
-                      await apiPatch(`/api/buckets/${patchBucketId}/images/${image.id}`, { favorite: newFav });
-                      if (onImageUpdated) onImageUpdated();
-                    } catch (err) {
-                      // Revert on failure
-                      setImages(prev => prev.map(img => img.id === image.id ? { ...img, favorite: !newFav } : img));
-                      toast.error(err instanceof Error ? err.message : "Failed to update favorite");
-                    }
-                  }}
-                  className={`absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
-                    image.favorite
-                      ? "text-yellow-400 bg-black/40 hover:scale-110 opacity-100"
-                      : "text-white/70 bg-black/40 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:scale-110 hover:text-white"
-                  }`}
-                >
-                  <Star className="h-4 w-4" fill={image.favorite ? "currentColor" : "none"} />
-                </button>
-
-                {!readonly && dragCount > 1 ? (
-                  <div className="absolute bottom-2 right-2 z-20 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
-                    {dragCount}
-                  </div>
-                ) : null}
-              </div>
+                image={image}
+                readonly={readonly}
+                isSelected={isSelected}
+                dragCount={dragCount}
+                bucketId={bucketId}
+                dragImageIdsFor={dragImageIdsFor}
+                toggleImageSelection={toggleImageSelection}
+                openImageDetails={openImageDetails}
+                setImages={setImages}
+                onImageUpdated={onImageUpdated}
+                isMobile={isMobile}
+                handleCopyLink={handleCopyLink}
+              />
             );
           })}
         </div>
@@ -942,4 +854,161 @@ function applyBulkMetadataToImages(
       tags,
     };
   });
+}
+
+interface ImageCardProps {
+  image: ImageItem;
+  readonly: boolean;
+  isSelected: boolean;
+  dragCount: number;
+  bucketId: string;
+  dragImageIdsFor: (id: string) => string[];
+  toggleImageSelection: (id: string) => void;
+  openImageDetails: (image: ImageItem) => void;
+  setImages: React.Dispatch<React.SetStateAction<ImageItem[]>>;
+  onImageUpdated?: () => void;
+  isMobile: boolean;
+  handleCopyLink: (url: string) => void;
+}
+
+function ImageCard({
+  image,
+  readonly,
+  isSelected,
+  dragCount,
+  bucketId,
+  dragImageIdsFor,
+  toggleImageSelection,
+  openImageDetails,
+  setImages,
+  onImageUpdated,
+  isMobile,
+  handleCopyLink,
+}: ImageCardProps) {
+  const touchHandlers = useTouchHold({
+    onTap: () => handleCopyLink(image.url),
+    onLongPress: () => openImageDetails(image),
+  });
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+      onClick={(event) => {
+        if (isMobile) return;
+        if (!readonly && (event.metaKey || event.ctrlKey || event.shiftKey)) {
+          toggleImageSelection(image.id);
+          return;
+        }
+        openImageDetails(image);
+      }}
+      onKeyDown={(event) => {
+        if (!readonly && event.key === " ") {
+          event.preventDefault();
+          toggleImageSelection(image.id);
+          return;
+        }
+        if (event.key === "Enter") {
+          event.preventDefault();
+          openImageDetails(image);
+        }
+      }}
+      draggable={!readonly}
+      onDragStart={(event) => {
+        const imageIds = dragImageIdsFor(image.id);
+        event.dataTransfer.setData("application/json", JSON.stringify({ imageId: image.id, imageIds, sourceBucketId: bucketId }));
+        event.dataTransfer.effectAllowed = "move";
+      }}
+      className={`group relative overflow-hidden rounded-xl border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none break-inside-avoid mb-4 ${
+        isSelected
+          ? "border-primary ring-2 ring-primary"
+          : "border-border/70 hover:ring-2 hover:ring-ring"
+      }`}
+    >
+      {image.url.split('?')[0].toLowerCase().endsWith('.mp4') || image.url.split('?')[0].toLowerCase().endsWith('.webm') ? (
+        <video
+          src={image.url}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="w-full h-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02] select-none"
+          style={{ WebkitTouchCallout: "none" }}
+          onError={(e) => {
+            (e.target as HTMLVideoElement).style.display = 'none';
+            (e.target as HTMLVideoElement).nextElementSibling?.classList.remove('hidden');
+          }}
+          onContextMenu={(e) => isMobile && e.preventDefault()}
+          {...(isMobile ? touchHandlers : {})}
+        />
+      ) : (
+        <img
+          src={image.url}
+          alt={image.title || "Image preview"}
+          className="w-full h-auto object-cover block transition-transform duration-300 group-hover:scale-[1.02] select-none"
+          style={{ WebkitTouchCallout: "none" }}
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = 'none';
+            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+          }}
+          onContextMenu={(e) => isMobile && e.preventDefault()}
+          {...(isMobile ? touchHandlers : {})}
+        />
+      )}
+      <ImageIcon className="hidden w-10 h-10 text-muted-foreground/50 absolute z-0" />
+
+      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10" />
+
+      {!readonly ? (
+        <button
+          type="button"
+          aria-label={isSelected ? "Deselect image" : "Select image"}
+          aria-pressed={isSelected}
+          onClick={(event) => {
+            event.stopPropagation();
+            toggleImageSelection(image.id);
+          }}
+          className={`absolute left-2 top-2 z-20 flex h-6 w-6 items-center justify-center rounded-full border text-xs transition-opacity ${
+            isSelected
+              ? "border-primary bg-primary text-primary-foreground opacity-100"
+              : "border-white/70 bg-black/45 text-white opacity-0 group-hover:opacity-100 focus:opacity-100"
+          }`}
+        >
+          {isSelected ? <Check className="h-3.5 w-3.5" /> : null}
+        </button>
+      ) : null}
+
+      <button
+        type="button"
+        aria-label={image.favorite ? "Remove from favorites" : "Add to favorites"}
+        onClick={async (event) => {
+          event.stopPropagation();
+          const newFav = !image.favorite;
+          setImages(prev => prev.map(img => img.id === image.id ? { ...img, favorite: newFav } : img));
+          try {
+            const patchBucketId = bucketId === "favorites" ? (image as any).bucketId : bucketId;
+            await apiPatch(`/api/buckets/${patchBucketId}/images/${image.id}`, { favorite: newFav });
+            if (onImageUpdated) onImageUpdated();
+          } catch (err) {
+            setImages(prev => prev.map(img => img.id === image.id ? { ...img, favorite: !newFav } : img));
+            toast.error(err instanceof Error ? err.message : "Failed to update favorite");
+          }
+        }}
+        className={`absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
+          image.favorite
+            ? "text-yellow-400 bg-black/40 hover:scale-110 opacity-100"
+            : "text-white/70 bg-black/40 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:scale-110 hover:text-white"
+        }`}
+      >
+        <Star className="h-4 w-4" fill={image.favorite ? "currentColor" : "none"} />
+      </button>
+
+      {!readonly && dragCount > 1 ? (
+        <div className="absolute bottom-2 right-2 z-20 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+          {dragCount}
+        </div>
+      ) : null}
+    </div>
+  );
 }

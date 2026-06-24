@@ -79,13 +79,13 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
 
   return (
     <>
-    <div className="relative">
-      <form onSubmit={submit} className="flex items-center gap-2">
+    <div className="relative w-full">
+      <form onSubmit={submit} className="flex items-center gap-2 w-full">
           <Input
             value={url}
             onChange={(event) => handleUrlChange(event.target.value)}
             placeholder="URL or search KLIPY..."
-            className="h-8 w-48 text-sm"
+            className="h-8 flex-1 sm:w-48 text-sm"
             disabled={isCreating}
           />
         <ButtonGroup>

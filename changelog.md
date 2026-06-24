@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.5 - Jun 23, 2026
+
+### Added
+
+- Added mobile-specific touch gestures: single tap to copy media URLs to the clipboard, and long press (500ms) to open the detailed image properties modal in both the Bucket and Search views.
+- Enabled clicking images on desktop viewports in the Search page to open the properties dialog, matching the Bucket view behavior.
+
+### Changed
+
+- Rebranded the entire application from **ezGif** to **memeBucket**, renaming all references to **pools** to **buckets** throughout the database, backend services, Discord commands, and frontend UI.
+- Refactored the Bucket control toolbar to use a responsive two-row layout on mobile viewports, allowing the size slider to remain fully functional while the input box stretches to fill the screen width.
+- Configured Sonner toast notifications to dynamically display at the top center of the screen on mobile devices.
+
 ## v0.1.4 - Jun 22, 2026
 
 ### Added

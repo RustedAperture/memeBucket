@@ -5,8 +5,23 @@ export default function ChangelogPage() {
     <LegalPage
       title="Changelog"
       description="Notable changes to memeBucket."
-      updated="Jun 22, 2026"
+      updated="Jun 23, 2026"
     >
+      <LegalSection title="v0.1.5 - Jun 23, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added mobile-specific touch gestures: single tap to copy media URLs to the clipboard, and long press (500ms) to open the detailed image properties modal in both the Bucket and Search views.</li>
+          <li>Enabled clicking images on desktop viewports in the Search page to open the properties dialog, matching the Bucket view behavior.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Changed</h3>
+        <LegalList>
+          <li>Rebranded the entire application from <strong>ezGif</strong> to <strong>memeBucket</strong>, renaming all references to <strong>pools</strong> to <strong>buckets</strong> throughout the database, backend services, Discord commands, and frontend UI.</li>
+          <li>Refactored the Bucket control toolbar to use a responsive two-row layout on mobile viewports, allowing the size slider to remain fully functional while the input box stretches to fill the screen width.</li>
+          <li>Configured Sonner toast notifications to dynamically display at the top center of the screen on mobile devices.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.1.4 - Jun 22, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

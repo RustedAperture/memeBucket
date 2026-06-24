@@ -179,37 +179,39 @@ function BucketsContent() {
         </header>
         {/* Size toolbar */}
         {bucketId && (
-          <div className="flex items-center gap-3 px-4 lg:px-6 h-12 shrink-0 border-b bg-muted/30">
-            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-              Size
-            </span>
-            <div className="relative flex items-center w-24 h-6">
-              <div className="absolute left-0 right-0 h-0.5 rounded-full bg-border" />
-              <div
-                className="absolute left-0 h-0.5 rounded-full bg-primary transition-all duration-150"
-                style={{ width: `${(sizeIndex / (COLUMN_CLASSES.length - 1)) * 100}%` }}
-              />
-              {COLUMN_CLASSES.map((_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setSizeIndex(i)}
-                  className="absolute flex items-center justify-center"
-                  style={{ left: `${(i / (COLUMN_CLASSES.length - 1)) * 100}%`, transform: "translateX(-50%)" }}
-                  aria-label={`Thumbnail size ${SIZE_LABELS[i]}`}
-                >
-                  <span
-                    className={`block rounded-full border-2 transition-all duration-150 ${
-                      i === sizeIndex
-                        ? "h-3.5 w-3.5 border-primary bg-primary shadow-sm"
-                        : "h-2.5 w-2.5 border-muted-foreground/40 bg-background hover:border-primary/60"
-                    }`}
-                  />
-                </button>
-              ))}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 px-4 lg:px-6 py-2 sm:py-0 h-auto sm:h-12 shrink-0 border-b bg-muted/30 w-full">
+            <div className="flex items-center gap-3 h-8 shrink-0">
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                Size
+              </span>
+              <div className="relative flex items-center w-24 h-6">
+                <div className="absolute left-0 right-0 h-0.5 rounded-full bg-border" />
+                <div
+                  className="absolute left-0 h-0.5 rounded-full bg-primary transition-all duration-150"
+                  style={{ width: `${(sizeIndex / (COLUMN_CLASSES.length - 1)) * 100}%` }}
+                />
+                {COLUMN_CLASSES.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setSizeIndex(i)}
+                    className="absolute flex items-center justify-center"
+                    style={{ left: `${(i / (COLUMN_CLASSES.length - 1)) * 100}%`, transform: "translateX(-50%)" }}
+                    aria-label={`Thumbnail size ${SIZE_LABELS[i]}`}
+                  >
+                    <span
+                      className={`block rounded-full border-2 transition-all duration-150 ${
+                        i === sizeIndex
+                          ? "h-3.5 w-3.5 border-primary bg-primary shadow-sm"
+                          : "h-2.5 w-2.5 border-muted-foreground/40 bg-background hover:border-primary/60"
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
             </div>
             {!isReadOnly && activeBucket && (
-              <div className="ml-auto">
+              <div className="w-full sm:w-auto flex-grow sm:flex-grow-0 sm:ml-auto">
                 <ImageForm 
                   bucketId={bucketId} 
                   onCreated={() => setRefreshKey((k) => k + 1)} 

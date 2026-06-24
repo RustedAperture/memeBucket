@@ -12,6 +12,10 @@ import {
   Search,
   Star,
   X,
+  Edit2,
+  Trash2,
+  Tags,
+  Ban,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { RequireAuth } from "@/components/require-auth";
@@ -38,8 +42,29 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { apiGet } from "@/lib/api";
-import type { ImageSearchResult, Bucket } from "@/lib/types";
+import { apiGet, apiPatch, apiDelete } from "@/lib/api";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useTouchHold } from "@/hooks/use-touch-hold";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import type { ImageSearchResult, Bucket, ImageItem } from "@/lib/types";
 import { toast } from "sonner";
 
 type RandomFilter = "any" | "enabled" | "disabled";
@@ -316,9 +341,21 @@ function SearchContent() {
             </div>
           ) : (
             <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
-              {results.map((result) => (
-                <SearchResultCard key={result.image.id} result={result} />
-              ))}
+              {results.map((result) => {
+                const bucket = buckets.find((b) => b.id === result.bucketId);
+                const readonly = bucket ? (bucket.is_subscribed || bucket.is_read_only) : true;
+                return (
+                  <SearchResultCard
+                    key={result.image.id}
+                    result={result}
+                    readonly={readonly}
+                    buckets={buckets}
+                    onDelete={(imageId) => {
+                      setResults((prev) => prev.filter((r) => r.image.id !== imageId));
+                    }}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
@@ -327,11 +364,42 @@ function SearchContent() {
   );
 }
 
-function SearchResultCard({ result }: { result: ImageSearchResult }) {
-  const image = result.image;
+interface SearchResultCardProps {
+  result: ImageSearchResult;
+  readonly: boolean;
+  buckets: Bucket[];
+  onDelete: (imageId: string) => void;
+}
+
+function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultCardProps) {
+  const isMobile = useIsMobile();
+  const [image, setImage] = useState<ImageItem>(result.image);
+  const [currentBucketId, setCurrentBucketId] = useState(result.bucketId);
+  const [currentBucketName, setCurrentBucketName] = useState(result.bucketName);
+
   const isVideo = isVideoUrl(image.url);
   const [mediaFailed, setMediaFailed] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Details dialog states
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [editingMetadata, setEditingMetadata] = useState(false);
+  const [titleValue, setTitleValue] = useState("");
+  const [favoriteValue, setFavoriteValue] = useState(false);
+  const [randomWeightValue, setRandomWeightValue] = useState(1);
+  const [tagsValue, setTagsValue] = useState("");
+  const [notesValue, setNotesValue] = useState("");
+  const [imageToDelete, setImageToDelete] = useState<string | null>(null);
+
+  const openImageDetails = () => {
+    setTitleValue(image.title || "");
+    setFavoriteValue(image.favorite);
+    setRandomWeightValue(image.randomWeight);
+    setTagsValue(image.tags.join(", "));
+    setNotesValue(image.notes || "");
+    setEditingMetadata(false);
+    setDetailsOpen(true);
+  };
 
   const handleCopy = async () => {
     try {
@@ -344,97 +412,454 @@ function SearchResultCard({ result }: { result: ImageSearchResult }) {
     }
   };
 
+  const touchHandlers = useTouchHold({
+    onTap: handleCopy,
+    onLongPress: openImageDetails,
+  });
+
+  const handleSaveMetadata = async () => {
+    const normalizedTags = parseTagInput(tagsValue);
+    const normalizedTitle = titleValue.trim() || null;
+    const normalizedNotes = notesValue.trim() || null;
+    const normalizedWeight = clampRandomWeight(randomWeightValue);
+    try {
+      await apiPatch(`/api/buckets/${currentBucketId}/images/${image.id}`, {
+        title: normalizedTitle,
+        notes: normalizedNotes,
+        favorite: favoriteValue,
+        randomWeight: normalizedWeight,
+        tags: normalizedTags,
+      });
+      const updatedImage = {
+        ...image,
+        title: normalizedTitle,
+        notes: normalizedNotes,
+        favorite: favoriteValue,
+        randomWeight: normalizedWeight,
+        tags: normalizedTags,
+      };
+      setImage(updatedImage);
+      setEditingMetadata(false);
+      toast.success("Image details saved");
+    } catch {
+      toast.error("Failed to save image details");
+    }
+  };
+
+  const handleMoveToBucket = async (newBucketId: string) => {
+    try {
+      await apiPatch(`/api/buckets/${currentBucketId}/images/${image.id}/move`, {
+        destinationBucketId: newBucketId,
+      });
+      const destBucket = buckets.find((b) => b.id === newBucketId);
+      if (destBucket) {
+        setCurrentBucketId(newBucketId);
+        setCurrentBucketName(destBucket.name);
+      }
+      toast.success("Image moved successfully");
+      setDetailsOpen(false);
+    } catch {
+      toast.error("Failed to move image");
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!imageToDelete) return;
+    try {
+      await apiDelete(`/api/buckets/${currentBucketId}/images/${imageToDelete}`);
+      toast.success("Image deleted successfully");
+      setImageToDelete(null);
+      setDetailsOpen(false);
+      onDelete(image.id);
+    } catch {
+      toast.error("Failed to delete image");
+    }
+  };
+
+  const moveBucketItems = buckets.map((p) => ({
+    label: p.name,
+    value: p.id,
+  }));
+
   return (
-    <article className="min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm break-inside-avoid mb-4">
-      <div className="relative bg-muted">
-        {mediaFailed ? (
-          <div className="flex aspect-[4/3] w-full items-center justify-center">
-            <ImageIcon className="h-10 w-10 text-muted-foreground/50" />
+    <>
+      <article className="min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm break-inside-avoid mb-4">
+        <div 
+          className="relative bg-muted cursor-pointer group overflow-hidden rounded-t-lg"
+          onClick={() => {
+            if (isMobile) return;
+            openImageDetails();
+          }}
+        >
+          {mediaFailed ? (
+            <div className="flex aspect-[4/3] w-full items-center justify-center">
+              <ImageIcon className="h-10 w-10 text-muted-foreground/50" />
+            </div>
+          ) : isVideo ? (
+            <video
+              src={image.url}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.02] select-none"
+              style={{ WebkitTouchCallout: "none" }}
+              onError={() => setMediaFailed(true)}
+              onContextMenu={(e) => isMobile && e.preventDefault()}
+              {...(isMobile ? touchHandlers : {})}
+            />
+          ) : (
+            <img
+              src={image.url}
+              alt={image.title || "Image preview"}
+              className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.02] select-none"
+              style={{ WebkitTouchCallout: "none" }}
+              onError={() => setMediaFailed(true)}
+              onContextMenu={(e) => isMobile && e.preventDefault()}
+              {...(isMobile ? touchHandlers : {})}
+            />
+          )}
+        </div>
+        <div className="space-y-3 p-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold">{image.title || image.url}</h2>
           </div>
-        ) : isVideo ? (
-          <video
-            src={image.url}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-auto block"
-            onError={() => setMediaFailed(true)}
-          />
-        ) : (
-          <img
-            src={image.url}
-            alt={image.title || "Image preview"}
-            className="w-full h-auto block"
-            onError={() => setMediaFailed(true)}
-          />
-        )}
-      </div>
-      <div className="space-y-3 p-3">
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold">{image.title || image.url}</h2>
-        </div>
 
-        <div className="flex flex-wrap gap-1.5">
-          {image.favorite ? (
-            <Badge variant="secondary" className="rounded-md">
-              <Star className="h-3 w-3 fill-current" />
-              Favorite
-            </Badge>
-          ) : null}
-          <Badge variant="outline" className="rounded-md">Weight {image.randomWeight}</Badge>
-          <Badge variant="outline" className="rounded-md">{image.sendCount} send{image.sendCount === 1 ? "" : "s"}</Badge>
-        </div>
-
-        {image.tags.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {image.tags.slice(0, 6).map((tag) => (
-              <Badge key={tag} variant="secondary" className="max-w-full rounded-md">
-                <span className="truncate">{tag}</span>
+            {image.favorite ? (
+              <Badge variant="secondary" className="rounded-md">
+                <Star className="h-3 w-3 fill-current" />
+                Favorite
               </Badge>
-            ))}
-            {image.tags.length > 6 ? (
-              <Badge variant="outline" className="rounded-md">+{image.tags.length - 6}</Badge>
             ) : null}
+            <Badge variant="outline" className="rounded-md">Weight {image.randomWeight}</Badge>
+            <Badge variant="outline" className="rounded-md">{image.sendCount} send{image.sendCount === 1 ? "" : "s"}</Badge>
           </div>
-        ) : null}
 
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            nativeButton={false}
-            render={<Link href={`/buckets?id=${result.bucketId}`} />}
-            className="min-w-0"
-          >
-            <FolderOpen className="h-4 w-4 shrink-0" />
-            <span className="truncate">{result.bucketName}</span>
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleCopy}
-            className="shrink-0"
-          >
-            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-            Copy
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            nativeButton={false}
-            render={<a href={image.url} target="_blank" rel="noreferrer" />}
-            className="shrink-0"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Open
-          </Button>
+          {image.tags.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {image.tags.slice(0, 6).map((tag) => (
+                <Badge key={tag} variant="secondary" className="max-w-full rounded-md">
+                  <span className="truncate">{tag}</span>
+                </Badge>
+              ))}
+              {image.tags.length > 6 ? (
+                <Badge variant="outline" className="rounded-md">+{image.tags.length - 6}</Badge>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              nativeButton={false}
+              render={<Link href={`/buckets?id=${currentBucketId}`} />}
+              className="min-w-0"
+            >
+              <FolderOpen className="h-4 w-4 shrink-0" />
+              <span className="truncate">{currentBucketName}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleCopy}
+              className="shrink-0"
+            >
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              Copy
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<a href={image.url} target="_blank" rel="noreferrer" />}
+              className="shrink-0"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open
+            </Button>
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
+
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="min-w-0 max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="truncate">{image.title || "Image details"}</DialogTitle>
+            <DialogDescription>
+              {formatAddedAt(image.createdAt)} - {image.sendCount} send{image.sendCount === 1 ? "" : "s"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] gap-4 overflow-y-auto pr-1">
+            <div className="min-h-0 overflow-hidden rounded-xl border border-border/70 bg-muted/20">
+              {isVideo ? (
+                <video
+                  src={image.url}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="h-full max-h-full w-full object-contain"
+                />
+              ) : (
+                <img
+                  src={image.url}
+                  alt={image.title || "Selected image preview"}
+                  className="h-full max-h-full w-full object-contain"
+                />
+              )}
+            </div>
+
+            <div className="space-y-3 rounded-lg border border-border/70 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Metadata</p>
+                {!readonly && !editingMetadata ? (
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEditingMetadata(true)}>
+                    <Edit2 className="h-3 w-3 mr-1" /> Edit
+                  </Button>
+                ) : null}
+              </div>
+
+              {editingMetadata ? (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="image-title">Title</Label>
+                    <Input
+                      id="image-title"
+                      value={titleValue}
+                      maxLength={200}
+                      onChange={(event) => setTitleValue(event.target.value)}
+                      placeholder="Untitled"
+                    />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-[1fr_8rem]">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="image-tags">Tags</Label>
+                      <Input
+                        id="image-tags"
+                        value={tagsValue}
+                        onChange={(event) => setTagsValue(event.target.value)}
+                        placeholder="cat, reaction, happy"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor="image-weight">Weight</Label>
+                        <Tooltip>
+                          <TooltipTrigger className="cursor-help outline-none p-0 bg-transparent border-none inline-flex items-center justify-center">
+                            <HelpCircle className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            <div className="flex flex-col gap-1.5">
+                              <p>Weight (0-10) determines how likely this image is to be picked randomly.</p>
+                              <ul className="list-disc pl-4 opacity-90">
+                                <li><strong>0</strong>: Disabled (never picked)</li>
+                                <li><strong>1-10</strong>: Higher = more likely</li>
+                              </ul>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Input
+                        id="image-weight"
+                        type="number"
+                        min={0}
+                        max={10}
+                        step={1}
+                        value={randomWeightValue}
+                        onChange={(event) => setRandomWeightValue(clampRandomWeight(Number(event.target.value)))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                      <Label htmlFor="image-favorite" className="flex items-center gap-2 cursor-pointer">
+                        <Star className={favoriteValue ? "h-4 w-4 fill-current text-primary" : "h-4 w-4 text-muted-foreground"} />
+                        Favorite
+                      </Label>
+                      <Switch
+                        id="image-favorite"
+                        checked={favoriteValue}
+                        onCheckedChange={setFavoriteValue}
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
+                      <Label htmlFor="image-weight-disable" className="flex items-center gap-2 cursor-pointer">
+                        <Ban className={randomWeightValue === 0 ? "h-4 w-4 text-destructive" : "h-4 w-4 text-muted-foreground"} />
+                        Disable usage
+                      </Label>
+                      <Switch
+                        id="image-weight-disable"
+                        checked={randomWeightValue === 0}
+                        onCheckedChange={(checked) => setRandomWeightValue(checked ? 0 : 1)}
+                        className="data-[state=checked]:bg-destructive"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="image-notes">Notes / Credits</Label>
+                    <Textarea
+                      id="image-notes"
+                      value={notesValue}
+                      onChange={(event) => setNotesValue(event.target.value)}
+                      placeholder="Add notes, credits, or context..."
+                      className="resize-none h-24"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingMetadata(false);
+                        setTitleValue(image.title || "");
+                        setFavoriteValue(image.favorite);
+                        setRandomWeightValue(image.randomWeight);
+                        setTagsValue(image.tags.join(", "));
+                        setNotesValue(image.notes || "");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={handleSaveMetadata}>Save</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid gap-2 text-sm sm:grid-cols-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Favorite</p>
+                      <p className="flex items-center gap-1 font-medium">
+                        <Star className={image.favorite ? "h-4 w-4 fill-current text-primary" : "h-4 w-4 text-muted-foreground"} />
+                        {image.favorite ? "Yes" : "No"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Weight</p>
+                      <p className="font-medium">{image.randomWeight}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Sends</p>
+                      <p className="font-medium">{image.sendCount}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">Tags</p>
+                    {image.tags.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {image.tags.map((tag) => (
+                          <Badge key={tag} variant="secondary" className="max-w-full rounded-md">
+                            <span className="truncate">{tag}</span>
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No tags</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-muted-foreground">Notes / Credits</p>
+                    <p className="min-h-5 whitespace-pre-wrap text-sm text-foreground">
+                      {image.notes || "No notes provided."}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2 min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Link</p>
+              <div className="flex min-w-0 gap-2">
+                <Input readOnly value={image.url} title={image.url} />
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  aria-label="Open image link"
+                  render={<a href={image.url} target="_blank" rel="noreferrer" />}
+                >
+                  <ExternalLink />
+                </Button>
+              </div>
+            </div>
+
+            {buckets.length > 1 && !readonly && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Move to Bucket</p>
+                <Select
+                  items={moveBucketItems}
+                  value={currentBucketId}
+                  onValueChange={(newBucketId) => {
+                    if (typeof newBucketId === "string") {
+                      void handleMoveToBucket(newBucketId);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>Buckets</SelectLabel>
+                      {buckets.map((p) => (
+                        <SelectItem
+                          key={p.id}
+                          value={p.id}
+                          disabled={p.is_subscribed || p.id === currentBucketId}
+                        >
+                          {p.name}{p.id === currentBucketId ? " (Current)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          {!readonly && (
+            <DialogFooter>
+              <Button
+                variant="destructive"
+                onClick={() => setImageToDelete(image.id)}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete image
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!imageToDelete} onOpenChange={(open) => !open && setImageToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the image. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -476,4 +901,29 @@ function searchParams({
 function isVideoUrl(url: string) {
   const base = url.split("?")[0].toLowerCase();
   return base.endsWith(".mp4") || base.endsWith(".webm");
+}
+
+function parseTagInput(value: string): string[] {
+  return value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0);
+}
+
+function clampRandomWeight(value: number): number {
+  return Math.min(10, Math.max(0, Math.round(value)));
+}
+
+function formatAddedAt(value?: string) {
+  if (!value) return "Added recently";
+  try {
+    const date = new Date(value);
+    return `Added on ${date.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })}`;
+  } catch {
+    return "Added recently";
+  }
 }

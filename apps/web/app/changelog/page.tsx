@@ -5,8 +5,31 @@ export default function ChangelogPage() {
     <LegalPage
       title="Changelog"
       description="Notable changes to memeBucket."
-      updated="Jun 23, 2026"
+      updated="Jun 25, 2026"
     >
+      <LegalSection title="v0.1.6 - Jun 25, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added bulk editing features to the bucket view, including <strong>Bulk Delete</strong> and <strong>Bulk Move</strong> with efficient transactional backend endpoints.</li>
+          <li>Added <strong>Bulk Add Links</strong> allowing users to paste multiple image/video URLs at once with a step-by-step progress UI and error recovery (pre-filling with only failed URLs for easy retries).</li>
+          <li>Added batch actions to <strong>Select All</strong> and <strong>Copy Links</strong> for all selected items.</li>
+          <li>Added <strong>Import Data</strong> functionality in the Account Settings menu, allowing users to upload their exported backup JSON files to easily restore or duplicate their buckets and media with all metadata and tags fully preserved.</li>
+          <li>Added client-side format validation and server-side duplicate prevention to ensure seamless imports.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Changed</h3>
+        <LegalList>
+          <li>Rebranded the Discord system bucket from <strong>Added from Discord</strong> to <strong>Inbox</strong>, including a database migration to automatically migrate existing records.</li>
+          <li>Removed redundant drag count badges from selected cards for a cleaner visual aesthetic.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Fixed</h3>
+        <LegalList>
+          <li>Fixed the <strong>Export Data</strong> functionality which was failing due to outdated database table references (<code>pools</code>) from the rebranding.</li>
+          <li>Updated the export data payload to include all newly added image metadata fields (title, favorite, random weight, tags, notes, and created_at).</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.1.5 - Jun 23, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>
@@ -64,14 +87,14 @@ export default function ChangelogPage() {
           <li>Renamed the global saved-media search surface to Library to distinguish it from searching Klipy for new GIFs.</li>
           <li>Expanded access checks and tests for library search across owned, subscribed, public, private, and whitelisted buckets.</li>
           <li>Refactored bucket view and search pages to share a unified responsive layout.</li>
-          <li>System buckets (like Favorites or Added from Discord) are now automatically hidden when empty.</li>
+          <li>System buckets (like Favorites or Inbox) are now automatically hidden when empty.</li>
         </LegalList>
       </LegalSection>
 
       <LegalSection title="v0.1.2 - Jun 11, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>
-          <li>Added an "Add to Bucket" Discord message context menu command to save images directly from messages into an "Added from Discord" bucket.</li>
+          <li>Added an "Add to Bucket" Discord message context menu command to save images directly from messages into an "Inbox" bucket.</li>
           <li>Added the ability to rename image buckets.</li>
         </LegalList>
 

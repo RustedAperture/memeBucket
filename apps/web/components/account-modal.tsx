@@ -20,6 +20,7 @@ export function AccountModal() {
   const [newUsername, setNewUsername] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   async function handleLogout() {
     try {
@@ -46,6 +47,51 @@ export function AccountModal() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+
+        // Simple validation
+        if (!parsed || !Array.isArray(parsed.buckets)) {
+          throw new Error("Invalid backup file format. Expected a list of buckets.");
+        }
+
+        const res = await apiPost<any, { success: boolean; bucketsCreated: number; imagesCreated: number }>(
+          "/api/account/import",
+          parsed
+        );
+
+        if (res.success) {
+          toast.success(
+            `Import successful! Created ${res.bucketsCreated} buckets and ${res.imagesCreated} images.`
+          );
+          setOpen(false);
+          window.location.reload();
+        } else {
+          throw new Error("Import failed on the server.");
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to import data. Check file format.");
+      } finally {
+        setImporting(false);
+        e.target.value = "";
+      }
+    };
+    reader.onerror = () => {
+      toast.error("Failed to read file.");
+      setImporting(false);
+      e.target.value = "";
+    };
+    reader.readAsText(file);
   }
 
   return (
@@ -89,20 +135,36 @@ export function AccountModal() {
 
           <div className="space-y-4">
             <h3 className="text-sm font-medium text-muted-foreground">Account Actions</h3>
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="secondary" onClick={handleLogout} size="sm">
+            <div className="flex gap-2 flex-wrap items-center">
+              <Button variant="secondary" onClick={handleLogout} size="sm" disabled={importing}>
                 Log out
               </Button>
-              <Button variant="secondary" size="sm" render={<a href="/api/account/export" />}>
+              <Button variant="secondary" size="sm" disabled={importing} render={<a href="/api/account/export" />}>
                 Export data
               </Button>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={() => document.getElementById("import-file-input")?.click()}
+                disabled={importing}
+              >
+                {importing ? "Importing..." : "Import data"}
+              </Button>
+              <input
+                id="import-file-input"
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={handleImportFile}
+                disabled={importing}
+              />
             </div>
           </div>
 
           <div className="space-y-4 border-t pt-4">
             <h3 className="text-sm font-medium text-destructive">Danger Zone</h3>
             <div>
-              <Button variant="destructive" size="sm">Delete account</Button>
+              <Button variant="destructive" size="sm" disabled={importing}>Delete account</Button>
             </div>
           </div>
         </div>

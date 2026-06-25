@@ -10,7 +10,9 @@ use tower_governor::{
 
 use crate::{
     api::{
-        account::{delete_account, export_account, get_profile, logout, update_username},
+        account::{
+            delete_account, export_account, get_profile, import_account, logout, update_username,
+        },
         buckets::{create_bucket, delete_bucket, list_buckets, rename_bucket},
         gifs::search_gifs,
         images::{create_image, delete_image, list_images, search_images, update_image},
@@ -58,7 +60,12 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
         )
         .route(
             "/api/buckets/{bucket_id}/images/bulk",
-            axum::routing::patch(crate::api::images::bulk_update_images),
+            axum::routing::patch(crate::api::images::bulk_update_images)
+                .delete(crate::api::images::bulk_delete_images),
+        )
+        .route(
+            "/api/buckets/{bucket_id}/images/bulk/move",
+            post(crate::api::images::bulk_move_images),
         )
         .route(
             "/api/buckets/{bucket_id}/images/{image_id}",
@@ -106,6 +113,7 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
             delete(crate::api::buckets::remove_whitelist_user),
         )
         .route("/api/account/export", get(export_account))
+        .route("/api/account/import", post(import_account))
         .route("/api/account", get(get_profile).delete(delete_account))
         .route(
             "/api/account/username",

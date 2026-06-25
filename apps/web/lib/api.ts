@@ -70,14 +70,16 @@ export async function apiPatch<TRequest, TResponse>(path: string, body: TRequest
   return response.json() as Promise<TResponse>;
 }
 
-export async function apiDelete<TResponse>(path: string): Promise<TResponse> {
+export async function apiDelete<TResponse>(path: string, body?: any): Promise<TResponse> {
   const response = await fetch(path, {
     method: "DELETE",
     credentials: "include",
     headers: { 
       accept: "application/json",
+      ...(body ? { "content-type": "application/json" } : {}),
       "X-CSRF-Token": getCsrfToken(),
     },
+    body: body ? JSON.stringify(body) : undefined,
   });
 
   if (response.status === 401) {

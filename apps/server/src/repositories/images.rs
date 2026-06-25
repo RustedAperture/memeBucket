@@ -664,6 +664,84 @@ impl ImageRepository {
         Ok(valid_image_ids.len())
     }
 
+    pub async fn delete_bulk(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        image_ids: &[Uuid],
+    ) -> Result<usize, sqlx::Error> {
+        if image_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let mut tx = self.pool.begin().await?;
+        let mut deleted_count = 0;
+        for &image_id in image_ids {
+            let result = sqlx::query(
+                "DELETE FROM images WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
+            )
+            .bind(owner_user_id.to_string())
+            .bind(bucket_id.to_string())
+            .bind(image_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+
+            deleted_count += result.rows_affected() as usize;
+        }
+
+        tx.commit().await?;
+        Ok(deleted_count)
+    }
+
+    pub async fn move_bulk(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        image_ids: &[Uuid],
+        new_bucket_id: Uuid,
+    ) -> Result<usize, sqlx::Error> {
+        if image_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let mut tx = self.pool.begin().await?;
+
+        // First verify that the destination bucket exists and belongs to the user
+        let bucket_exists = sqlx::query_scalar::<_, i64>(
+            "SELECT 1 FROM buckets WHERE id = ? AND owner_user_id = ?",
+        )
+        .bind(new_bucket_id.to_string())
+        .bind(owner_user_id.to_string())
+        .fetch_optional(&mut *tx)
+        .await?
+        .is_some();
+
+        if !bucket_exists {
+            tx.rollback().await?;
+            return Ok(0);
+        }
+
+        let mut moved_count = 0;
+        for &image_id in image_ids {
+            let result = sqlx::query(
+                "UPDATE images
+                 SET bucket_id = ?
+                 WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
+            )
+            .bind(new_bucket_id.to_string())
+            .bind(owner_user_id.to_string())
+            .bind(bucket_id.to_string())
+            .bind(image_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+
+            moved_count += result.rows_affected() as usize;
+        }
+
+        tx.commit().await?;
+        Ok(moved_count)
+    }
+
     pub async fn move_to_bucket(
         &self,
         owner_user_id: Uuid,

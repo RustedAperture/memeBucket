@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.1.6 - Jun 25, 2026
+
+### Added
+
+- Added bulk editing features to the bucket view, including **Bulk Delete** and **Bulk Move** with efficient transactional backend endpoints.
+- Added **Bulk Add Links** allowing users to paste multiple image/video URLs at once with a step-by-step progress UI and error recovery (pre-filling with only failed URLs for easy retries).
+- Added batch actions to **Select All** and **Copy Links** for all selected items.
+- Added **Import Data** functionality in the Account Settings menu, allowing users to upload their exported backup JSON files to easily restore or duplicate their buckets and media with all metadata and tags fully preserved.
+- Added client-side format validation and server-side duplicate prevention to ensure seamless imports.
+
+### Changed
+
+- Rebranded the Discord system bucket from `"Added from Discord"` to `"Inbox"`, including a database migration to automatically migrate existing records.
+- Removed redundant drag count badges from selected cards for a cleaner visual aesthetic.
+
+### Fixed
+
+- Fixed the "Export Data" functionality which was failing due to outdated database table references (`pools`) from the rebranding.
+- Updated the export data payload to include all newly added image metadata fields (title, favorite, random weight, tags, notes, and created_at).
+
 ## v0.1.5 - Jun 23, 2026
 
 ### Added
@@ -52,13 +72,13 @@
 - Renamed the global saved-media search surface to Library to distinguish it from searching Klipy for new GIFs.
 - Expanded access checks and tests for library search across owned, subscribed, public, private, and whitelisted buckets.
 - Refactored bucket view and search pages to share a unified responsive layout.
-- System buckets (like Favorites or Added from Discord) are now automatically hidden when empty.
+- System buckets (like Favorites or Inbox) are now automatically hidden when empty.
 
 ## v0.1.2 - Jun 11, 2026
 
 ### Added
 
-- Added an "Add to Bucket" Discord message context menu command to save images directly from messages into an "Added from Discord" bucket.
+- Added an "Add to Bucket" Discord message context menu command to save images directly from messages into an "Inbox" bucket.
 - Added the ability to rename image buckets.
 
 ### Changed

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api";
-import { ExternalLink, Info, Loader2, Tags, Trash2, Check, Download, Video, CheckSquare, Image as ImageIcon, Copy, Star, Edit2, X, HelpCircle, Ban } from "lucide-react";
+import { ExternalLink, Info, Loader2, Tags, Trash2, Check, Download, Video, CheckSquare, Image as ImageIcon, Copy, Star, Edit2, X, HelpCircle, Ban, FolderInput } from "lucide-react";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +60,11 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<ImageItem | null>(null);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [bulkMoveDialogOpen, setBulkMoveDialogOpen] = useState(false);
+  const [bulkMoveBucketId, setBulkMoveBucketId] = useState("");
+  const [isBulkMoving, setIsBulkMoving] = useState(false);
   const [editingMetadata, setEditingMetadata] = useState(false);
   const [titleValue, setTitleValue] = useState("");
   const [favoriteValue, setFavoriteValue] = useState(false);
@@ -287,6 +292,67 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
     }
   }
 
+  function handleSelectAll() {
+    setSelectedImageIds(new Set(images.map((img) => img.id)));
+  }
+
+  async function handleCopySelectedLinks() {
+    const selectedUrls = images
+      .filter((img) => selectedImageIds.has(img.id))
+      .map((img) => img.url)
+      .join("\n");
+    if (!selectedUrls) return;
+    try {
+      await navigator.clipboard.writeText(selectedUrls);
+      toast.success(`Copied ${selectedImageIds.size} link(s) to clipboard`);
+    } catch {
+      toast.error("Failed to copy links");
+    }
+  }
+
+  async function handleBulkDeleteConfirm() {
+    setIsBulkDeleting(true);
+    const imageIds = Array.from(selectedImageIds);
+    try {
+      await apiDelete(`/api/buckets/${bucketId}/images/bulk`, { imageIds });
+      setImages((prev) => prev.filter((img) => !selectedImageIds.has(img.id)));
+      setSelectedImageIds(new Set());
+      setBulkDeleteConfirmOpen(false);
+      toast.success(`Successfully deleted ${imageIds.length} images`);
+      if (onImageUpdated) onImageUpdated();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete images");
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  }
+
+  async function handleBulkMoveConfirm() {
+    if (!bulkMoveBucketId) return;
+    setIsBulkMoving(true);
+    const imageIds = Array.from(selectedImageIds);
+    try {
+      await apiPost(`/api/buckets/${bucketId}/images/bulk/move`, {
+        imageIds,
+        newBucketId: bulkMoveBucketId,
+      });
+      setImages((prev) => prev.filter((img) => !selectedImageIds.has(img.id)));
+      setSelectedImageIds(new Set());
+      setBulkMoveDialogOpen(false);
+      setBulkMoveBucketId("");
+      toast.success(`Successfully moved ${imageIds.length} images`);
+      if (onMoveImage) {
+        onMoveImage();
+      } else {
+        await load();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to move images");
+    } finally {
+      setIsBulkMoving(false);
+    }
+  }
+
   if (images.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-8 text-center animate-in fade-in-50">
@@ -307,22 +373,67 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
             <span className="font-medium">
               {selectedImageIds.size} image{selectedImageIds.size === 1 ? "" : "s"} selected
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
-                className="h-7 px-2"
+                className="h-7 px-2 gap-1.5"
+                onClick={handleSelectAll}
+              >
+                <CheckSquare className="h-3.5 w-3.5" />
+                Select All
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-7 px-2 gap-1.5"
+                onClick={handleCopySelectedLinks}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy Links
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-7 px-2 gap-1.5"
                 onClick={() => setBulkDialogOpen(true)}
               >
                 <Tags className="h-3.5 w-3.5" />
-                Edit
+                Edit Tags
+              </Button>
+              {buckets.filter((p) => p.id !== bucketId && !p.is_subscribed && !p.is_read_only).length > 0 && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 px-2 gap-1.5"
+                  onClick={() => {
+                    setBulkMoveBucketId("");
+                    setBulkMoveDialogOpen(true);
+                  }}
+                >
+                  <FolderInput className="h-3.5 w-3.5" />
+                  Move
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="h-7 px-2 gap-1.5"
+                onClick={() => setBulkDeleteConfirmOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2"
+                className="h-7 px-2 gap-1.5"
                 onClick={() => setSelectedImageIds(new Set())}
               >
                 <X className="h-3.5 w-3.5" />
@@ -752,6 +863,82 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Delete Alert Dialog */}
+      <AlertDialog open={bulkDeleteConfirmOpen} onOpenChange={setBulkDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the {selectedImageIds.size} selected images from this bucket. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDeleteConfirm}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={isBulkDeleting}
+            >
+              {isBulkDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Move Dialog */}
+      <Dialog open={bulkMoveDialogOpen} onOpenChange={setBulkMoveDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Move {selectedImageIds.size} Images</DialogTitle>
+            <DialogDescription>
+              Select the destination bucket for the selected images.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-2">
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Destination Bucket</p>
+              <Select
+                value={bulkMoveBucketId}
+                onValueChange={(value) => setBulkMoveBucketId(value || "")}
+              >
+                <SelectTrigger className="w-full h-9 text-sm bg-background">
+                  <SelectValue placeholder="Select a bucket..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>Buckets</SelectLabel>
+                    {buckets
+                      .filter((p) => p.id !== bucketId && !p.is_subscribed && !p.is_read_only)
+                      .map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkMoveDialogOpen(false)}
+              disabled={isBulkMoving}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkMoveConfirm}
+              disabled={isBulkMoving || !bulkMoveBucketId}
+            >
+              {isBulkMoving ? "Moving..." : "Move Images"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -1003,12 +1190,6 @@ function ImageCard({
       >
         <Star className="h-4 w-4" fill={image.favorite ? "currentColor" : "none"} />
       </button>
-
-      {!readonly && dragCount > 1 ? (
-        <div className="absolute bottom-2 right-2 z-20 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
-          {dragCount}
-        </div>
-      ) : null}
     </div>
   );
 }

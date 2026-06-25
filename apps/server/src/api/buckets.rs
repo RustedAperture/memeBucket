@@ -59,7 +59,7 @@ pub async fn list_buckets(
     for bucket in owned {
         let mut br = BucketResponse::from(bucket);
         br.is_subscribed = false;
-        br.is_read_only = br.name == "Added from Discord";
+        br.is_read_only = br.name == "Inbox";
 
         if br.is_read_only && br.image_count == 0 {
             continue;
@@ -70,7 +70,7 @@ pub async fn list_buckets(
     for bucket in subscribed {
         let mut br = BucketResponse::from(bucket);
         br.is_subscribed = true;
-        br.is_read_only = br.name == "Added from Discord";
+        br.is_read_only = br.name == "Inbox";
 
         if br.is_read_only && br.image_count == 0 {
             continue;

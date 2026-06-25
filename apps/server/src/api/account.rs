@@ -50,6 +50,20 @@ pub async fn export_account(
     Ok(Json(service.export_user_data(user.user_id).await?))
 }
 
+pub async fn import_account(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Json(request): Json<crate::services::account::ExportedUserData>,
+) -> Result<Json<serde_json::Value>, crate::error::AppError> {
+    let service = AccountService::new(state.pool);
+    let (buckets_created, images_created) = service.import_user_data(user.user_id, request).await?;
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "bucketsCreated": buckets_created,
+        "imagesCreated": images_created,
+    })))
+}
+
 pub async fn delete_account(
     State(state): State<AppState>,
     user: AuthenticatedUser,

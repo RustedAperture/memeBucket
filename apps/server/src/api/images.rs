@@ -75,6 +75,20 @@ pub struct BulkUpdateImagesRequest {
 }
 
 #[derive(Deserialize)]
+pub struct BulkDeleteImagesRequest {
+    #[serde(rename = "imageIds")]
+    pub image_ids: Vec<Uuid>,
+}
+
+#[derive(Deserialize)]
+pub struct BulkMoveImagesRequest {
+    #[serde(rename = "imageIds")]
+    pub image_ids: Vec<Uuid>,
+    #[serde(rename = "newBucketId")]
+    pub new_bucket_id: Uuid,
+}
+
+#[derive(Deserialize)]
 pub struct SearchImagesQuery {
     pub q: Option<String>,
     #[serde(rename = "bucketId")]
@@ -295,6 +309,61 @@ pub async fn bulk_update_images(
     }
 
     Ok(Json(serde_json::json!({ "updated": updated })))
+}
+
+pub async fn bulk_delete_images(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Path(bucket_id): Path<Uuid>,
+    Json(request): Json<BulkDeleteImagesRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if request.image_ids.is_empty() {
+        return Err(AppError::BadRequest("imageIds is required".to_string()));
+    }
+    if request.image_ids.len() > 100 {
+        return Err(AppError::BadRequest(
+            "imageIds must include 100 images or fewer".to_string(),
+        ));
+    }
+
+    let repo = ImageRepository::new(state.pool);
+    let deleted = repo
+        .delete_bulk(user.user_id, bucket_id, &request.image_ids)
+        .await?;
+
+    Ok(Json(serde_json::json!({ "deleted": deleted })))
+}
+
+pub async fn bulk_move_images(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Path(bucket_id): Path<Uuid>,
+    Json(request): Json<BulkMoveImagesRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if request.image_ids.is_empty() {
+        return Err(AppError::BadRequest("imageIds is required".to_string()));
+    }
+    if request.image_ids.len() > 100 {
+        return Err(AppError::BadRequest(
+            "imageIds must include 100 images or fewer".to_string(),
+        ));
+    }
+
+    let repo = ImageRepository::new(state.pool);
+    let moved = repo
+        .move_bulk(
+            user.user_id,
+            bucket_id,
+            &request.image_ids,
+            request.new_bucket_id,
+        )
+        .await?;
+
+    if moved == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    Ok(Json(serde_json::json!({ "moved": moved })))
 }
 
 pub async fn move_image(

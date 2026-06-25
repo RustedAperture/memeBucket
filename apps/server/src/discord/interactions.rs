@@ -922,7 +922,7 @@ async fn handle_add_to_bucket_message_command(
     }
 
     let buckets = BucketRepository::new(state.pool.clone());
-    let bucket_name = "Added from Discord";
+    let bucket_name = "Inbox";
 
     let bucket = match buckets.create(user_id, bucket_name).await {
         Ok(bucket) => bucket,

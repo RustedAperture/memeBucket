@@ -1,16 +1,16 @@
-use sqlx::SqlitePool;
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
 use crate::repositories::{
     buckets::{BucketRepo, BucketRepository},
     cached::{CachedBucketRepository, CachedImageRepository},
     images::{ImageRepo, ImageRepository},
     send_history::{SendHistoryRepo, SendHistoryRepository},
     users::{UserRepo, UserRepository},
+};
+use sqlx::SqlitePool;
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 #[derive(Clone)]
@@ -40,8 +40,12 @@ pub struct AppState {
 impl AppState {
     pub fn new(pool: SqlitePool) -> Self {
         let user_repo = Arc::new(UserRepository::new(pool.clone()));
-        let bucket_repo = Arc::new(CachedBucketRepository::new(BucketRepository::new(pool.clone())));
-        let image_repo = Arc::new(CachedImageRepository::new(ImageRepository::new(pool.clone())));
+        let bucket_repo = Arc::new(CachedBucketRepository::new(BucketRepository::new(
+            pool.clone(),
+        )));
+        let image_repo = Arc::new(CachedImageRepository::new(ImageRepository::new(
+            pool.clone(),
+        )));
         let send_history_repo = Arc::new(SendHistoryRepository::new(pool.clone()));
 
         Self {

@@ -1,12 +1,11 @@
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
-use validator::Validate;
 use crate::{
-    api::ValidatedJson,
-    app_state::AppState, auth::sessions::AuthenticatedUser,
+    api::ValidatedJson, app_state::AppState, auth::sessions::AuthenticatedUser,
     services::account::AccountService,
 };
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 #[derive(Serialize)]
 pub struct UserProfileResponse {
@@ -18,13 +17,20 @@ pub struct UserProfileResponse {
 
 #[derive(Deserialize, Validate)]
 pub struct UpdateUsernameRequest {
-    #[validate(length(min = 3, max = 32, message = "Username must be between 3 and 32 characters"))]
+    #[validate(length(
+        min = 3,
+        max = 32,
+        message = "Username must be between 3 and 32 characters"
+    ))]
     #[validate(custom(function = validate_username))]
     pub username: String,
 }
 
 fn validate_username(username: &str) -> Result<(), validator::ValidationError> {
-    if !username.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+    if !username
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
         let mut err = validator::ValidationError::new("invalid_username");
         err.message = Some("Username can only contain letters, numbers, and underscores".into());
         return Err(err);

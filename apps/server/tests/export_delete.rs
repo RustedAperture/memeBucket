@@ -1,7 +1,7 @@
 use memebucket_server::{
     repositories::{
-        BucketRepo, ImageRepo, UserRepo,
-        buckets::BucketRepository, images::ImageRepository, users::UserRepository,
+        BucketRepo, ImageRepo, UserRepo, buckets::BucketRepository, images::ImageRepository,
+        users::UserRepository,
     },
     services::account::AccountService,
 };

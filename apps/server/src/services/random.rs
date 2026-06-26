@@ -1,12 +1,12 @@
 use rand::Rng;
 use uuid::Uuid;
 
-use std::sync::Arc;
 use crate::repositories::{
     buckets::{BucketRepo, StoredBucket},
     images::{ImageRepo, StoredImage},
     send_history::SendHistoryRepo,
 };
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RandomVisibility {

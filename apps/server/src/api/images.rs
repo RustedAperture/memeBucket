@@ -6,7 +6,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use validator::Validate;
 use crate::{
     api::ValidatedJson,
     app_state::AppState,
@@ -15,12 +14,13 @@ use crate::{
     repositories::{
         SendHistoryRepo,
         images::{
-            BulkImageMetadataPatch, StoredImage, UpdateImageMetadataPatch, ImageSearchFilters,
+            BulkImageMetadataPatch, ImageSearchFilters, StoredImage, UpdateImageMetadataPatch,
         },
         send_history::SendHistoryRepository,
     },
     services::images::resolve_image_url,
 };
+use validator::Validate;
 
 #[derive(Deserialize, Validate)]
 pub struct CreateImageRequest {
@@ -170,7 +170,8 @@ pub async fn search_images(
         .iter()
         .map(|result| result.image.id)
         .collect::<Vec<_>>();
-    let send_counts = state.send_history_repo
+    let send_counts = state
+        .send_history_repo
         .count_for_images(user.user_id, &image_ids)
         .await?;
 

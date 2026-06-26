@@ -1,6 +1,6 @@
 use axum::{
-    extract::{FromRequest, Request},
     Json,
+    extract::{FromRequest, Request},
 };
 use serde::de::DeserializeOwned;
 use validator::Validate;
@@ -17,16 +17,22 @@ where
     type Rejection = AppError;
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        let Json(value) = Json::<T>::from_request(req, state).await.map_err(|e| {
-            AppError::BadRequest(e.to_string())
-        })?;
+        let Json(value) = Json::<T>::from_request(req, state)
+            .await
+            .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
         value.validate().map_err(|e| {
-            let errors = e.field_errors()
+            let errors = e
+                .field_errors()
                 .values()
                 .map(|errs| {
                     errs.iter()
-                        .map(|err| err.message.as_ref().map(|m| m.as_ref()).unwrap_or("invalid value"))
+                        .map(|err| {
+                            err.message
+                                .as_ref()
+                                .map(|m| m.as_ref())
+                                .unwrap_or("invalid value")
+                        })
                         .collect::<Vec<_>>()
                         .join(", ")
                 })

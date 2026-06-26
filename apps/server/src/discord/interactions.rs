@@ -474,15 +474,14 @@ async fn dispatch_autocomplete(state: &AppState, payload: &InteractionPayload) -
     } else {
         BucketAutocompleteContext::single(focused_value)
     };
-    let mut buckets = state.bucket_repo
+    let mut buckets = state
+        .bucket_repo
         .list_for_user(user.id)
         .await
         .unwrap_or_default();
 
     if data.name == "mb"
-        && let Ok(subscribed) = state.bucket_repo
-            .list_subscribed_for_user(user.id)
-            .await
+        && let Ok(subscribed) = state.bucket_repo.list_subscribed_for_user(user.id).await
     {
         buckets.extend(subscribed);
     }
@@ -674,10 +673,7 @@ async fn handle_bucket_create(
         return ephemeral_message("Bucket name cannot be blank.");
     };
 
-    match state.bucket_repo
-        .create(user_id, name)
-        .await
-    {
+    match state.bucket_repo.create(user_id, name).await {
         Ok(bucket) => ephemeral_message(&format!("Created bucket \"{}\".", bucket.name)),
         Err(sqlx::Error::RowNotFound) => {
             ephemeral_message("You already have a bucket with that name.")
@@ -731,10 +727,7 @@ async fn handle_bucket_add(
 }
 
 async fn handle_bucket_list(state: &AppState, user_id: Uuid) -> Value {
-    match state.bucket_repo
-        .list_for_user(user_id)
-        .await
-    {
+    match state.bucket_repo.list_for_user(user_id).await {
         Ok(buckets) if buckets.is_empty() => ephemeral_message("You have no buckets yet."),
         Ok(buckets) => {
             let content = format!(
@@ -792,7 +785,8 @@ async fn resolve_user(
         .or(discord_user.username.as_deref());
 
     let discord_user_key = DiscordUserKey::derive(secret.as_bytes(), &discord_user.id);
-    let stored_user = state.user_repo
+    let stored_user = state
+        .user_repo
         .upsert_by_discord_key(discord_user_key.as_hex(), display_name, None)
         .await
         .map_err(|_| DiscordAuthError::Storage)?;
@@ -1131,7 +1125,8 @@ async fn handle_reply_with_gif_submit(
             embed_message(&content, &selection.url, false, target_color)
         }
         Err(error) => {
-            let user_buckets = state.bucket_repo
+            let user_buckets = state
+                .bucket_repo
                 .list_bucket_names_for_user(user_id)
                 .await
                 .unwrap_or_default();

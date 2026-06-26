@@ -1,14 +1,13 @@
-use std::sync::Arc;
 use memebucket_server::repositories::{
-    BucketRepo, ImageRepo, SendHistoryRepo, UserRepo,
-    buckets::BucketRepository, images::ImageRepository, send_history::SendHistoryRepository,
-    users::UserRepository,
+    BucketRepo, ImageRepo, SendHistoryRepo, UserRepo, buckets::BucketRepository,
+    images::ImageRepository, send_history::SendHistoryRepository, users::UserRepository,
 };
 use memebucket_server::services::{
     images::validate_http_url,
     random::{RandomError, RandomService, RandomVisibility},
 };
 use sqlx::{Row, SqlitePool};
+use std::sync::Arc;
 
 async fn test_pool() -> SqlitePool {
     let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
@@ -23,7 +22,11 @@ async fn random_lookup_matches_bucket_case_insensitively() {
     let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
-    let service = RandomService::new(Arc::new(pools.clone()), Arc::new(images.clone()), Arc::new(history));
+    let service = RandomService::new(
+        Arc::new(pools.clone()),
+        Arc::new(images.clone()),
+        Arc::new(history),
+    );
     let user = users
         .upsert_by_discord_key("user-key", None, None)
         .await
@@ -62,7 +65,11 @@ async fn random_lookup_combines_images_from_multiple_pools() {
     let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
-    let service = RandomService::new(Arc::new(pools.clone()), Arc::new(images.clone()), Arc::new(history));
+    let service = RandomService::new(
+        Arc::new(pools.clone()),
+        Arc::new(images.clone()),
+        Arc::new(history),
+    );
     let user = users
         .upsert_by_discord_key("multi-pool-user-key", None, None)
         .await
@@ -102,7 +109,11 @@ async fn random_excludes_zero_weight_images() {
     let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
-    let service = RandomService::new(Arc::new(pools.clone()), Arc::new(images.clone()), Arc::new(history));
+    let service = RandomService::new(
+        Arc::new(pools.clone()),
+        Arc::new(images.clone()),
+        Arc::new(history),
+    );
     let user = users
         .upsert_by_discord_key("zero-weight-user", None, None)
         .await
@@ -149,7 +160,11 @@ async fn random_avoids_recent_image_when_alternative_exists() {
     let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
-    let service = RandomService::new(Arc::new(pools.clone()), Arc::new(images.clone()), Arc::new(history.clone()));
+    let service = RandomService::new(
+        Arc::new(pools.clone()),
+        Arc::new(images.clone()),
+        Arc::new(history.clone()),
+    );
     let user = users
         .upsert_by_discord_key("recent-user", None, None)
         .await
@@ -183,7 +198,11 @@ async fn random_returns_only_image_from_single_image_pool() {
     let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
-    let service = RandomService::new(Arc::new(pools.clone()), Arc::new(images.clone()), Arc::new(history.clone()));
+    let service = RandomService::new(
+        Arc::new(pools.clone()),
+        Arc::new(images.clone()),
+        Arc::new(history.clone()),
+    );
     let user = users
         .upsert_by_discord_key("single-image-user", None, None)
         .await
@@ -213,7 +232,11 @@ async fn all_zero_weight_images_return_random_enabled_error() {
     let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
-    let service = RandomService::new(Arc::new(pools.clone()), Arc::new(images.clone()), Arc::new(history));
+    let service = RandomService::new(
+        Arc::new(pools.clone()),
+        Arc::new(images.clone()),
+        Arc::new(history),
+    );
     let user = users
         .upsert_by_discord_key("all-zero-random-user", None, None)
         .await
@@ -355,7 +378,11 @@ async fn subscribed_pool_random_selection_records_requesting_user_history() {
     let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
-    let service = RandomService::new(Arc::new(pools.clone()), Arc::new(images.clone()), Arc::new(history));
+    let service = RandomService::new(
+        Arc::new(pools.clone()),
+        Arc::new(images.clone()),
+        Arc::new(history),
+    );
     let owner = users
         .upsert_by_discord_key("owner-subscribed-history", None, None)
         .await

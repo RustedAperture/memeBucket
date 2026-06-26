@@ -20,11 +20,7 @@ pub struct StoredBucket {
 
 #[async_trait::async_trait]
 pub trait BucketRepo: Send + Sync {
-    async fn create(
-        &self,
-        owner_user_id: Uuid,
-        name: &str,
-    ) -> Result<StoredBucket, sqlx::Error>;
+    async fn create(&self, owner_user_id: Uuid, name: &str) -> Result<StoredBucket, sqlx::Error>;
 
     async fn rename_bucket(
         &self,
@@ -33,21 +29,11 @@ pub trait BucketRepo: Send + Sync {
         new_name: &str,
     ) -> Result<bool, sqlx::Error>;
 
-    async fn list_for_user(
-        &self,
-        user_id: Uuid,
-    ) -> Result<Vec<StoredBucket>, sqlx::Error>;
+    async fn list_for_user(&self, user_id: Uuid) -> Result<Vec<StoredBucket>, sqlx::Error>;
 
-    async fn list_bucket_names_for_user(
-        &self,
-        user_id: Uuid,
-    ) -> Result<Vec<String>, sqlx::Error>;
+    async fn list_bucket_names_for_user(&self, user_id: Uuid) -> Result<Vec<String>, sqlx::Error>;
 
-    async fn delete_for_user(
-        &self,
-        user_id: Uuid,
-        bucket_id: Uuid,
-    ) -> Result<bool, sqlx::Error>;
+    async fn delete_for_user(&self, user_id: Uuid, bucket_id: Uuid) -> Result<bool, sqlx::Error>;
 
     async fn find_by_name_folded(
         &self,
@@ -134,11 +120,7 @@ impl BucketRepository {
 
 #[async_trait::async_trait]
 impl BucketRepo for BucketRepository {
-    async fn create(
-        &self,
-        owner_user_id: Uuid,
-        name: &str,
-    ) -> Result<StoredBucket, sqlx::Error> {
+    async fn create(&self, owner_user_id: Uuid, name: &str) -> Result<StoredBucket, sqlx::Error> {
         let id = Uuid::new_v4();
         let trimmed_name = name.trim();
         let name_folded = trimmed_name.to_lowercase();
@@ -192,10 +174,7 @@ impl BucketRepo for BucketRepository {
         Ok(result.rows_affected() == 1)
     }
 
-    async fn list_for_user(
-        &self,
-        owner_user_id: Uuid,
-    ) -> Result<Vec<StoredBucket>, sqlx::Error> {
+    async fn list_for_user(&self, owner_user_id: Uuid) -> Result<Vec<StoredBucket>, sqlx::Error> {
         let rows = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool, i64)>(
             "SELECT p.id, p.owner_user_id, p.name, p.share_token, 
                (SELECT COUNT(*) FROM bucket_subscriptions s WHERE s.bucket_id = p.id) as subscriber_count,
@@ -239,10 +218,7 @@ impl BucketRepo for BucketRepository {
             .collect()
     }
 
-    async fn list_bucket_names_for_user(
-        &self,
-        user_id: Uuid,
-    ) -> Result<Vec<String>, sqlx::Error> {
+    async fn list_bucket_names_for_user(&self, user_id: Uuid) -> Result<Vec<String>, sqlx::Error> {
         let rows = sqlx::query_as::<_, (String,)>(
             "SELECT name FROM (
                   SELECT name FROM buckets WHERE owner_user_id = ?
@@ -425,10 +401,7 @@ impl BucketRepo for BucketRepository {
         .transpose()
     }
 
-    async fn get_by_share_token(
-        &self,
-        token: &str,
-    ) -> Result<Option<StoredBucket>, sqlx::Error> {
+    async fn get_by_share_token(&self, token: &str) -> Result<Option<StoredBucket>, sqlx::Error> {
         let row = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool, i64)>(
             "SELECT p.id, p.owner_user_id, p.name, p.share_token,
                (SELECT COUNT(*) FROM bucket_subscriptions s WHERE s.bucket_id = p.id) as subscriber_count,

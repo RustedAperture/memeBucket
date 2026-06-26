@@ -5,15 +5,11 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use validator::Validate;
 use crate::{
-    api::ValidatedJson,
-    app_state::AppState,
-    auth::middleware::OptionalUser,
-    auth::sessions::AuthenticatedUser,
-    error::AppError,
-    repositories::buckets::StoredBucket,
+    api::ValidatedJson, app_state::AppState, auth::middleware::OptionalUser,
+    auth::sessions::AuthenticatedUser, error::AppError, repositories::buckets::StoredBucket,
 };
+use validator::Validate;
 
 #[derive(Deserialize, Validate)]
 pub struct CreateBucketRequest {
@@ -35,7 +31,6 @@ fn validate_bucket_name(name: &str) -> Result<(), validator::ValidationError> {
     }
     Ok(())
 }
-
 
 #[derive(Serialize)]
 pub struct BucketResponse {
@@ -108,11 +103,7 @@ pub async fn create_bucket(
     user: AuthenticatedUser,
     ValidatedJson(request): ValidatedJson<CreateBucketRequest>,
 ) -> Result<Json<BucketResponse>, AppError> {
-
-    let bucket = match state.bucket_repo
-        .create(user.user_id, &request.name)
-        .await
-    {
+    let bucket = match state.bucket_repo.create(user.user_id, &request.name).await {
         Ok(bucket) => bucket,
         Err(sqlx::Error::RowNotFound) => {
             return Err(AppError::BadRequest("bucket already exists".to_string()));
@@ -138,7 +129,8 @@ pub async fn delete_bucket(
     user: AuthenticatedUser,
     Path(bucket_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let deleted = state.bucket_repo
+    let deleted = state
+        .bucket_repo
         .delete_for_user(user.user_id, bucket_id)
         .await?;
 
@@ -157,8 +149,8 @@ pub async fn rename_bucket(
     Path(bucket_id): Path<Uuid>,
     ValidatedJson(request): ValidatedJson<RenameBucketRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-
-    match state.bucket_repo
+    match state
+        .bucket_repo
         .rename_bucket(bucket_id, user.user_id, &request.name)
         .await
     {
@@ -188,7 +180,8 @@ pub async fn share_bucket(
         .map(char::from)
         .collect();
 
-    let updated = state.bucket_repo
+    let updated = state
+        .bucket_repo
         .set_share_token(bucket_id, user.user_id, Some(&token))
         .await?;
 
@@ -204,7 +197,8 @@ pub async fn unshare_bucket(
     user: AuthenticatedUser,
     Path(bucket_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let updated = state.bucket_repo
+    let updated = state
+        .bucket_repo
         .set_share_token(bucket_id, user.user_id, None)
         .await?;
 
@@ -319,15 +313,23 @@ pub async fn set_whitelist_enabled(
 
 #[derive(Deserialize, Validate)]
 pub struct AddWhitelistUserRequest {
-    #[validate(length(min = 3, max = 32, message = "username must be between 3 and 32 characters"))]
+    #[validate(length(
+        min = 3,
+        max = 32,
+        message = "username must be between 3 and 32 characters"
+    ))]
     #[validate(custom(function = validate_username))]
     pub username: String,
 }
 
 fn validate_username(username: &str) -> Result<(), validator::ValidationError> {
-    if !username.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+    if !username
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
         let mut err = validator::ValidationError::new("invalid_username");
-        err.message = Some("username can only contain alphanumeric characters and underscores".into());
+        err.message =
+            Some("username can only contain alphanumeric characters and underscores".into());
         return Err(err);
     }
     Ok(())

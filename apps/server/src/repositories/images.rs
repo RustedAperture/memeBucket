@@ -90,6 +90,7 @@ pub trait ImageRepo: Send + Sync {
         url: &str,
     ) -> Result<StoredImage, sqlx::Error>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn create_with_metadata(
         &self,
         owner_user_id: Uuid,
@@ -135,6 +136,7 @@ pub trait ImageRepo: Send + Sync {
         notes: Option<&str>,
     ) -> Result<bool, sqlx::Error>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn update_metadata(
         &self,
         owner_user_id: Uuid,

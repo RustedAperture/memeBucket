@@ -5,8 +5,25 @@ export default function ChangelogPage() {
     <LegalPage
       title="Changelog"
       description="Notable changes to memeBucket."
-      updated="Jun 25, 2026"
+      updated="Jun 26, 2026"
     >
+      <LegalSection title="v0.1.7 - Jun 26, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added a dedicated, thread-safe in-memory caching layer using <code>moka</code> in the backend to cache read-heavy database lookups (bucket lists, names, subscriptions, whitelists, and image lists) with precise write-time invalidation hooks.</li>
+          <li>Added declarative request payload validation at the API boundary using the <code>validator</code> crate and a custom Axum extractor <code>ValidatedJson</code>.</li>
+          <li>Added non-blocking asynchronous external process execution in <code>video_converter.rs</code> utilizing <code>tokio::process::Command</code> to prevent blocking worker threads during <code>ffmpeg</code> conversions.</li>
+          <li>Added a <code>delete</code> method to the <code>UserRepo</code> trait and shifted the complex bulk database import/export transaction logic entirely to the repository layer, rendering the service layer fully decoupled and database-agnostic.</li>
+          <li>Migrated the global frontend session and authentication state from React Context to a <code>zustand</code> store, optimizing component re-renders.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Changed</h3>
+        <LegalList>
+          <li>Refactored server startup to bind and run the HTTP listener first, scheduling Discord command registration asynchronously in a background task.</li>
+          <li>Refactored <code>AccountService</code> to consume repository traits via Dependency Injection instead of holding a concrete <code>SqlitePool</code> and executing raw SQL queries.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.1.6 - Jun 25, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

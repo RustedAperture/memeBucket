@@ -6,7 +6,10 @@ use http_body_util::BodyExt;
 use memebucket_server::{
     app_state::AppState,
     auth::sessions::AuthenticatedUser,
-    repositories::{buckets::BucketRepository, images::ImageRepository, users::UserRepository},
+    repositories::{
+        BucketRepo, ImageRepo, UserRepo,
+        buckets::BucketRepository, images::ImageRepository, users::UserRepository,
+    },
     router::build_router_for_tests,
 };
 use sqlx::SqlitePool;

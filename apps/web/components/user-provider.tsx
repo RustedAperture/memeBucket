@@ -1,54 +1,54 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { useEffect } from "react";
+import { create } from "zustand";
 import { User } from "@/lib/types";
-import { apiGet } from "@/lib/api";
 
-type UserContextType = {
+interface UserState {
   user: User | null;
   loading: boolean;
+  loadUser: () => Promise<void>;
   refreshUser: () => Promise<void>;
-};
+  setUser: (user: User | null) => void;
+}
 
-const UserContext = createContext<UserContextType>({
+export const useUserStore = create<UserState>((set, get) => ({
   user: null,
   loading: true,
-  refreshUser: async () => {},
-});
-
-export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  async function loadUser() {
-    setLoading(true);
+  setUser: (user) => set({ user }),
+  loadUser: async () => {
+    set({ loading: true });
     try {
       const res = await fetch("/api/account", { headers: { accept: "application/json" } });
       if (!res.ok) {
-        setUser(null);
+        set({ user: null, loading: false });
         return;
       }
       const data = await res.json();
-      setUser(data);
+      set({ user: data, loading: false });
     } catch (err) {
-      // Not logged in or error
-      setUser(null);
-    } finally {
-      setLoading(false);
+      set({ user: null, loading: false });
     }
-  }
+  },
+  refreshUser: async () => {
+    await get().loadUser();
+  },
+}));
+
+export function UserProvider({ children }: { children: React.ReactNode }) {
+  const loadUser = useUserStore((state) => state.loadUser);
 
   useEffect(() => {
     void loadUser();
-  }, []);
+  }, [loadUser]);
 
-  return (
-    <UserContext.Provider value={{ user, loading, refreshUser: loadUser }}>
-      {children}
-    </UserContext.Provider>
-  );
+  return <>{children}</>;
 }
 
 export function useUser() {
-  return useContext(UserContext);
+  const user = useUserStore((state) => state.user);
+  const loading = useUserStore((state) => state.loading);
+  const refreshUser = useUserStore((state) => state.refreshUser);
+
+  return { user, loading, refreshUser };
 }

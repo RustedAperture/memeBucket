@@ -28,9 +28,13 @@ async fn main() -> anyhow::Result<()> {
         .expect("database migration failed");
     tracing::info!("Database migrations complete.");
 
-    // Register Discord slash commands if credentials are configured
+    // Register Discord slash commands asynchronously in the background if credentials are configured
     if !config.discord_application_id.is_empty() && !config.discord_bot_token.is_empty() {
-        register_discord_commands(&config.discord_application_id, &config.discord_bot_token).await;
+        let app_id = config.discord_application_id.clone();
+        let bot_token = config.discord_bot_token.clone();
+        tokio::spawn(async move {
+            register_discord_commands(&app_id, &bot_token).await;
+        });
     }
 
     let app = build_router(

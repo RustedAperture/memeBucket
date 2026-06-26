@@ -1,6 +1,6 @@
 [package]
 name = "memebucket-server"
-version = "0.1.6"
+version = "0.1.7"
 edition.workspace = true
 license.workspace = true
 
@@ -16,12 +16,14 @@ hex.workspace = true
 hmac.workspace = true
 ipnet = "2.12.0"
 rand.workspace = true
+moka.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
+validator.workspace = true
 tokio.workspace = true
 tempfile.workspace = true
 tower.workspace = true

@@ -13,10 +13,6 @@ use crate::{
     app_state::AppState,
     discord::signatures::verify_interaction_signature,
     domain::user_key::DiscordUserKey,
-    repositories::{
-        buckets::BucketRepository, images::ImageRepository, send_history::SendHistoryRepository,
-        users::UserRepository,
-    },
     services::{
         images::resolve_image_url,
         random::{RandomService, RandomVisibility},
@@ -478,13 +474,13 @@ async fn dispatch_autocomplete(state: &AppState, payload: &InteractionPayload) -
     } else {
         BucketAutocompleteContext::single(focused_value)
     };
-    let mut buckets = BucketRepository::new(state.pool.clone())
+    let mut buckets = state.bucket_repo
         .list_for_user(user.id)
         .await
         .unwrap_or_default();
 
     if data.name == "mb"
-        && let Ok(subscribed) = BucketRepository::new(state.pool.clone())
+        && let Ok(subscribed) = state.bucket_repo
             .list_subscribed_for_user(user.id)
             .await
     {
@@ -612,9 +608,9 @@ async fn handle_random_command(state: &AppState, user_id: Uuid, data: &Interacti
         .unwrap_or(false);
 
     let service = RandomService::new(
-        BucketRepository::new(state.pool.clone()),
-        ImageRepository::new(state.pool.clone()),
-        SendHistoryRepository::new(state.pool.clone()),
+        state.bucket_repo.clone(),
+        state.image_repo.clone(),
+        state.send_history_repo.clone(),
     );
     let bucket_name_refs = bucket_names.iter().map(String::as_str).collect::<Vec<_>>();
 
@@ -678,7 +674,7 @@ async fn handle_bucket_create(
         return ephemeral_message("Bucket name cannot be blank.");
     };
 
-    match BucketRepository::new(state.pool.clone())
+    match state.bucket_repo
         .create(user_id, name)
         .await
     {
@@ -718,8 +714,8 @@ async fn handle_bucket_add(
         Err(err) => return ephemeral_message(err.user_message()),
     };
 
-    let buckets = BucketRepository::new(state.pool.clone());
-    let images = ImageRepository::new(state.pool.clone());
+    let buckets = state.bucket_repo.clone();
+    let images = state.image_repo.clone();
     let Some(bucket) = (match buckets.find_by_name_folded(user_id, bucket_name).await {
         Ok(bucket) => bucket,
         Err(_) => return ephemeral_message("I hit a storage error while finding bucket."),
@@ -735,7 +731,7 @@ async fn handle_bucket_add(
 }
 
 async fn handle_bucket_list(state: &AppState, user_id: Uuid) -> Value {
-    match BucketRepository::new(state.pool.clone())
+    match state.bucket_repo
         .list_for_user(user_id)
         .await
     {
@@ -796,7 +792,7 @@ async fn resolve_user(
         .or(discord_user.username.as_deref());
 
     let discord_user_key = DiscordUserKey::derive(secret.as_bytes(), &discord_user.id);
-    let stored_user = UserRepository::new(state.pool.clone())
+    let stored_user = state.user_repo
         .upsert_by_discord_key(discord_user_key.as_hex(), display_name, None)
         .await
         .map_err(|_| DiscordAuthError::Storage)?;
@@ -921,7 +917,7 @@ async fn handle_add_to_bucket_message_command(
         }
     }
 
-    let buckets = BucketRepository::new(state.pool.clone());
+    let buckets = state.bucket_repo.clone();
     let bucket_name = "Inbox";
 
     let bucket = match buckets.create(user_id, bucket_name).await {
@@ -935,7 +931,7 @@ async fn handle_add_to_bucket_message_command(
         Err(_) => return ephemeral_message("I hit a storage error while creating the bucket."),
     };
 
-    let images = ImageRepository::new(state.pool.clone());
+    let images = state.image_repo.clone();
     match images.create(user_id, bucket.id, &resolved_url).await {
         Ok(_) => ephemeral_message(&format!("Added image to \"{}\".", bucket.name)),
         Err(_) => ephemeral_message("I hit a storage error while saving the image."),
@@ -1120,9 +1116,9 @@ async fn handle_reply_with_gif_submit(
     }
 
     let service = RandomService::new(
-        BucketRepository::new(state.pool.clone()),
-        ImageRepository::new(state.pool.clone()),
-        SendHistoryRepository::new(state.pool.clone()),
+        state.bucket_repo.clone(),
+        state.image_repo.clone(),
+        state.send_history_repo.clone(),
     );
     let bucket_name_refs = bucket_names.iter().map(String::as_str).collect::<Vec<_>>();
 
@@ -1135,7 +1131,7 @@ async fn handle_reply_with_gif_submit(
             embed_message(&content, &selection.url, false, target_color)
         }
         Err(error) => {
-            let user_buckets = BucketRepository::new(state.pool.clone())
+            let user_buckets = state.bucket_repo
                 .list_bucket_names_for_user(user_id)
                 .await
                 .unwrap_or_default();

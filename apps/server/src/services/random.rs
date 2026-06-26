@@ -1,10 +1,11 @@
 use rand::Rng;
 use uuid::Uuid;
 
+use std::sync::Arc;
 use crate::repositories::{
-    buckets::{BucketRepository, StoredBucket},
-    images::{ImageRepository, StoredImage},
-    send_history::SendHistoryRepository,
+    buckets::{BucketRepo, StoredBucket},
+    images::{ImageRepo, StoredImage},
+    send_history::SendHistoryRepo,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -57,9 +58,9 @@ impl RandomError {
 
 #[derive(Clone)]
 pub struct RandomService {
-    buckets: BucketRepository,
-    images: ImageRepository,
-    history: SendHistoryRepository,
+    buckets: Arc<dyn BucketRepo>,
+    images: Arc<dyn ImageRepo>,
+    history: Arc<dyn SendHistoryRepo>,
 }
 
 #[derive(Clone, Debug)]
@@ -71,9 +72,9 @@ struct WeightedChoice {
 
 impl RandomService {
     pub fn new(
-        buckets: BucketRepository,
-        images: ImageRepository,
-        history: SendHistoryRepository,
+        buckets: Arc<dyn BucketRepo>,
+        images: Arc<dyn ImageRepo>,
+        history: Arc<dyn SendHistoryRepo>,
     ) -> Self {
         Self {
             buckets,

@@ -1,5 +1,8 @@
 use memebucket_server::{
-    repositories::{buckets::BucketRepository, images::ImageRepository, users::UserRepository},
+    repositories::{
+        BucketRepo, ImageRepo, UserRepo,
+        buckets::BucketRepository, images::ImageRepository, users::UserRepository,
+    },
     services::account::AccountService,
 };
 use sqlx::SqlitePool;
@@ -13,10 +16,10 @@ async fn test_pool() -> SqlitePool {
 #[tokio::test]
 async fn test_export_import_and_delete_account() {
     let pool = test_pool().await;
-    let users = UserRepository::new(pool.clone());
-    let buckets = BucketRepository::new(pool.clone());
-    let images_repo = ImageRepository::new(pool.clone());
-    let account_service = AccountService::new(pool.clone());
+    let users = std::sync::Arc::new(UserRepository::new(pool.clone()));
+    let buckets = std::sync::Arc::new(BucketRepository::new(pool.clone()));
+    let images_repo = std::sync::Arc::new(ImageRepository::new(pool.clone()));
+    let account_service = AccountService::new(users.clone(), buckets.clone(), images_repo.clone());
 
     // 1. Create user, bucket, and image with full metadata
     let user = users

@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.1.7 - Jun 26, 2026
+
+### Added
+
+- Added a dedicated, thread-safe in-memory caching layer using `moka` in the backend to cache read-heavy database lookups (bucket lists, names, subscriptions, whitelists, and image lists) with precise write-time invalidation hooks.
+- Added declarative request payload validation at the API boundary using the `validator` crate and a custom Axum extractor `ValidatedJson`.
+- Added non-blocking asynchronous external process execution in `video_converter.rs` utilizing `tokio::process::Command` to prevent blocking worker threads during `ffmpeg` conversions.
+- Added a `delete` method to the `UserRepo` trait and shifted the complex bulk database import/export transaction logic entirely to the repository layer, rendering the service layer fully decoupled and database-agnostic.
+- Migrated the global frontend session and authentication state from React Context to a `zustand` store, optimizing component re-renders.
+
+### Changed
+
+- Refactored server startup to bind and run the HTTP listener first, scheduling Discord command registration asynchronously in a background task.
+- Refactored `AccountService` to consume repository traits via Dependency Injection instead of holding a concrete `SqlitePool` and executing raw SQL queries.
+
 ## v0.1.6 - Jun 25, 2026
 
 ### Added

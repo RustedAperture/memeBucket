@@ -18,12 +18,123 @@ pub struct StoredBucket {
     pub image_count: i64,
 }
 
+#[async_trait::async_trait]
+pub trait BucketRepo: Send + Sync {
+    async fn create(
+        &self,
+        owner_user_id: Uuid,
+        name: &str,
+    ) -> Result<StoredBucket, sqlx::Error>;
+
+    async fn rename_bucket(
+        &self,
+        bucket_id: Uuid,
+        owner_user_id: Uuid,
+        new_name: &str,
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn list_for_user(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<StoredBucket>, sqlx::Error>;
+
+    async fn list_bucket_names_for_user(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<String>, sqlx::Error>;
+
+    async fn delete_for_user(
+        &self,
+        user_id: Uuid,
+        bucket_id: Uuid,
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn find_by_name_folded(
+        &self,
+        owner_user_id: Uuid,
+        name: &str,
+    ) -> Result<Option<StoredBucket>, sqlx::Error>;
+
+    async fn find_accessible_by_name_folded(
+        &self,
+        requester_user_id: Uuid,
+        name: &str,
+    ) -> Result<Option<StoredBucket>, sqlx::Error>;
+
+    async fn get_by_id(&self, bucket_id: Uuid) -> Result<Option<StoredBucket>, sqlx::Error>;
+
+    async fn get_by_share_token(
+        &self,
+        share_token: &str,
+    ) -> Result<Option<StoredBucket>, sqlx::Error>;
+
+    async fn set_share_token(
+        &self,
+        bucket_id: Uuid,
+        owner_user_id: Uuid,
+        token: Option<&str>,
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn subscribe_user_to_bucket(
+        &self,
+        user_id: Uuid,
+        bucket_id: Uuid,
+    ) -> Result<(), sqlx::Error>;
+
+    async fn unsubscribe_user_from_bucket(
+        &self,
+        user_id: Uuid,
+        bucket_id: Uuid,
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn list_subscribed_for_user(
+        &self,
+        subscriber_user_id: Uuid,
+    ) -> Result<Vec<StoredBucket>, sqlx::Error>;
+
+    async fn set_whitelist_enabled(
+        &self,
+        bucket_id: Uuid,
+        owner_user_id: Uuid,
+        enabled: bool,
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn add_whitelist_user(
+        &self,
+        bucket_id: Uuid,
+        owner_user_id: Uuid,
+        username: &str,
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn remove_whitelist_user(
+        &self,
+        bucket_id: Uuid,
+        owner_user_id: Uuid,
+        username: &str,
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn list_whitelist_users(
+        &self,
+        bucket_id: Uuid,
+        owner_user_id: Uuid,
+    ) -> Result<Option<Vec<String>>, sqlx::Error>;
+
+    async fn is_user_whitelisted(
+        &self,
+        bucket_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<bool, sqlx::Error>;
+}
+
 impl BucketRepository {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
+}
 
-    pub async fn create(
+#[async_trait::async_trait]
+impl BucketRepo for BucketRepository {
+    async fn create(
         &self,
         owner_user_id: Uuid,
         name: &str,
@@ -59,7 +170,7 @@ impl BucketRepository {
         })
     }
 
-    pub async fn rename_bucket(
+    async fn rename_bucket(
         &self,
         bucket_id: Uuid,
         owner_user_id: Uuid,
@@ -81,7 +192,7 @@ impl BucketRepository {
         Ok(result.rows_affected() == 1)
     }
 
-    pub async fn list_for_user(
+    async fn list_for_user(
         &self,
         owner_user_id: Uuid,
     ) -> Result<Vec<StoredBucket>, sqlx::Error> {
@@ -128,7 +239,7 @@ impl BucketRepository {
             .collect()
     }
 
-    pub async fn list_bucket_names_for_user(
+    async fn list_bucket_names_for_user(
         &self,
         user_id: Uuid,
     ) -> Result<Vec<String>, sqlx::Error> {
@@ -147,7 +258,7 @@ impl BucketRepository {
         Ok(rows.into_iter().map(|(name,)| name).collect())
     }
 
-    pub async fn delete_for_user(
+    async fn delete_for_user(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -161,7 +272,7 @@ impl BucketRepository {
         Ok(result.rows_affected() == 1)
     }
 
-    pub async fn find_by_name_folded(
+    async fn find_by_name_folded(
         &self,
         owner_user_id: Uuid,
         name: &str,
@@ -209,7 +320,7 @@ impl BucketRepository {
         .transpose()
     }
 
-    pub async fn find_accessible_by_name_folded(
+    async fn find_accessible_by_name_folded(
         &self,
         user_id: Uuid,
         name: &str,
@@ -272,7 +383,7 @@ impl BucketRepository {
         .transpose()
     }
 
-    pub async fn get_by_id(&self, bucket_id: Uuid) -> Result<Option<StoredBucket>, sqlx::Error> {
+    async fn get_by_id(&self, bucket_id: Uuid) -> Result<Option<StoredBucket>, sqlx::Error> {
         let row = sqlx::query_as::<_, (String, String, String, Option<String>, i64, Option<String>, bool, i64)>(
             "SELECT p.id, p.owner_user_id, p.name, p.share_token,
                (SELECT COUNT(*) FROM bucket_subscriptions s WHERE s.bucket_id = p.id) as subscriber_count,
@@ -314,7 +425,7 @@ impl BucketRepository {
         .transpose()
     }
 
-    pub async fn get_by_share_token(
+    async fn get_by_share_token(
         &self,
         token: &str,
     ) -> Result<Option<StoredBucket>, sqlx::Error> {
@@ -359,7 +470,7 @@ impl BucketRepository {
         .transpose()
     }
 
-    pub async fn set_share_token(
+    async fn set_share_token(
         &self,
         bucket_id: Uuid,
         owner_user_id: Uuid,
@@ -376,7 +487,7 @@ impl BucketRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    pub async fn subscribe_user_to_bucket(
+    async fn subscribe_user_to_bucket(
         &self,
         subscriber_user_id: Uuid,
         bucket_id: Uuid,
@@ -392,7 +503,7 @@ impl BucketRepository {
         Ok(())
     }
 
-    pub async fn unsubscribe_user_from_bucket(
+    async fn unsubscribe_user_from_bucket(
         &self,
         subscriber_user_id: Uuid,
         bucket_id: Uuid,
@@ -408,7 +519,7 @@ impl BucketRepository {
         Ok(result.rows_affected() == 1)
     }
 
-    pub async fn list_subscribed_for_user(
+    async fn list_subscribed_for_user(
         &self,
         subscriber_user_id: Uuid,
     ) -> Result<Vec<StoredBucket>, sqlx::Error> {
@@ -466,7 +577,7 @@ impl BucketRepository {
             .collect()
     }
 
-    pub async fn set_whitelist_enabled(
+    async fn set_whitelist_enabled(
         &self,
         bucket_id: Uuid,
         owner_user_id: Uuid,
@@ -484,7 +595,7 @@ impl BucketRepository {
         Ok(result.rows_affected() == 1)
     }
 
-    pub async fn add_whitelist_user(
+    async fn add_whitelist_user(
         &self,
         bucket_id: Uuid,
         owner_user_id: Uuid,
@@ -520,7 +631,7 @@ impl BucketRepository {
         Ok(true)
     }
 
-    pub async fn remove_whitelist_user(
+    async fn remove_whitelist_user(
         &self,
         bucket_id: Uuid,
         owner_user_id: Uuid,
@@ -557,7 +668,7 @@ impl BucketRepository {
         Ok(result.rows_affected() == 1)
     }
 
-    pub async fn list_whitelist_users(
+    async fn list_whitelist_users(
         &self,
         bucket_id: Uuid,
         owner_user_id: Uuid,
@@ -580,7 +691,7 @@ impl BucketRepository {
         Ok(Some(rows.into_iter().map(|r| r.0).collect()))
     }
 
-    pub async fn is_user_whitelisted(
+    async fn is_user_whitelisted(
         &self,
         bucket_id: Uuid,
         user_id: Uuid,

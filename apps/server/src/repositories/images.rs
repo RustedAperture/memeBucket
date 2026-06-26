@@ -81,12 +81,120 @@ type SearchImageRow = (
     Option<String>,
 );
 
+#[async_trait::async_trait]
+pub trait ImageRepo: Send + Sync {
+    async fn create(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        url: &str,
+    ) -> Result<StoredImage, sqlx::Error>;
+
+    async fn create_with_metadata(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        url: &str,
+        title: Option<&str>,
+        favorite: bool,
+        random_weight: i64,
+        tags: &[String],
+    ) -> Result<StoredImage, sqlx::Error>;
+
+    async fn list_for_bucket(
+        &self,
+        user_id: Uuid,
+        bucket_id: Uuid,
+    ) -> Result<Vec<StoredImage>, sqlx::Error>;
+
+    async fn search_for_user(
+        &self,
+        owner_user_id: Uuid,
+        filters: &ImageSearchFilters,
+    ) -> Result<Vec<StoredImageSearchResult>, sqlx::Error>;
+
+    async fn get_for_owner(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        image_id: Uuid,
+    ) -> Result<Option<StoredImage>, sqlx::Error>;
+
+    async fn delete_for_user(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        image_id: Uuid,
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn update_notes(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        image_id: Uuid,
+        notes: Option<&str>,
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn update_metadata(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        image_id: Uuid,
+        title: Option<&str>,
+        notes: Option<&str>,
+        favorite: bool,
+        random_weight: i64,
+        tags: &[String],
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn update_metadata_partial(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        image_id: Uuid,
+        patch: &UpdateImageMetadataPatch,
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn update_metadata_bulk(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        patch: &BulkImageMetadataPatch,
+    ) -> Result<usize, sqlx::Error>;
+
+    async fn delete_bulk(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        image_ids: &[Uuid],
+    ) -> Result<usize, sqlx::Error>;
+
+    async fn move_bulk(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        image_ids: &[Uuid],
+        new_bucket_id: Uuid,
+    ) -> Result<usize, sqlx::Error>;
+
+    async fn move_to_bucket(
+        &self,
+        owner_user_id: Uuid,
+        bucket_id: Uuid,
+        image_id: Uuid,
+        new_bucket_id: Uuid,
+    ) -> Result<bool, sqlx::Error>;
+}
+
 impl ImageRepository {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
+}
 
-    pub async fn create(
+#[async_trait::async_trait]
+impl ImageRepo for ImageRepository {
+    async fn create(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -97,7 +205,7 @@ impl ImageRepository {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn create_with_metadata(
+    async fn create_with_metadata(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -148,7 +256,7 @@ impl ImageRepository {
         Self::stored_image_from_row(row, normalized_tags)
     }
 
-    pub async fn list_for_bucket(
+    async fn list_for_bucket(
         &self,
         user_id: Uuid,
         bucket_id: Uuid,
@@ -211,7 +319,7 @@ impl ImageRepository {
             .collect()
     }
 
-    pub async fn search_for_user(
+    async fn search_for_user(
         &self,
         user_id: Uuid,
         filters: &ImageSearchFilters,
@@ -341,7 +449,7 @@ impl ImageRepository {
             .collect()
     }
 
-    pub async fn get_for_owner(
+    async fn get_for_owner(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -382,7 +490,7 @@ impl ImageRepository {
         )?))
     }
 
-    pub async fn delete_for_user(
+    async fn delete_for_user(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -399,7 +507,7 @@ impl ImageRepository {
         Ok(result.rows_affected() == 1)
     }
 
-    pub async fn update_notes(
+    async fn update_notes(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -420,7 +528,7 @@ impl ImageRepository {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn update_metadata(
+    async fn update_metadata(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -458,7 +566,7 @@ impl ImageRepository {
         Ok(true)
     }
 
-    pub async fn update_metadata_partial(
+    async fn update_metadata_partial(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -542,7 +650,7 @@ impl ImageRepository {
         Ok(true)
     }
 
-    pub async fn update_metadata_bulk(
+    async fn update_metadata_bulk(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -664,7 +772,7 @@ impl ImageRepository {
         Ok(valid_image_ids.len())
     }
 
-    pub async fn delete_bulk(
+    async fn delete_bulk(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -693,7 +801,7 @@ impl ImageRepository {
         Ok(deleted_count)
     }
 
-    pub async fn move_bulk(
+    async fn move_bulk(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -742,7 +850,7 @@ impl ImageRepository {
         Ok(moved_count)
     }
 
-    pub async fn move_to_bucket(
+    async fn move_to_bucket(
         &self,
         owner_user_id: Uuid,
         bucket_id: Uuid,
@@ -772,7 +880,9 @@ impl ImageRepository {
 
         Ok(result.rows_affected() == 1)
     }
+}
 
+impl ImageRepository {
     async fn replace_tags(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,

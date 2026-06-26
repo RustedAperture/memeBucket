@@ -9,12 +9,39 @@ pub struct SendHistoryRepository {
     pool: SqlitePool,
 }
 
+#[async_trait::async_trait]
+pub trait SendHistoryRepo: Send + Sync {
+    async fn record(
+        &self,
+        requester_user_id: Uuid,
+        bucket: &StoredBucket,
+        image: &StoredImage,
+        visibility: &str,
+    ) -> Result<(), sqlx::Error>;
+
+    async fn count_for_images(
+        &self,
+        requester_user_id: Uuid,
+        image_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, i64>, sqlx::Error>;
+
+    async fn recent_image_ids_for_buckets(
+        &self,
+        requester_user_id: Uuid,
+        bucket_ids: &[Uuid],
+        limit: usize,
+    ) -> Result<Vec<Uuid>, sqlx::Error>;
+}
+
 impl SendHistoryRepository {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
+}
 
-    pub async fn record(
+#[async_trait::async_trait]
+impl SendHistoryRepo for SendHistoryRepository {
+    async fn record(
         &self,
         requester_user_id: Uuid,
         bucket: &StoredBucket,
@@ -69,7 +96,7 @@ impl SendHistoryRepository {
         Ok(())
     }
 
-    pub async fn count_for_images(
+    async fn count_for_images(
         &self,
         requester_user_id: Uuid,
         image_ids: &[Uuid],
@@ -110,7 +137,7 @@ impl SendHistoryRepository {
         Ok(counts)
     }
 
-    pub async fn recent_image_ids_for_buckets(
+    async fn recent_image_ids_for_buckets(
         &self,
         requester_user_id: Uuid,
         bucket_ids: &[Uuid],

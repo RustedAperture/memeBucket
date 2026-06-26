@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use reqwest::multipart;
 use serde::Deserialize;
-use std::process::Command;
 use tempfile::NamedTempFile;
 use tokio::fs;
 use tracing::{error, info};
@@ -42,7 +41,7 @@ pub async fn convert_and_upload_mp4(url: &str, imgbb_api_key: &str) -> Result<St
     let temp_gif_path = temp_gif.path().to_path_buf();
 
     info!("Running FFmpeg to convert MP4 to GIF");
-    let output = Command::new("ffmpeg")
+    let output = tokio::process::Command::new("ffmpeg")
         .args([
             "-y",
             "-i",
@@ -56,6 +55,7 @@ pub async fn convert_and_upload_mp4(url: &str, imgbb_api_key: &str) -> Result<St
             temp_gif_path.to_str().unwrap(),
         ])
         .output()
+        .await
         .context("Failed to execute FFmpeg. Is it installed?")?;
 
     if !output.status.success() {

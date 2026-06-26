@@ -1,7 +1,9 @@
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 
+use validator::Validate;
 use crate::{
-    app_state::AppState, auth::sessions::AuthenticatedUser, repositories::users::UserRepository,
+    api::ValidatedJson,
+    app_state::AppState, auth::sessions::AuthenticatedUser,
     services::account::AccountService,
 };
 use serde::{Deserialize, Serialize};
@@ -14,9 +16,20 @@ pub struct UserProfileResponse {
     pub avatar_url: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct UpdateUsernameRequest {
+    #[validate(length(min = 3, max = 32, message = "Username must be between 3 and 32 characters"))]
+    #[validate(custom(function = validate_username))]
     pub username: String,
+}
+
+fn validate_username(username: &str) -> Result<(), validator::ValidationError> {
+    if !username.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        let mut err = validator::ValidationError::new("invalid_username");
+        err.message = Some("Username can only contain letters, numbers, and underscores".into());
+        return Err(err);
+    }
+    Ok(())
 }
 
 pub async fn logout(
@@ -46,7 +59,11 @@ pub async fn export_account(
     State(state): State<AppState>,
     user: AuthenticatedUser,
 ) -> Result<Json<crate::services::account::ExportedUserData>, crate::error::AppError> {
-    let service = AccountService::new(state.pool);
+    let service = AccountService::new(
+        state.user_repo.clone(),
+        state.bucket_repo.clone(),
+        state.image_repo.clone(),
+    );
     Ok(Json(service.export_user_data(user.user_id).await?))
 }
 
@@ -55,7 +72,11 @@ pub async fn import_account(
     user: AuthenticatedUser,
     Json(request): Json<crate::services::account::ExportedUserData>,
 ) -> Result<Json<serde_json::Value>, crate::error::AppError> {
-    let service = AccountService::new(state.pool);
+    let service = AccountService::new(
+        state.user_repo.clone(),
+        state.bucket_repo.clone(),
+        state.image_repo.clone(),
+    );
     let (buckets_created, images_created) = service.import_user_data(user.user_id, request).await?;
     Ok(Json(serde_json::json!({
         "success": true,
@@ -68,7 +89,11 @@ pub async fn delete_account(
     State(state): State<AppState>,
     user: AuthenticatedUser,
 ) -> Result<Json<serde_json::Value>, crate::error::AppError> {
-    let service = AccountService::new(state.pool);
+    let service = AccountService::new(
+        state.user_repo.clone(),
+        state.bucket_repo.clone(),
+        state.image_repo.clone(),
+    );
     service.delete_account(user.user_id).await?;
     Ok(Json(serde_json::json!({ "deleted": true })))
 }
@@ -77,7 +102,7 @@ pub async fn get_profile(
     State(state): State<AppState>,
     user: AuthenticatedUser,
 ) -> Result<Json<UserProfileResponse>, crate::error::AppError> {
-    let repo = UserRepository::new(state.pool.clone());
+    let repo = state.user_repo.clone();
     let stored = repo
         .get_by_id(user.user_id)
         .await?
@@ -94,28 +119,12 @@ pub async fn get_profile(
 pub async fn update_username(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Json(req): Json<UpdateUsernameRequest>,
+    ValidatedJson(req): ValidatedJson<UpdateUsernameRequest>,
 ) -> Result<Json<UserProfileResponse>, crate::error::AppError> {
-    let username = req.username.trim();
-    if username.is_empty() || username.len() < 3 || username.len() > 32 {
-        return Err(crate::error::AppError::BadRequest(
-            "Username must be between 3 and 32 characters".into(),
-        ));
-    }
-    // simple regex validation: alphanumeric and underscores only
-    if !username
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_')
-    {
-        return Err(crate::error::AppError::BadRequest(
-            "Username can only contain letters, numbers, and underscores".into(),
-        ));
-    }
-
-    let repo = UserRepository::new(state.pool.clone());
+    let repo = state.user_repo.clone();
 
     // SQLite UNIQUE constraint will catch duplicates, but we could return a nice error.
-    match repo.update_username(user.user_id, username).await {
+    match repo.update_username(user.user_id, &req.username).await {
         Ok(_) => (),
         Err(sqlx::Error::Database(err)) if err.is_unique_violation() => {
             return Err(crate::error::AppError::BadRequest(

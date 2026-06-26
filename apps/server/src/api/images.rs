@@ -6,25 +6,55 @@ use serde::{Deserialize, Deserializer, Serialize};
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use validator::Validate;
 use crate::{
+    api::ValidatedJson,
     app_state::AppState,
     auth::sessions::AuthenticatedUser,
     error::AppError,
     repositories::{
+        SendHistoryRepo,
         images::{
-            BulkImageMetadataPatch, ImageRepository, ImageSearchFilters, StoredImage,
-            UpdateImageMetadataPatch,
+            BulkImageMetadataPatch, StoredImage, UpdateImageMetadataPatch, ImageSearchFilters,
         },
         send_history::SendHistoryRepository,
     },
     services::images::resolve_image_url,
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct CreateImageRequest {
+    #[validate(url(message = "URL must be a valid HTTP or HTTPS URL"))]
     pub url: String,
+    #[validate(custom(function = validate_optional_title))]
     pub title: Option<String>,
+    #[validate(custom(function = validate_optional_tags))]
     pub tags: Option<Vec<String>>,
+}
+
+fn validate_optional_title(title: &str) -> Result<(), validator::ValidationError> {
+    if title.chars().count() > 200 {
+        let mut err = validator::ValidationError::new("title_too_long");
+        err.message = Some("title must be 200 characters or fewer".into());
+        return Err(err);
+    }
+    Ok(())
+}
+
+fn validate_optional_tags(tags: &Vec<String>) -> Result<(), validator::ValidationError> {
+    for tag in tags {
+        if tag.trim().is_empty() {
+            let mut err = validator::ValidationError::new("empty_tag");
+            err.message = Some("tags cannot contain empty or blank strings".into());
+            return Err(err);
+        }
+        if tag.chars().count() > 32 {
+            let mut err = validator::ValidationError::new("tag_too_long");
+            err.message = Some("tags must be 32 characters or fewer".into());
+            return Err(err);
+        }
+    }
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -114,7 +144,7 @@ pub async fn list_images(
     user: AuthenticatedUser,
     Path(bucket_id): Path<Uuid>,
 ) -> Result<Json<Vec<ImageResponse>>, AppError> {
-    let repo = ImageRepository::new(state.pool.clone());
+    let repo = state.image_repo.clone();
     let images = repo.list_for_bucket(user.user_id, bucket_id).await?;
     Ok(Json(
         build_image_responses(state.pool, Some(user.user_id), images).await?,
@@ -126,7 +156,7 @@ pub async fn search_images(
     user: AuthenticatedUser,
     Query(query): Query<SearchImagesQuery>,
 ) -> Result<Json<Vec<ImageSearchResponse>>, AppError> {
-    let repo = ImageRepository::new(state.pool.clone());
+    let repo = state.image_repo.clone();
     let filters = ImageSearchFilters {
         query: query.q,
         bucket_id: query.bucket_id,
@@ -140,7 +170,7 @@ pub async fn search_images(
         .iter()
         .map(|result| result.image.id)
         .collect::<Vec<_>>();
-    let send_counts = SendHistoryRepository::new(state.pool)
+    let send_counts = state.send_history_repo
         .count_for_images(user.user_id, &image_ids)
         .await?;
 
@@ -166,14 +196,10 @@ pub async fn create_image(
     State(state): State<AppState>,
     user: AuthenticatedUser,
     Path(bucket_id): Path<Uuid>,
-    Json(request): Json<CreateImageRequest>,
+    ValidatedJson(request): ValidatedJson<CreateImageRequest>,
 ) -> Result<Json<ImageResponse>, AppError> {
-    let url = request.url.trim();
-    if url.is_empty() {
-        return Err(AppError::BadRequest("url is required".to_string()));
-    }
     let title = validate_title(request.title)?;
-    let mut resolved_url = resolve_image_url(url)
+    let mut resolved_url = resolve_image_url(&request.url)
         .await
         .map_err(|err| AppError::BadRequest(err.user_message().to_string()))?;
 
@@ -194,7 +220,7 @@ pub async fn create_image(
             })?;
     }
 
-    let repo = ImageRepository::new(state.pool);
+    let repo = state.image_repo.clone();
     let image = repo
         .create_with_metadata(
             user.user_id,
@@ -214,7 +240,7 @@ pub async fn delete_image(
     user: AuthenticatedUser,
     Path((bucket_id, image_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let repo = ImageRepository::new(state.pool);
+    let repo = state.image_repo.clone();
     let deleted = repo
         .delete_for_user(user.user_id, bucket_id, image_id)
         .await?;
@@ -227,7 +253,7 @@ pub async fn update_image(
     Path((bucket_id, image_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<UpdateImageRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let repo = ImageRepository::new(state.pool.clone());
+    let repo = state.image_repo.clone();
     repo.get_for_owner(user.user_id, bucket_id, image_id)
         .await?
         .ok_or(AppError::NotFound)?;
@@ -289,7 +315,7 @@ pub async fn bulk_update_images(
         ));
     }
 
-    let repo = ImageRepository::new(state.pool);
+    let repo = state.image_repo.clone();
     let updated = repo
         .update_metadata_bulk(
             user.user_id,
@@ -326,7 +352,7 @@ pub async fn bulk_delete_images(
         ));
     }
 
-    let repo = ImageRepository::new(state.pool);
+    let repo = state.image_repo.clone();
     let deleted = repo
         .delete_bulk(user.user_id, bucket_id, &request.image_ids)
         .await?;
@@ -349,7 +375,7 @@ pub async fn bulk_move_images(
         ));
     }
 
-    let repo = ImageRepository::new(state.pool);
+    let repo = state.image_repo.clone();
     let moved = repo
         .move_bulk(
             user.user_id,
@@ -372,7 +398,7 @@ pub async fn move_image(
     Path((bucket_id, image_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<MoveImageRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let repo = ImageRepository::new(state.pool);
+    let repo = state.image_repo.clone();
     let updated = repo
         .move_to_bucket(user.user_id, bucket_id, image_id, request.new_bucket_id)
         .await?;

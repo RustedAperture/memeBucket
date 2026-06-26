@@ -11,7 +11,6 @@ use crate::{
     app_state::AppState,
     auth::sessions::{create_session, read_cookie, session_cookie},
     domain::user_key::DiscordUserKey,
-    repositories::users::UserRepository,
 };
 
 #[derive(Debug, Deserialize)]
@@ -147,7 +146,7 @@ async fn complete_oauth_flow(state: &AppState, code: &str) -> anyhow::Result<(Uu
         )
     });
 
-    let users = UserRepository::new(state.pool.clone());
+    let users = state.user_repo.clone();
     let stored_user = users
         .upsert_by_discord_key(
             user_key.as_hex(),

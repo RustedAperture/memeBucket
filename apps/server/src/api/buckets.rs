@@ -5,18 +5,37 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use validator::Validate;
 use crate::{
+    api::ValidatedJson,
     app_state::AppState,
     auth::middleware::OptionalUser,
     auth::sessions::AuthenticatedUser,
     error::AppError,
-    repositories::buckets::{BucketRepository, StoredBucket},
+    repositories::buckets::StoredBucket,
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct CreateBucketRequest {
+    #[validate(custom(function = validate_bucket_name))]
     pub name: String,
 }
+
+fn validate_bucket_name(name: &str) -> Result<(), validator::ValidationError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        let mut err = validator::ValidationError::new("required");
+        err.message = Some("bucket name is required".into());
+        return Err(err);
+    }
+    if trimmed.chars().count() > 50 {
+        let mut err = validator::ValidationError::new("too_long");
+        err.message = Some("bucket name must be between 1 and 50 characters".into());
+        return Err(err);
+    }
+    Ok(())
+}
+
 
 #[derive(Serialize)]
 pub struct BucketResponse {
@@ -51,7 +70,7 @@ pub async fn list_buckets(
     State(state): State<AppState>,
     user: AuthenticatedUser,
 ) -> Result<Json<Vec<BucketResponse>>, AppError> {
-    let repo = BucketRepository::new(state.pool);
+    let repo = state.bucket_repo.clone();
     let owned = repo.list_for_user(user.user_id).await?;
     let subscribed = repo.list_subscribed_for_user(user.user_id).await?;
 
@@ -87,13 +106,10 @@ pub async fn list_buckets(
 pub async fn create_bucket(
     State(state): State<AppState>,
     user: AuthenticatedUser,
-    Json(request): Json<CreateBucketRequest>,
+    ValidatedJson(request): ValidatedJson<CreateBucketRequest>,
 ) -> Result<Json<BucketResponse>, AppError> {
-    if request.name.trim().is_empty() {
-        return Err(AppError::BadRequest("bucket name is required".to_string()));
-    }
 
-    let bucket = match BucketRepository::new(state.pool)
+    let bucket = match state.bucket_repo
         .create(user.user_id, &request.name)
         .await
     {
@@ -122,15 +138,16 @@ pub async fn delete_bucket(
     user: AuthenticatedUser,
     Path(bucket_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let deleted = BucketRepository::new(state.pool)
+    let deleted = state.bucket_repo
         .delete_for_user(user.user_id, bucket_id)
         .await?;
 
     Ok(Json(serde_json::json!({ "deleted": deleted })))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct RenameBucketRequest {
+    #[validate(custom(function = validate_bucket_name))]
     pub name: String,
 }
 
@@ -138,13 +155,10 @@ pub async fn rename_bucket(
     State(state): State<AppState>,
     user: AuthenticatedUser,
     Path(bucket_id): Path<Uuid>,
-    Json(request): Json<RenameBucketRequest>,
+    ValidatedJson(request): ValidatedJson<RenameBucketRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    if request.name.trim().is_empty() {
-        return Err(AppError::BadRequest("bucket name is required".to_string()));
-    }
 
-    match BucketRepository::new(state.pool)
+    match state.bucket_repo
         .rename_bucket(bucket_id, user.user_id, &request.name)
         .await
     {
@@ -174,7 +188,7 @@ pub async fn share_bucket(
         .map(char::from)
         .collect();
 
-    let updated = BucketRepository::new(state.pool)
+    let updated = state.bucket_repo
         .set_share_token(bucket_id, user.user_id, Some(&token))
         .await?;
 
@@ -190,7 +204,7 @@ pub async fn unshare_bucket(
     user: AuthenticatedUser,
     Path(bucket_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let updated = BucketRepository::new(state.pool)
+    let updated = state.bucket_repo
         .set_share_token(bucket_id, user.user_id, None)
         .await?;
 
@@ -206,7 +220,7 @@ pub async fn subscribe_bucket(
     user: AuthenticatedUser,
     Path(token): Path<String>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let repo = BucketRepository::new(state.pool);
+    let repo = state.bucket_repo.clone();
     let bucket = repo
         .get_by_share_token(&token)
         .await?
@@ -229,7 +243,7 @@ pub async fn unsubscribe_bucket(
     user: AuthenticatedUser,
     Path(bucket_id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let repo = BucketRepository::new(state.pool);
+    let repo = state.bucket_repo.clone();
     let deleted = repo
         .unsubscribe_user_from_bucket(user.user_id, bucket_id)
         .await?;
@@ -249,7 +263,7 @@ pub async fn get_shared_bucket(
     OptionalUser(user): OptionalUser,
     Path(token): Path<String>,
 ) -> Result<Json<SharedBucketPreview>, AppError> {
-    let repo = BucketRepository::new(state.pool.clone());
+    let repo = state.bucket_repo.clone();
     let bucket = repo
         .get_by_share_token(&token)
         .await?
@@ -265,7 +279,7 @@ pub async fn get_shared_bucket(
         }
     }
 
-    let image_repo = crate::repositories::images::ImageRepository::new(state.pool.clone());
+    let image_repo = state.image_repo.clone();
     let images = image_repo
         .list_for_bucket(bucket.owner_user_id, bucket.id)
         .await?;
@@ -293,7 +307,7 @@ pub async fn set_whitelist_enabled(
     Path(bucket_id): Path<Uuid>,
     Json(req): Json<WhitelistEnabledRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let repo = BucketRepository::new(state.pool);
+    let repo = state.bucket_repo.clone();
     let updated = repo
         .set_whitelist_enabled(bucket_id, user.user_id, req.enabled)
         .await?;
@@ -303,18 +317,29 @@ pub async fn set_whitelist_enabled(
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct AddWhitelistUserRequest {
+    #[validate(length(min = 3, max = 32, message = "username must be between 3 and 32 characters"))]
+    #[validate(custom(function = validate_username))]
     pub username: String,
+}
+
+fn validate_username(username: &str) -> Result<(), validator::ValidationError> {
+    if !username.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        let mut err = validator::ValidationError::new("invalid_username");
+        err.message = Some("username can only contain alphanumeric characters and underscores".into());
+        return Err(err);
+    }
+    Ok(())
 }
 
 pub async fn add_whitelist_user(
     State(state): State<AppState>,
     user: AuthenticatedUser,
     Path(bucket_id): Path<Uuid>,
-    Json(req): Json<AddWhitelistUserRequest>,
+    ValidatedJson(req): ValidatedJson<AddWhitelistUserRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let repo = BucketRepository::new(state.pool);
+    let repo = state.bucket_repo.clone();
     let added = repo
         .add_whitelist_user(bucket_id, user.user_id, &req.username)
         .await?;
@@ -329,7 +354,7 @@ pub async fn remove_whitelist_user(
     user: AuthenticatedUser,
     Path((bucket_id, username)): Path<(Uuid, String)>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let repo = BucketRepository::new(state.pool);
+    let repo = state.bucket_repo.clone();
     let removed = repo
         .remove_whitelist_user(bucket_id, user.user_id, &username)
         .await?;
@@ -344,7 +369,7 @@ pub async fn list_whitelist_users(
     user: AuthenticatedUser,
     Path(bucket_id): Path<Uuid>,
 ) -> Result<Json<Vec<String>>, AppError> {
-    let repo = BucketRepository::new(state.pool);
+    let repo = state.bucket_repo.clone();
     let users = repo
         .list_whitelist_users(bucket_id, user.user_id)
         .await?

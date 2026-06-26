@@ -10,6 +10,7 @@ use memebucket_server::{
     app_state::AppState,
     auth::sessions::AuthenticatedUser,
     repositories::{
+        BucketRepo, ImageRepo, SendHistoryRepo, UserRepo,
         buckets::BucketRepository, images::ImageRepository, send_history::SendHistoryRepository,
         users::UserRepository,
     },

@@ -191,9 +191,14 @@ export default function DownloadPage() {
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground">
-          macOS users: right-click → Open on first launch if you see a security warning (app is not notarized).
-        </p>
+        <div className="rounded-lg border bg-card p-4 space-y-2">
+          <p className="text-sm font-medium">macOS: "app is damaged" warning</p>
+          <p className="text-sm text-muted-foreground">
+            macOS quarantines unsigned apps downloaded from the internet. If you see a "damaged" or "can't be opened" error, run this in Terminal:
+          </p>
+          <pre className="rounded-md bg-muted px-3 py-2 text-xs font-mono">xattr -cr "/Applications/memeBucket Picker.app"</pre>
+          <p className="text-xs text-muted-foreground">Then open the app normally.</p>
+        </div>
 
         {/* Getting started */}
         <div className="space-y-4">

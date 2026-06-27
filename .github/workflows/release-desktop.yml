@@ -31,7 +31,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ startsWith(matrix.os, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ startsWith(matrix.os, 'macos') && 'aarch64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -46,7 +46,13 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libappindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            libxdo-dev
+
+      - name: Generate icon.ico (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: magick apps/desktop/src-tauri/icons/icon.png -define icon:auto-resize=256,128,64,48,32,16 apps/desktop/src-tauri/icons/icon.ico
 
       - name: Build and release
         uses: tauri-apps/tauri-action@v0
@@ -69,3 +75,14 @@ jobs:
           prerelease: false
           projectPath: './apps/desktop'
           args: ${{ matrix.args }}
+
+  publish-release:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish draft release
+        run: gh release edit ${{ github.ref_name }} --draft=false --repo ${{ github.repository }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

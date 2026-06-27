@@ -39,7 +39,8 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libappindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            libxdo-dev
 
       # --- Rust Tests & SAST (Linters, Security Audit) ---
       - name: Check Rust formatting

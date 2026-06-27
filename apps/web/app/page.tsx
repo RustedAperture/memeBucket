@@ -1,10 +1,19 @@
+"use client";
+
+import { useEffect } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Coffee, GitFork, Search, Sparkles, Image as ImageIcon } from "lucide-react";
+import { Coffee, GitFork, Search, Sparkles, Image as ImageIcon, Download } from "lucide-react";
 import Link from "next/link";
 
 export default function HomePage() {
+  useEffect(() => {
+    const isTauri = typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+    if (isTauri) {
+      window.location.href = "/picker";
+    }
+  }, []);
   return (
     <AppShell>
       <div className="space-y-6">
@@ -93,6 +102,22 @@ export default function HomePage() {
               <CardContent>
                 <p className="text-sm text-muted-foreground">
                   Search GIFs and images already saved in your buckets.
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/download" className="block">
+            <Card className="h-full hover:bg-muted/50 transition-colors">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Download</CardTitle>
+                  <Download className="w-5 h-5 text-muted-foreground" />
+                </div>
+                <CardDescription>Get the desktop app</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Download the memeBucket Picker for macOS, Windows, or Linux.
                 </p>
               </CardContent>
             </Card>

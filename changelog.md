@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.1.8 - Jun 26, 2026
+
+### Added
+
+- Added the **memeBucket Picker** desktop app (Tauri): a lightweight overlay that lives in the macOS menu bar or Windows/Linux system tray and never occupies the dock or taskbar.
+- Added a global hotkey (`⌘ Shift M` / `Ctrl Shift M`) to summon and dismiss the Picker from any app.
+- Added a `/picker` web page powering the overlay: masonry image grid with live search, bucket filter, keyboard navigation (↑↓ for linear, ←→ for column-aware jumping), and Enter-to-paste.
+- Added a `/download` page that fetches the latest GitHub release via the API, auto-detects the visitor's OS, and shows a direct download button with file size alongside a Getting Started guide.
+- Added a Download card to the dashboard and a Download link to the navigation bar.
+- Added a GitHub Actions release workflow (`release-desktop.yml`) that builds and publishes signed-free binaries for macOS Apple Silicon, macOS Intel, Windows, and Linux on `desktop-v*` tag pushes.
+
+### Changed
+
+- Improved the Picker selection highlight to use a solid full-opacity ring with an offset gap for much higher contrast.
+- Removed the item count badge from the Picker header to reduce visual noise.
+
 ## v0.1.7 - Jun 26, 2026
 
 ### Added

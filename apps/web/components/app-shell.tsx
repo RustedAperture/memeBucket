@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutDashboard, FolderOpen, Search } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Search, Download } from "lucide-react";
 import { AccountModal } from "./account-modal";
 import { ThemeToggle } from "./theme-toggle";
 import { useUser } from "./user-provider";
@@ -28,6 +28,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Link href="/search" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
               <Search className="w-4 h-4" />
               <span className="hidden sm:inline">Library</span>
+            </Link>
+            <Link href="/download" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Download</span>
             </Link>
             {user && <AccountModal />}
           </nav>

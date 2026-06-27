@@ -1,0 +1,24 @@
+[[permission]]
+identifier = "allow-get-server-url"
+description = "Allows reading the saved server URL."
+commands.allow = ["get_server_url"]
+
+[[permission]]
+identifier = "allow-set-server-url"
+description = "Allows saving the server URL."
+commands.allow = ["set_server_url"]
+
+[[permission]]
+identifier = "allow-navigate-to"
+description = "Allows Rust-driven WebView navigation."
+commands.allow = ["navigate_to"]
+
+[[permission]]
+identifier = "allow-hide-window"
+description = "Allows hiding the picker window."
+commands.allow = ["hide_window"]
+
+[[permission]]
+identifier = "allow-copy-and-paste-link"
+description = "Allows copying a link and pasting it into the active window."
+commands.allow = ["copy_and_paste_link"]

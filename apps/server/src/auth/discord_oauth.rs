@@ -174,15 +174,26 @@ fn random_oauth_state() -> String {
         .collect()
 }
 
+fn is_cookie_secure() -> bool {
+    std::env::var("COOKIE_SECURE")
+        .map(|v| v.to_lowercase() != "false")
+        .unwrap_or(true)
+}
+
 fn oauth_state_cookie(value: &str) -> String {
+    let secure = if is_cookie_secure() { " Secure;" } else { "" };
     format!(
-        "oauth_state={value}; Path=/auth/discord/callback; HttpOnly; SameSite=Lax; Secure; Max-Age=600"
+        "oauth_state={value}; Path=/auth/discord/callback; HttpOnly; SameSite=Lax;{} Max-Age=600",
+        secure
     )
 }
 
 fn expired_oauth_state_cookie() -> String {
-    "oauth_state=; Path=/auth/discord/callback; HttpOnly; SameSite=Lax; Secure; Max-Age=0"
-        .to_string()
+    let secure = if is_cookie_secure() { " Secure;" } else { "" };
+    format!(
+        "oauth_state=; Path=/auth/discord/callback; HttpOnly; SameSite=Lax;{} Max-Age=0",
+        secure
+    )
 }
 
 fn valid_oauth_state(headers: &HeaderMap, state: Option<&str>) -> bool {

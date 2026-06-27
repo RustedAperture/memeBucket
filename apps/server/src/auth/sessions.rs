@@ -29,26 +29,39 @@ pub fn verify_csrf_token(session_secret: &str, token: &str, expected_hash: &str)
     mac.verify_slice(&expected_bytes).is_ok()
 }
 
+fn is_cookie_secure() -> bool {
+    std::env::var("COOKIE_SECURE")
+        .map(|v| v.to_lowercase() != "false")
+        .unwrap_or(true)
+}
+
 pub fn session_cookie(value: &str) -> String {
+    let secure = if is_cookie_secure() { " Secure;" } else { "" };
     format!(
-        "session={}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=2592000",
-        value
+        "session={}; Path=/; HttpOnly; SameSite=Lax;{} Max-Age=2592000",
+        value, secure
     )
 }
 
 pub fn csrf_cookie(value: &str) -> String {
+    let secure = if is_cookie_secure() { " Secure;" } else { "" };
     format!(
-        "csrf_token={}; Path=/; SameSite=Lax; Secure; Max-Age=2592000",
-        value
+        "csrf_token={}; Path=/; SameSite=Lax;{} Max-Age=2592000",
+        value, secure
     )
 }
 
 pub fn expired_session_cookie() -> String {
-    "session=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0".to_string()
+    let secure = if is_cookie_secure() { " Secure;" } else { "" };
+    format!(
+        "session=; Path=/; HttpOnly; SameSite=Lax;{} Max-Age=0",
+        secure
+    )
 }
 
 pub fn expired_csrf_cookie() -> String {
-    "csrf_token=; Path=/; SameSite=Lax; Secure; Max-Age=0".to_string()
+    let secure = if is_cookie_secure() { " Secure;" } else { "" };
+    format!("csrf_token=; Path=/; SameSite=Lax;{} Max-Age=0", secure)
 }
 
 pub async fn create_session(

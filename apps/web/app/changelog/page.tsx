@@ -7,6 +7,24 @@ export default function ChangelogPage() {
       description="Notable changes to memeBucket."
       updated="Jun 26, 2026"
     >
+      <LegalSection title="v0.1.8 - Jun 26, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added the <strong>memeBucket Picker</strong> desktop app (Tauri): a lightweight overlay that lives in the macOS menu bar or Windows/Linux system tray and never occupies the dock or taskbar.</li>
+          <li>Added a global hotkey (<kbd>⌘ Shift M</kbd> / <kbd>Ctrl Shift M</kbd>) to summon and dismiss the Picker from any app.</li>
+          <li>Added a <code>/picker</code> web page powering the overlay: masonry image grid with live search, bucket filter, keyboard navigation (↑↓ for linear, ←→ for column-aware jumping), and Enter-to-paste.</li>
+          <li>Added a <code>/download</code> page that fetches the latest GitHub release via the API, auto-detects the visitor's OS, and shows a direct download button with file size alongside a Getting Started guide.</li>
+          <li>Added a Download card to the dashboard and a Download link to the navigation bar.</li>
+          <li>Added a GitHub Actions release workflow that builds and publishes binaries for macOS Apple Silicon, macOS Intel, Windows, and Linux on <code>desktop-v*</code> tag pushes.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Changed</h3>
+        <LegalList>
+          <li>Improved the Picker selection highlight to use a solid full-opacity ring with an offset gap for much higher contrast.</li>
+          <li>Removed the item count badge from the Picker header to reduce visual noise.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.1.7 - Jun 26, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

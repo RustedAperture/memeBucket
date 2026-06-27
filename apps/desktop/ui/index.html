@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connect memeBucket</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <!-- Loading State (visible by default) -->
+      <div id="loading-state">
+        <h1>memeBucket</h1>
+        <p class="subtitle" id="loading-text">Connecting to memeBucket...</p>
+        <div class="spinner" style="margin: 20px auto 0; border-top-color: var(--primary-color);"></div>
+      </div>
+
+      <!-- Setup Container (hidden by default) -->
+      <div id="setup-container" class="hidden">
+        <div class="header">
+          <h1>memeBucket</h1>
+          <p class="subtitle">Desktop Mini-Picker Setup</p>
+        </div>
+
+        <form id="setup-form">
+          <div class="form-group">
+            <label for="server-url">Server URL</label>
+            <input 
+              type="text" 
+              id="server-url" 
+              placeholder="e.g. memebucket.yourdomain.com"
+              required
+              autocomplete="off"
+            >
+            <p class="help-text">Enter the URL of your self-hosted memeBucket instance.</p>
+          </div>
+
+          <button type="submit" id="submit-btn">
+            <span class="btn-text">Connect Instance</span>
+            <span class="spinner hidden"></span>
+          </button>
+        </form>
+      </div>
+
+      <div id="error-msg" class="error hidden"></div>
+    </div>
+  </div>
+
+  <script>
+    const loadingState = document.getElementById('loading-state');
+    const loadingText = document.getElementById('loading-text');
+    const setupContainer = document.getElementById('setup-container');
+    const form = document.getElementById('setup-form');
+    const input = document.getElementById('server-url');
+    const button = document.getElementById('submit-btn');
+    const spinner = button.querySelector('.spinner');
+    const btnText = button.querySelector('.btn-text');
+    const errorMsg = document.getElementById('error-msg');
+
+    // Wait for Tauri to be ready
+    function waitForTauri(callback, retries = 20) {
+      if (window.__TAURI__ && window.__TAURI__.core) {
+        callback();
+      } else if (retries > 0) {
+        setTimeout(() => waitForTauri(callback, retries - 1), 100);
+      } else {
+        // Fallback for browser testing
+        loadingState.classList.add('hidden');
+        setupContainer.classList.remove('hidden');
+      }
+    }
+
+    const showSetup = () => {
+      loadingState.classList.add('hidden');
+      setupContainer.classList.remove('hidden');
+      input.focus();
+    };
+
+    // Load saved server URL on startup
+    waitForTauri(async () => {
+      try {
+        const savedUrl = await window.__TAURI__.core.invoke('get_server_url');
+        if (savedUrl) {
+          loadingText.textContent = 'Redirecting to picker...';
+          let navigated = false;
+          window.addEventListener('beforeunload', () => { navigated = true; }, { once: true });
+          window.__TAURI__.core.invoke('navigate_to', { url: `${savedUrl}/picker` }).catch(() => {});
+          setTimeout(() => { if (!navigated) showSetup(); }, 5000);
+        } else {
+          showSetup();
+        }
+      } catch (e) {
+        showSetup();
+      }
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const url = input.value.trim();
+      if (!url) return;
+
+      // Show loading state
+      button.disabled = true;
+      spinner.classList.remove('hidden');
+      btnText.textContent = 'Connecting...';
+      errorMsg.classList.add('hidden');
+
+      const resetForm = (msg) => {
+        button.disabled = false;
+        spinner.classList.add('hidden');
+        btnText.textContent = 'Connect Instance';
+        errorMsg.textContent = msg;
+        errorMsg.classList.remove('hidden');
+      };
+
+      try {
+        if (window.__TAURI__ && window.__TAURI__.core) {
+          const normalizedUrl = await window.__TAURI__.core.invoke('set_server_url', { url: url });
+          // navigate_to starts navigation but doesn't wait for the page to load.
+          // If the server is unreachable, the WebView stays here with the spinner stuck.
+          // Reset the form after 5s if beforeunload (= successful navigation) hasn't fired.
+          let navigated = false;
+          window.addEventListener('beforeunload', () => { navigated = true; }, { once: true });
+          window.__TAURI__.core.invoke('navigate_to', { url: `${normalizedUrl}/picker` }).catch(() => {});
+          setTimeout(() => {
+            if (!navigated) resetForm('Could not reach the server. Check the URL and try again.');
+          }, 5000);
+        } else {
+          throw new Error('Tauri context not found. Are you running in the desktop app?');
+        }
+      } catch (err) {
+        resetForm(typeof err === 'string' ? err : err.message);
+      }
+    });
+  </script>
+</body>
+</html>

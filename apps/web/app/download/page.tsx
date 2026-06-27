@@ -7,7 +7,7 @@ import { Download, Apple, Monitor, Cpu } from "lucide-react";
 
 const REPO = "RustedAperture/memeBucket";
 
-type Platform = "mac-arm" | "mac-intel" | "windows" | "linux-appimage" | "linux-deb" | "unknown";
+type Platform = "mac-arm" | "windows" | "linux-appimage" | "linux-deb" | "unknown";
 
 interface Asset {
   name: string;
@@ -44,7 +44,6 @@ function detectPlatform(): Platform {
 function categorizeAssets(assets: Asset[]): Record<Platform, Asset | undefined> {
   return {
     "mac-arm": assets.find((a) => a.name.endsWith(".dmg") && a.name.includes("aarch64")),
-    "mac-intel": assets.find((a) => a.name.endsWith(".dmg") && (a.name.includes("x64") || a.name.includes("x86_64"))),
     "windows": assets.find((a) => a.name.endsWith(".msi")),
     "linux-appimage": assets.find((a) => a.name.endsWith(".AppImage")),
     "linux-deb": assets.find((a) => a.name.endsWith(".deb")),
@@ -82,7 +81,6 @@ export default function DownloadPage() {
 
   const platforms: { key: Platform; label: string; description: string; icon: React.ReactNode }[] = [
     { key: "mac-arm", label: "macOS (Apple Silicon)", description: "M1 and later", icon: <Apple className="w-5 h-5" /> },
-    { key: "mac-intel", label: "macOS (Intel)", description: "x86_64", icon: <Apple className="w-5 h-5" /> },
     { key: "windows", label: "Windows", description: ".msi installer", icon: <Monitor className="w-5 h-5" /> },
     { key: "linux-appimage", label: "Linux", description: "AppImage", icon: <Cpu className="w-5 h-5" /> },
     { key: "linux-deb", label: "Linux", description: ".deb package", icon: <Cpu className="w-5 h-5" /> },

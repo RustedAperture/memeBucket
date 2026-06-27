@@ -16,9 +16,6 @@ jobs:
           - os: macos-latest
             args: '--target aarch64-apple-darwin'
             label: 'mac-apple-silicon'
-          - os: macos-13
-            args: '--target x86_64-apple-darwin'
-            label: 'mac-intel'
           - os: ubuntu-22.04
             args: ''
             label: 'linux'
@@ -64,7 +61,6 @@ jobs:
             | Platform | File |
             |----------|------|
             | macOS (Apple Silicon) | `.dmg` ending in `aarch64` |
-            | macOS (Intel) | `.dmg` ending in `x86_64` |
             | Windows | `.msi` installer |
             | Linux | `.AppImage` or `.deb` |
 

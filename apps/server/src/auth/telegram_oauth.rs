@@ -10,7 +10,8 @@ use std::collections::BTreeMap;
 use crate::{
     app_state::AppState,
     auth::sessions::{
-        create_session, csrf_cookie, lookup_session, read_session_cookie, session_cookie,
+        create_session, csrf_cookie, lookup_session, lookup_session_info, read_session_cookie,
+        session_cookie, verify_csrf_token,
     },
 };
 
@@ -25,6 +26,7 @@ pub struct TelegramCallbackQuery {
     pub photo_url: Option<String>,
     pub auth_date: Option<i64>,
     pub hash: Option<String>,
+    pub link_token: Option<String>,
 }
 
 pub async fn handle_telegram_callback(
@@ -96,13 +98,32 @@ pub async fn handle_telegram_callback(
     let avatar_url = query.photo_url.clone();
 
     // Check for existing session: link mode (active session) vs login mode (no session)
-    let active_user = if let Some(session_id) = read_session_cookie(&headers) {
-        lookup_session(&state.pool, &session_id).await
+    let session_id_opt = read_session_cookie(&headers);
+    let active_user = if let Some(ref session_id) = session_id_opt {
+        lookup_session(&state.pool, session_id).await
     } else {
         None
     };
 
     let user = if let Some(active) = active_user {
+        // Link mode: verify the CSRF link_token before linking
+        let link_token = match &query.link_token {
+            Some(t) => t,
+            None => return StatusCode::FORBIDDEN.into_response(),
+        };
+        let session_info =
+            match lookup_session_info(&state.pool, session_id_opt.as_deref().unwrap()).await {
+                Some(info) => info,
+                None => return StatusCode::FORBIDDEN.into_response(),
+            };
+        if !verify_csrf_token(
+            state.session_secret(),
+            link_token,
+            &session_info.csrf_token_hash,
+        ) {
+            return StatusCode::FORBIDDEN.into_response();
+        }
+
         // Link mode: add Telegram identity to existing user
         let already_linked = state
             .user_repo

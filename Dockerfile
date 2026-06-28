@@ -1,4 +1,6 @@
 FROM node:24-alpine AS web-build
+ARG NEXT_PUBLIC_TELEGRAM_BOT_USERNAME
+ENV NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=$NEXT_PUBLIC_TELEGRAM_BOT_USERNAME
 WORKDIR /repo/apps/web
 COPY apps/web/package*.json ./
 RUN --mount=type=cache,target=/root/.npm \

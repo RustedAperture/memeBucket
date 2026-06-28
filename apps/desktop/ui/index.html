@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+  <div class="drag-strip" data-tauri-drag-region></div>
   <div class="container">
     <div class="card">
       <!-- Loading State (visible by default) -->
@@ -135,6 +136,14 @@
         resetForm(typeof err === 'string' ? err : err.message);
       }
     });
+
+    // Save window position when user drags it
+    if (window.__TAURI__) {
+      window.__TAURI__.event.listen('tauri://move', (event) => {
+        const { x, y } = event.payload;
+        window.__TAURI__.core.invoke('save_window_position', { x, y });
+      });
+    }
   </script>
 </body>
 </html>

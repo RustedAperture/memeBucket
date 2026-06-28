@@ -11,8 +11,17 @@ use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default)]
 struct Config {
     server_url: Option<String>,
+    window_x: Option<f64>,
+    window_y: Option<f64>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self { server_url: None, window_x: None, window_y: None }
+    }
 }
 
 // Helper to get the path to the config file
@@ -63,6 +72,7 @@ fn set_server_url(app: AppHandle, url: String) -> Result<String, String> {
 
     let config = Config {
         server_url: Some(normalized_url.clone()),
+        ..Default::default()
     };
 
     let content = serde_json::to_string(&config).map_err(|e| e.to_string())?;
@@ -97,6 +107,23 @@ fn hide_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         window.hide().map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+// Save the window's current position to config
+#[tauri::command]
+fn save_window_position(app: AppHandle, x: f64, y: f64) -> Result<(), String> {
+    let path = get_config_path(&app)?;
+    let mut config: Config = if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        Config { server_url: None, window_x: None, window_y: None }
+    };
+    config.window_x = Some(x);
+    config.window_y = Some(y);
+    let content = serde_json::to_string(&config).map_err(|e| e.to_string())?;
+    fs::write(path, content).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -256,7 +283,8 @@ fn main() {
             set_server_url,
             navigate_to,
             hide_window,
-            copy_and_paste_link
+            copy_and_paste_link,
+            save_window_position,
         ])
         .setup(|app| {
             // Hide from dock on macOS; the tray icon is the only entry point.
@@ -318,49 +346,57 @@ fn main() {
                                 #[cfg(target_os = "macos")]
                                 let _ = app.show();
 
-                                // Position window so its bottom-left corner is at the cursor
                                 use enigo::{Enigo, MouseControllable};
-                                let enigo = Enigo::new();
-                                let (cx, cy) = enigo.mouse_location();
 
-                                // Clamp window to monitor bounds so it never opens partially off-screen.
-                                // enigo returns logical coordinates; monitor bounds are in physical pixels,
-                                // so convert them using the scale factor before clamping.
-                                let positioned = if let Ok(Some(monitor)) = window.current_monitor() {
-                                    let scale = monitor.scale_factor();
-                                    let mpos = monitor.position(); // PhysicalPosition<i32>
-                                    let msize = monitor.size();    // PhysicalSize<u32>
-                                    let wsize = window.outer_size()
-                                        .unwrap_or(tauri::PhysicalSize { width: 360, height: 500 });
+                                // Check for a saved position first
+                                let saved_pos: Option<(f64, f64)> = get_config_path(&app)
+                                    .ok()
+                                    .and_then(|p| fs::read_to_string(p).ok())
+                                    .and_then(|s| serde_json::from_str::<Config>(&s).ok())
+                                    .and_then(|c| c.window_x.zip(c.window_y));
 
-                                    // Convert monitor physical bounds to logical for comparison with cursor
-                                    let mon_lx = (mpos.x as f64 / scale) as i32;
-                                    let mon_ly = (mpos.y as f64 / scale) as i32;
-                                    let mon_lw = (msize.width as f64 / scale) as i32;
-                                    let mon_lh = (msize.height as f64 / scale) as i32;
-                                    let win_lw = (wsize.width as f64 / scale) as i32;
-                                    let win_lh = (wsize.height as f64 / scale) as i32;
-
-                                    let target_x = cx;
-                                    let target_y = cy - win_lh;
-
-                                    let clamped_x = target_x.clamp(mon_lx, (mon_lx + mon_lw - win_lw).max(mon_lx));
-                                    let clamped_y = target_y.clamp(mon_ly, (mon_ly + mon_lh - win_lh).max(mon_ly));
-
-                                    let _ = window.set_position(tauri::LogicalPosition::new(
-                                        clamped_x as f64,
-                                        clamped_y as f64,
-                                    ));
-                                    true
+                                if let Some((sx, sy)) = saved_pos {
+                                    let _ = window.set_position(tauri::LogicalPosition::new(sx, sy));
                                 } else {
-                                    false
-                                };
+                                    let enigo = Enigo::new();
+                                    let (cx, cy) = enigo.mouse_location();
 
-                                if !positioned {
-                                    let _ = window.set_position(tauri::LogicalPosition::new(
-                                        cx as f64,
-                                        (cy - 500).max(0) as f64,
-                                    ));
+                                    let positioned = if let Ok(Some(monitor)) = window.current_monitor() {
+                                        let scale = monitor.scale_factor();
+                                        let mpos = monitor.position();
+                                        let msize = monitor.size();
+                                        let wsize = window.outer_size()
+                                            .unwrap_or(tauri::PhysicalSize { width: 360, height: 500 });
+
+                                        let mon_lx = (mpos.x as f64 / scale) as i32;
+                                        let mon_ly = (mpos.y as f64 / scale) as i32;
+                                        let mon_lw = (msize.width as f64 / scale) as i32;
+                                        let mon_lh = (msize.height as f64 / scale) as i32;
+                                        let win_lw = (wsize.width as f64 / scale) as i32;
+                                        let win_lh = (wsize.height as f64 / scale) as i32;
+
+                                        let target_x = cx;
+                                        let target_y = cy - win_lh;
+                                        let clamped_x = target_x.clamp(mon_lx, (mon_lx + mon_lw - win_lw).max(mon_lx));
+                                        let clamped_y = target_y.clamp(mon_ly, (mon_ly + mon_lh - win_lh).max(mon_ly));
+
+                                        let _ = window.set_position(tauri::LogicalPosition::new(
+                                            clamped_x as f64,
+                                            clamped_y as f64,
+                                        ));
+                                        true
+                                    } else {
+                                        false
+                                    };
+
+                                    if !positioned {
+                                        let enigo = Enigo::new();
+                                        let (cx, cy) = enigo.mouse_location();
+                                        let _ = window.set_position(tauri::LogicalPosition::new(
+                                            cx as f64,
+                                            (cy - 500).max(0) as f64,
+                                        ));
+                                    }
                                 }
                                 let _ = window.show();
                                 let _ = window.set_focus();

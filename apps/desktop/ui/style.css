@@ -208,3 +208,18 @@ button:disabled {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
 }
+
+.drag-strip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  cursor: grab;
+  z-index: 9999;
+  /* transparent — sits above content, grabs drag events only */
+}
+
+.drag-strip:active {
+  cursor: grabbing;
+}

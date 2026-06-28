@@ -1,4 +1,7 @@
-use object_store::{ObjectStore, aws::AmazonS3Builder, path::Path as ObjPath};
+use object_store::{
+    Attribute, AttributeValue, Attributes, ObjectStore, PutOptions, aws::AmazonS3Builder,
+    path::Path as ObjPath,
+};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
@@ -74,12 +77,29 @@ impl StorageService {
             .await
             .map_err(|e| StorageError::FetchFailed(e.to_string()))?;
 
-        // Determine output format and convert if needed
+        // Determine output format and convert if needed.
+        // WebP conversion is CPU-bound (decode + encode), so we offload it to a
+        // blocking thread to avoid tying up a tokio worker.
+        let url_for_log = url.to_string();
         let (final_bytes, ext) =
             if content_type.contains("image/png") || content_type.contains("image/jpeg") {
-                match convert_to_webp(&bytes) {
-                    Ok(webp_bytes) => (webp_bytes, "webp"),
-                    Err(_) => (bytes.to_vec(), ext_from_content_type(&content_type)),
+                let bytes_clone = bytes.clone();
+                match tokio::task::spawn_blocking(move || convert_to_webp(&bytes_clone)).await {
+                    Ok(Ok(webp_bytes)) => (webp_bytes, "webp"),
+                    Ok(Err(e)) => {
+                        tracing::warn!(
+                            "WebP conversion failed for {}, storing original format: {e}",
+                            url_for_log
+                        );
+                        (bytes.to_vec(), ext_from_content_type(&content_type))
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "WebP conversion task panicked for {}, storing original format: {e}",
+                            url_for_log
+                        );
+                        (bytes.to_vec(), ext_from_content_type(&content_type))
+                    }
                 }
             } else {
                 (bytes.to_vec(), ext_from_content_type(&content_type))
@@ -89,8 +109,21 @@ impl StorageService {
         let hash = hex::encode(Sha256::digest(url.as_bytes()));
         let key = ObjPath::from(format!("{}.{}", hash, ext));
 
+        // Set Content-Type so B2 serves the correct MIME type and browsers
+        // render <img>/<video> elements without receiving octet-stream.
+        let attributes = Attributes::from_iter([(
+            Attribute::ContentType,
+            AttributeValue::from(mime_for_ext(ext)),
+        )]);
         self.store
-            .put(&key, final_bytes.into())
+            .put_opts(
+                &key,
+                final_bytes.into(),
+                PutOptions {
+                    attributes,
+                    ..Default::default()
+                },
+            )
             .await
             .map_err(|e| StorageError::UploadFailed(e.to_string()))?;
 
@@ -126,6 +159,21 @@ fn ext_from_content_type(ct: &str) -> &'static str {
     }
 }
 
+/// Maps a file extension to the appropriate MIME Content-Type string.
+/// Used when uploading to B2 so browsers receive the correct type for
+/// <img> and <video> rendering rather than `application/octet-stream`.
+fn mime_for_ext(ext: &str) -> &'static str {
+    match ext {
+        "webp" => "image/webp",
+        "png" => "image/png",
+        "jpg" => "image/jpeg",
+        "gif" => "image/gif",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
+        _ => "application/octet-stream",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,5 +201,17 @@ mod tests {
         assert_eq!(ext_from_content_type("image/jpeg"), "jpg");
         assert_eq!(ext_from_content_type("video/mp4"), "mp4");
         assert_eq!(ext_from_content_type("application/octet-stream"), "bin");
+    }
+
+    #[test]
+    fn mime_for_ext_maps_all_supported_extensions() {
+        assert_eq!(mime_for_ext("webp"), "image/webp");
+        assert_eq!(mime_for_ext("png"), "image/png");
+        assert_eq!(mime_for_ext("jpg"), "image/jpeg");
+        assert_eq!(mime_for_ext("gif"), "image/gif");
+        assert_eq!(mime_for_ext("mp4"), "video/mp4");
+        assert_eq!(mime_for_ext("webm"), "video/webm");
+        assert_eq!(mime_for_ext("bin"), "application/octet-stream");
+        assert_eq!(mime_for_ext("unknown"), "application/octet-stream");
     }
 }

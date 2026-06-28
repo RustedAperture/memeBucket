@@ -37,6 +37,8 @@ memeBucket relies on Discord for OAuth, application commands, user profile data,
 
 memeBucket also supports **Telegram Login** as an authentication provider. When you sign in or link your account with Telegram, the Telegram Login Widget sends your Telegram user ID, first name, username (if set), and profile photo URL to our server. This data is stored to identify your account and display your profile in the dashboard.
 
+To make media links permanent, memeBucket may automatically fetch images or GIFs you add from Discord (or other expiring sources) and re-upload them to **Backblaze B2** (a third-party cloud storage provider). Re-hosted media is then served through **Cloudflare** (a CDN and proxy provider). By adding media to memeBucket, you consent to this re-hosting. Backblaze B2 and Cloudflare are governed by their own terms and privacy policies.
+
 ## Retention
 
 memeBucket keeps account, bucket, image, sharing, subscription, whitelist, and command history data until it is deleted, the account is deleted, or the maintainers remove it for operational reasons. Session records expire and may be removed as part of normal maintenance.

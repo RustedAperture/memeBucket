@@ -5,7 +5,7 @@ export default function PrivacyPage() {
     <LegalPage
       title="Privacy Policy"
       description="What memeBucket collects, stores, and uses to provide Discord media buckets."
-      updated="Jun 12, 2026"
+      updated="Jun 28, 2026"
     >
       <LegalSection title="Data We Collect">
         <LegalList>
@@ -55,6 +55,15 @@ export default function PrivacyPage() {
           Login Widget sends your Telegram user ID, first name, username (if set), and
           profile photo URL to our server. This data is stored to identify your account
           and display your profile in the dashboard.
+        </p>
+        <p className="mt-3">
+          To make media links permanent, memeBucket may automatically fetch images or
+          GIFs you add from Discord (or other expiring sources) and re-upload them to{" "}
+          <strong>Backblaze B2</strong> (a third-party cloud storage provider).
+          Re-hosted media is then served through <strong>Cloudflare</strong> (a CDN and
+          proxy provider). By adding media to memeBucket, you consent to this
+          re-hosting. Backblaze B2 and Cloudflare are governed by their own terms and
+          privacy policies.
         </p>
       </LegalSection>
 

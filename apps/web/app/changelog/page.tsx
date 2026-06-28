@@ -5,8 +5,17 @@ export default function ChangelogPage() {
     <LegalPage
       title="Changelog"
       description="Notable changes to memeBucket."
-      updated="Jun 27, 2026"
+      updated="Jun 28, 2026"
     >
+      <LegalSection title="v0.2.0 - Jun 28, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added <strong>Media Permanence</strong>: Discord CDN URLs (which expire) are now automatically re-hosted to Backblaze B2 cloud storage and served through Cloudflare, making image and GIF links permanent.</li>
+          <li>Added a background migration job that runs at server startup to re-host any existing images still pointing to Discord CDN.</li>
+          <li>Added a broken-link placeholder in the web dashboard and Picker: images whose source URL was already expired when fetched display a clear <strong>⚠ Link unavailable</strong> indicator instead of a broken image icon.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.1.9 - Jun 27, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

@@ -563,3 +563,75 @@ fn normalized_tag_inputs(tags: &[String]) -> Vec<String> {
 
     normalized
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    fn make_stored_image(
+        url: &str,
+        cdn_url: Option<&str>,
+        cdn_status: Option<&str>,
+    ) -> StoredImage {
+        StoredImage {
+            id: Uuid::new_v4(),
+            owner_user_id: Uuid::new_v4(),
+            bucket_id: Uuid::new_v4(),
+            url: url.to_string(),
+            cdn_url: cdn_url.map(str::to_string),
+            cdn_status: cdn_status.map(str::to_string),
+            title: None,
+            favorite: false,
+            random_weight: 1,
+            tags: vec![],
+            created_at: "2026-06-28T00:00:00Z".to_string(),
+            notes: None,
+        }
+    }
+
+    #[test]
+    fn url_swap_migrated_status_returns_cdn_url() {
+        let original = "https://cdn.discordapp.com/attachments/1/2/img.png";
+        let cdn = "https://media.memebucket.app/abc123.webp";
+        let image = make_stored_image(original, Some(cdn), Some("migrated"));
+        let response = image_response_from_stored(image, 0);
+        assert_eq!(response.url, cdn);
+        assert_eq!(response.cdn_status.as_deref(), Some("migrated"));
+    }
+
+    #[test]
+    fn url_swap_pending_status_returns_original_url() {
+        let original = "https://cdn.discordapp.com/attachments/1/2/img.png";
+        let image = make_stored_image(original, None, Some("pending"));
+        let response = image_response_from_stored(image, 0);
+        assert_eq!(response.url, original);
+        assert_eq!(response.cdn_status.as_deref(), Some("pending"));
+    }
+
+    #[test]
+    fn url_swap_broken_status_returns_original_url() {
+        let original = "https://cdn.discordapp.com/attachments/1/2/img.png";
+        let image = make_stored_image(original, None, Some("broken"));
+        let response = image_response_from_stored(image, 0);
+        assert_eq!(response.url, original);
+        assert_eq!(response.cdn_status.as_deref(), Some("broken"));
+    }
+
+    #[test]
+    fn url_swap_migrated_without_cdn_url_falls_back_to_original() {
+        // cdn_url is None even though cdn_status is "migrated" — defensive fallback
+        let original = "https://example.com/img.gif";
+        let image = make_stored_image(original, None, Some("migrated"));
+        let response = image_response_from_stored(image, 0);
+        assert_eq!(response.url, original);
+    }
+
+    #[test]
+    fn url_swap_no_cdn_status_returns_original_url() {
+        let original = "https://example.com/img.gif";
+        let image = make_stored_image(original, None, None);
+        let response = image_response_from_stored(image, 0);
+        assert_eq!(response.url, original);
+    }
+}

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.2.0 - Jun 28, 2026
+
+### Added
+
+- Added **Media Permanence**: Discord CDN URLs (which expire) are now automatically re-hosted to Backblaze B2 cloud storage and served through Cloudflare, making image and GIF links permanent.
+- Added background migration job that runs at server startup to re-host any existing images still pointing to Discord CDN.
+- Added broken-link placeholder in the web dashboard and Picker: images whose source URL was already expired when we tried to fetch them display a clear "⚠ Link unavailable" indicator instead of a broken image icon.
+
 ## v0.1.9 - Jun 27, 2026
 
 ### Added

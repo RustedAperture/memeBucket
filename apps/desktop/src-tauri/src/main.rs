@@ -70,11 +70,13 @@ fn set_server_url(app: AppHandle, url: String) -> Result<String, String> {
         normalized_url = normalized_url.replace("://localhost", "://127.0.0.1:3000");
     }
 
-    let config = Config {
-        server_url: Some(normalized_url.clone()),
-        ..Default::default()
+    let mut config: Config = if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        Config::default()
     };
-
+    config.server_url = Some(normalized_url.clone());
     let content = serde_json::to_string(&config).map_err(|e| e.to_string())?;
     fs::write(path, content).map_err(|e| e.to_string())?;
 

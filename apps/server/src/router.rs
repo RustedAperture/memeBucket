@@ -20,7 +20,7 @@ use crate::{
     },
     app_state::AppState,
     auth::discord_oauth::{handle_discord_oauth_callback, start_discord_oauth},
-    auth::telegram_oauth::handle_telegram_callback,
+    auth::telegram_oauth::{get_telegram_config, handle_telegram_callback},
     discord::interactions::handle_interaction,
     static_files::static_fallback,
 };
@@ -143,6 +143,7 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
                 get(handle_telegram_callback)
                     .layer(GovernorLayer::new(strict_governor_conf.clone())),
             )
+            .route("/api/telegram/config", get(get_telegram_config))
             .route("/api/buckets", get(list_buckets).post(create_bucket))
             .layer(axum::middleware::from_fn_with_state(
                 state.clone(),
@@ -154,6 +155,7 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
             .route("/auth/discord/start", get(start_discord_oauth))
             .route("/auth/discord/callback", get(handle_discord_oauth_callback))
             .route("/auth/telegram/callback", get(handle_telegram_callback))
+            .route("/api/telegram/config", get(get_telegram_config))
             .route("/api/buckets", get(list_buckets).post(create_bucket));
     }
 

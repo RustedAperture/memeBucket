@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { TelegramWidget } from "@/components/telegram-widget";
 import { apiGet } from "@/lib/api";
 import { toast } from "sonner";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 
 type Identity = { provider: string; display_name?: string; avatar_url?: string };
-
-const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "";
 
 function getCsrfToken(): string {
   if (typeof document === "undefined") return "";
@@ -81,7 +81,13 @@ export function ConnectedAccounts() {
             Disconnect
           </Button>
         ) : (
-          <Button variant="outline" size="sm" render={<a href="/auth/discord/start" />}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="cursor-pointer border-[#5865F2] text-[#5865F2] hover:bg-[#5865F2]/10 hover:text-[#5865F2]"
+            render={<a href="/auth/discord/start" />}
+          >
+            <FontAwesomeIcon icon={faDiscord} className="size-3.5" />
             Connect
           </Button>
         )}
@@ -105,8 +111,14 @@ export function ConnectedAccounts() {
           >
             Disconnect
           </Button>
-        ) : TELEGRAM_BOT_USERNAME && telegramLinkUrl ? (
-          <TelegramWidget botUsername={TELEGRAM_BOT_USERNAME} authUrl={telegramLinkUrl} size="small" />
+        ) : telegramLinkUrl ? (
+          <TelegramWidget
+            authUrl={telegramLinkUrl}
+            variant="outline"
+            size="sm"
+            label="Connect"
+            className="cursor-pointer border-[#2CA5E0] text-[#2CA5E0] hover:bg-[#2CA5E0]/10 hover:text-[#2CA5E0]"
+          />
         ) : null}
       </div>
     </section>

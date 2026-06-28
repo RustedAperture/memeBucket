@@ -1,9 +1,11 @@
 use axum::{
+    Json,
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Redirect},
 };
 use hmac::{Hmac, Mac};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
@@ -195,4 +197,21 @@ pub async fn handle_telegram_callback(
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
+}
+
+// GET /api/telegram/config — public, no auth required.
+// Returns the bot_id (numeric prefix of the bot token) and username so the
+// frontend can construct the oauth.telegram.org popup URL itself.
+pub async fn get_telegram_config(State(state): State<AppState>) -> impl IntoResponse {
+    let username = state.telegram_bot_username();
+    let bot_id = state.telegram_bot_id();
+    if bot_id.is_empty() || username.is_empty() {
+        return Json(json!({ "configured": false })).into_response();
+    }
+    Json(json!({
+        "configured": true,
+        "bot_id": bot_id,
+        "username": username,
+    }))
+    .into_response()
 }

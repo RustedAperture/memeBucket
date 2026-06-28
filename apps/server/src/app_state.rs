@@ -138,4 +138,8 @@ impl AppState {
     pub fn telegram_bot_username(&self) -> &str {
         &self.telegram_bot_username
     }
+    // Bot token format: "<bot_id>:<secret>". The numeric ID is public info.
+    pub fn telegram_bot_id(&self) -> &str {
+        self.telegram_bot_token.split(':').next().unwrap_or("")
+    }
 }

@@ -35,6 +35,8 @@ pub struct AppState {
     pub klipy_api_base_url: String,
     pub gif_search_cache: Arc<Mutex<HashMap<String, GifSearchCacheEntry>>>,
     pub gif_search_cache_ttl: Duration,
+    telegram_bot_token: String,
+    telegram_bot_username: String,
 }
 
 impl AppState {
@@ -63,6 +65,8 @@ impl AppState {
             klipy_api_base_url: "https://api.klipy.com".to_string(),
             gif_search_cache: Arc::new(Mutex::new(HashMap::new())),
             gif_search_cache_ttl: Duration::from_secs(60 * 60 * 6),
+            telegram_bot_token: String::new(),
+            telegram_bot_username: String::new(),
         }
     }
 
@@ -120,5 +124,18 @@ impl AppState {
     pub fn with_gif_search_cache_ttl(mut self, gif_search_cache_ttl: Duration) -> Self {
         self.gif_search_cache_ttl = gif_search_cache_ttl;
         self
+    }
+
+    pub fn with_telegram(mut self, bot_token: String, bot_username: String) -> Self {
+        self.telegram_bot_token = bot_token;
+        self.telegram_bot_username = bot_username;
+        self
+    }
+
+    pub fn telegram_bot_token(&self) -> &str {
+        &self.telegram_bot_token
+    }
+    pub fn telegram_bot_username(&self) -> &str {
+        &self.telegram_bot_username
     }
 }

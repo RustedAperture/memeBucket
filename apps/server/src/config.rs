@@ -15,6 +15,8 @@ pub struct Config {
     pub klipy_api_key: Option<String>,
     pub imgbb_api_key: Option<String>,
     pub static_dir: PathBuf,
+    pub telegram_bot_token: Option<String>,
+    pub telegram_bot_username: Option<String>,
 }
 
 impl Config {
@@ -30,6 +32,12 @@ impl Config {
         let session_secret = required_env("SESSION_SECRET")?;
         let klipy_api_key = env::var("KLIPY_API_KEY").ok().filter(|v| !v.is_empty());
         let imgbb_api_key = env::var("IMGBB_API_KEY").ok().filter(|v| !v.is_empty());
+        let telegram_bot_token = env::var("TELEGRAM_BOT_TOKEN")
+            .ok()
+            .filter(|v| !v.is_empty());
+        let telegram_bot_username = env::var("TELEGRAM_BOT_USERNAME")
+            .ok()
+            .filter(|v| !v.is_empty());
         let static_dir = env::var("STATIC_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("apps/web/out"));
@@ -44,6 +52,8 @@ impl Config {
             klipy_api_key,
             imgbb_api_key,
             static_dir,
+            telegram_bot_token,
+            telegram_bot_username,
         })
     }
 }

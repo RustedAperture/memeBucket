@@ -17,6 +17,11 @@ pub struct Config {
     pub static_dir: PathBuf,
     pub telegram_bot_token: Option<String>,
     pub telegram_bot_username: Option<String>,
+    pub b2_key_id: Option<String>,
+    pub b2_app_key: Option<String>,
+    pub b2_bucket_name: Option<String>,
+    pub b2_endpoint: Option<String>,
+    pub cdn_base_url: Option<String>,
 }
 
 impl Config {
@@ -38,6 +43,11 @@ impl Config {
         let telegram_bot_username = env::var("TELEGRAM_BOT_USERNAME")
             .ok()
             .filter(|v| !v.is_empty());
+        let b2_key_id = env::var("B2_KEY_ID").ok().filter(|v| !v.is_empty());
+        let b2_app_key = env::var("B2_APP_KEY").ok().filter(|v| !v.is_empty());
+        let b2_bucket_name = env::var("B2_BUCKET_NAME").ok().filter(|v| !v.is_empty());
+        let b2_endpoint = env::var("B2_ENDPOINT").ok().filter(|v| !v.is_empty());
+        let cdn_base_url = env::var("CDN_BASE_URL").ok().filter(|v| !v.is_empty());
         let static_dir = env::var("STATIC_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("apps/web/out"));
@@ -54,6 +64,11 @@ impl Config {
             static_dir,
             telegram_bot_token,
             telegram_bot_username,
+            b2_key_id,
+            b2_app_key,
+            b2_bucket_name,
+            b2_endpoint,
+            cdn_base_url,
         })
     }
 }

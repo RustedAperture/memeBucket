@@ -3,6 +3,7 @@ use memebucket_server::{
     config::{Config, connect_sqlite_pool, connect_sqlite_pool_for_migrations},
     discord::commands::command_definitions,
     router::build_router,
+    services::storage::StorageService,
 };
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -40,6 +41,31 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
+    let storage = match (
+        &config.b2_key_id,
+        &config.b2_app_key,
+        &config.b2_bucket_name,
+        &config.b2_endpoint,
+        &config.cdn_base_url,
+    ) {
+        (Some(key_id), Some(app_key), Some(bucket), Some(endpoint), Some(cdn_url)) => {
+            match StorageService::new(bucket, endpoint, key_id, app_key, cdn_url) {
+                Ok(svc) => {
+                    tracing::info!("B2 storage configured, CDN: {}", cdn_url);
+                    Some(svc)
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to initialize B2 storage: {e}");
+                    None
+                }
+            }
+        }
+        _ => {
+            tracing::warn!("B2 env vars not set — media permanence disabled");
+            None
+        }
+    };
+
     let app = build_router(
         AppState::new(pool)
             .with_session_secret(config.session_secret)
@@ -51,7 +77,8 @@ async fn main() -> anyhow::Result<()> {
             .with_telegram(
                 config.telegram_bot_token.unwrap_or_default(),
                 config.telegram_bot_username.unwrap_or_default(),
-            ),
+            )
+            .with_storage(storage),
     );
     let listener = TcpListener::bind(config.bind_addr).await?;
 

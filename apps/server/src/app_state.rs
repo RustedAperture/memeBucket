@@ -5,6 +5,7 @@ use crate::repositories::{
     send_history::{SendHistoryRepo, SendHistoryRepository},
     users::{UserRepo, UserRepository},
 };
+use crate::services::storage::StorageService;
 use sqlx::SqlitePool;
 use std::{
     collections::HashMap,
@@ -37,6 +38,7 @@ pub struct AppState {
     pub gif_search_cache_ttl: Duration,
     telegram_bot_token: String,
     telegram_bot_username: String,
+    pub storage: Option<Arc<StorageService>>,
 }
 
 impl AppState {
@@ -67,6 +69,7 @@ impl AppState {
             gif_search_cache_ttl: Duration::from_secs(60 * 60 * 6),
             telegram_bot_token: String::new(),
             telegram_bot_username: String::new(),
+            storage: None,
         }
     }
 
@@ -141,5 +144,14 @@ impl AppState {
     // Bot token format: "<bot_id>:<secret>". The numeric ID is public info.
     pub fn telegram_bot_id(&self) -> &str {
         self.telegram_bot_token.split(':').next().unwrap_or("")
+    }
+
+    pub fn with_storage(mut self, storage: Option<StorageService>) -> Self {
+        self.storage = storage.map(Arc::new);
+        self
+    }
+
+    pub fn storage(&self) -> Option<&StorageService> {
+        self.storage.as_deref()
     }
 }

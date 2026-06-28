@@ -14,6 +14,8 @@ pub struct StoredImage {
     pub owner_user_id: Uuid,
     pub bucket_id: Uuid,
     pub url: String,
+    pub cdn_url: Option<String>,
+    pub cdn_status: Option<String>,
     pub title: Option<String>,
     pub favorite: bool,
     pub random_weight: i64,
@@ -62,6 +64,8 @@ type StoredImageRow = (
     String,
     String,
     Option<String>,
+    Option<String>,
+    Option<String>,
     bool,
     i64,
     String,
@@ -74,6 +78,8 @@ type SearchImageRow = (
     String,
     String,
     String,
+    Option<String>,
+    Option<String>,
     Option<String>,
     bool,
     i64,
@@ -227,6 +233,8 @@ impl ImageRepo for ImageRepository {
                 String,
                 String,
                 Option<String>,
+                Option<String>,
+                Option<String>,
                 bool,
                 i64,
                 String,
@@ -238,7 +246,7 @@ impl ImageRepo for ImageRepository {
                 SELECT ?, ?, id, ?, ?, ?, ?, NULL
                 FROM buckets
                 WHERE id = ? AND owner_user_id = ?
-                RETURNING id, owner_user_id, bucket_id, url, title, favorite, random_weight, created_at, notes
+                RETURNING id, owner_user_id, bucket_id, url, cdn_url, cdn_status, title, favorite, random_weight, created_at, notes
                 "#,
             )
             .bind(id.to_string())
@@ -271,13 +279,15 @@ impl ImageRepo for ImageRepository {
                 String,
                 String,
                 Option<String>,
+                Option<String>,
+                Option<String>,
                 bool,
                 i64,
                 String,
                 Option<String>,
             ),
         >(
-            "SELECT id, owner_user_id, bucket_id, url, title, favorite, random_weight, created_at, notes
+            "SELECT id, owner_user_id, bucket_id, url, cdn_url, cdn_status, title, favorite, random_weight, created_at, notes
              FROM images
              WHERE bucket_id = ?
                AND (
@@ -328,7 +338,7 @@ impl ImageRepo for ImageRepository {
     ) -> Result<Vec<StoredImageSearchResult>, sqlx::Error> {
         let mut builder: QueryBuilder<'_, Sqlite> = QueryBuilder::new(
             "SELECT p.name, images.id, images.owner_user_id, images.bucket_id, images.url,
-                    images.title, images.favorite, images.random_weight, images.created_at, images.notes
+                    images.cdn_url, images.cdn_status, images.title, images.favorite, images.random_weight, images.created_at, images.notes
              FROM images
              INNER JOIN buckets p
                 ON p.id = images.bucket_id
@@ -438,7 +448,7 @@ impl ImageRepo for ImageRepository {
                 let image_id =
                     Uuid::parse_str(&row.1).map_err(|err| sqlx::Error::Decode(Box::new(err)))?;
                 let image_row = (
-                    row.1, row.2, row.3, row.4, row.5, row.6, row.7, row.8, row.9,
+                    row.1, row.2, row.3, row.4, row.5, row.6, row.7, row.8, row.9, row.10, row.11,
                 );
                 Ok(StoredImageSearchResult {
                     bucket_name: row.0,
@@ -465,13 +475,15 @@ impl ImageRepo for ImageRepository {
                 String,
                 String,
                 Option<String>,
+                Option<String>,
+                Option<String>,
                 bool,
                 i64,
                 String,
                 Option<String>,
             ),
         >(
-            "SELECT id, owner_user_id, bucket_id, url, title, favorite, random_weight, created_at, notes
+            "SELECT id, owner_user_id, bucket_id, url, cdn_url, cdn_status, title, favorite, random_weight, created_at, notes
              FROM images
              WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
         )
@@ -941,6 +953,8 @@ impl ImageRepository {
                 String,
                 String,
                 Option<String>,
+                Option<String>,
+                Option<String>,
                 bool,
                 i64,
                 String,
@@ -1021,6 +1035,8 @@ impl ImageRepository {
             stored_owner_user_id,
             stored_bucket_id,
             stored_url,
+            stored_cdn_url,
+            stored_cdn_status,
             stored_title,
             stored_favorite,
             stored_random_weight,
@@ -1035,6 +1051,8 @@ impl ImageRepository {
             bucket_id: Uuid::parse_str(&stored_bucket_id)
                 .map_err(|err| sqlx::Error::Decode(Box::new(err)))?,
             url: stored_url,
+            cdn_url: stored_cdn_url,
+            cdn_status: stored_cdn_status,
             title: stored_title,
             favorite: stored_favorite,
             random_weight: stored_random_weight,

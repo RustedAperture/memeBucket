@@ -334,7 +334,11 @@ export default function PickerPage() {
                       : "border-transparent hover:scale-[0.99] hover:border-muted-foreground/30"
                   }`}
                 >
-                  {isVideo ? (
+                  {result.image.cdn_status === 'broken' ? (
+                    <div className="flex items-center justify-center w-full h-full bg-muted rounded text-muted-foreground text-xs p-2 text-center" style={{ minHeight: '80px' }}>
+                      <span>⚠ Link unavailable</span>
+                    </div>
+                  ) : isVideo ? (
                     <video
                       src={result.image.url}
                       autoPlay

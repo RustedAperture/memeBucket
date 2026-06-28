@@ -1113,7 +1113,11 @@ function ImageCard({
           : "border-border/70 hover:ring-2 hover:ring-ring"
       }`}
     >
-      {image.url.split('?')[0].toLowerCase().endsWith('.mp4') || image.url.split('?')[0].toLowerCase().endsWith('.webm') ? (
+      {image.cdn_status === 'broken' ? (
+        <div className="flex items-center justify-center w-full h-full bg-muted rounded text-muted-foreground text-xs p-2 text-center" style={{ minHeight: '80px' }}>
+          <span>⚠ Link unavailable</span>
+        </div>
+      ) : image.url.split('?')[0].toLowerCase().endsWith('.mp4') || image.url.split('?')[0].toLowerCase().endsWith('.webm') ? (
         <video
           src={image.url}
           autoPlay

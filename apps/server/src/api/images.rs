@@ -61,6 +61,7 @@ fn validate_optional_tags(tags: &Vec<String>) -> Result<(), validator::Validatio
 pub struct ImageResponse {
     pub id: String,
     pub url: String,
+    pub cdn_status: Option<String>,
     pub title: Option<String>,
     pub favorite: bool,
     #[serde(rename = "randomWeight")]
@@ -480,7 +481,11 @@ pub async fn build_image_responses(
 pub fn image_response_from_stored(image: StoredImage, send_count: i64) -> ImageResponse {
     ImageResponse {
         id: image.id.to_string(),
-        url: image.url,
+        url: image
+            .cdn_url
+            .filter(|_| image.cdn_status.as_deref() == Some("migrated"))
+            .unwrap_or(image.url),
+        cdn_status: image.cdn_status,
         title: image.title,
         favorite: image.favorite,
         random_weight: image.random_weight,

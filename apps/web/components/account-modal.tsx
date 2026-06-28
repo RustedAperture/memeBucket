@@ -7,6 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { User } from "lucide-react";
 import { apiPost, apiPatch } from "@/lib/api";
+import { ConnectedAccounts } from "@/components/connected-accounts";
 import {
   Dialog,
   DialogContent,
@@ -132,6 +133,8 @@ export function AccountModal() {
               </form>
             </div>
           </div>
+
+          <ConnectedAccounts />
 
           <div className="space-y-4">
             <h3 className="text-sm font-medium text-muted-foreground">Account Actions</h3>

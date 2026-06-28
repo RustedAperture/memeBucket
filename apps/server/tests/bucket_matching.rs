@@ -28,7 +28,7 @@ async fn random_lookup_matches_bucket_case_insensitively() {
         Arc::new(history),
     );
     let user = users
-        .upsert_by_discord_key("user-key", None, None)
+        .upsert_by_provider("discord", "user-key", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(user.id, "Cats").await.unwrap();
@@ -71,7 +71,7 @@ async fn random_lookup_combines_images_from_multiple_pools() {
         Arc::new(history),
     );
     let user = users
-        .upsert_by_discord_key("multi-pool-user-key", None, None)
+        .upsert_by_provider("discord", "multi-pool-user-key", None, None)
         .await
         .unwrap();
     pools.create(user.id, "Cats").await.unwrap();
@@ -115,7 +115,7 @@ async fn random_excludes_zero_weight_images() {
         Arc::new(history),
     );
     let user = users
-        .upsert_by_discord_key("zero-weight-user", None, None)
+        .upsert_by_provider("discord", "zero-weight-user", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(user.id, "cats").await.unwrap();
@@ -166,7 +166,7 @@ async fn random_avoids_recent_image_when_alternative_exists() {
         Arc::new(history.clone()),
     );
     let user = users
-        .upsert_by_discord_key("recent-user", None, None)
+        .upsert_by_provider("discord", "recent-user", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(user.id, "cats").await.unwrap();
@@ -204,7 +204,7 @@ async fn random_returns_only_image_from_single_image_pool() {
         Arc::new(history.clone()),
     );
     let user = users
-        .upsert_by_discord_key("single-image-user", None, None)
+        .upsert_by_provider("discord", "single-image-user", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(user.id, "cats").await.unwrap();
@@ -238,7 +238,7 @@ async fn all_zero_weight_images_return_random_enabled_error() {
         Arc::new(history),
     );
     let user = users
-        .upsert_by_discord_key("all-zero-random-user", None, None)
+        .upsert_by_provider("discord", "all-zero-random-user", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(user.id, "cats").await.unwrap();
@@ -289,7 +289,7 @@ async fn empty_bucket_returns_private_safe_error() {
     let history = SendHistoryRepository::new(pool.clone());
     let service = RandomService::new(Arc::new(pools.clone()), Arc::new(images), Arc::new(history));
     let user = users
-        .upsert_by_discord_key("user-key", None, None)
+        .upsert_by_provider("discord", "user-key", None, None)
         .await
         .unwrap();
     pools.create(user.id, "empty").await.unwrap();
@@ -312,11 +312,11 @@ async fn send_history_record_rejects_cross_owner_inputs() {
     let history = SendHistoryRepository::new(pool.clone());
 
     let alice = users
-        .upsert_by_discord_key("alice-history-key", None, None)
+        .upsert_by_provider("discord", "alice-history-key", None, None)
         .await
         .unwrap();
     let bob = users
-        .upsert_by_discord_key("bob-history-key", None, None)
+        .upsert_by_provider("discord", "bob-history-key", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(alice.id, "Cats").await.unwrap();
@@ -341,7 +341,7 @@ async fn recent_image_ids_for_buckets_prefers_latest_insert_when_sent_at_ties() 
     let images = ImageRepository::new(pool.clone());
     let history = SendHistoryRepository::new(pool.clone());
     let user = users
-        .upsert_by_discord_key("recent-order-user", None, None)
+        .upsert_by_provider("discord", "recent-order-user", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(user.id, "Cats").await.unwrap();
@@ -384,11 +384,11 @@ async fn subscribed_pool_random_selection_records_requesting_user_history() {
         Arc::new(history),
     );
     let owner = users
-        .upsert_by_discord_key("owner-subscribed-history", None, None)
+        .upsert_by_provider("discord", "owner-subscribed-history", None, None)
         .await
         .unwrap();
     let subscriber = users
-        .upsert_by_discord_key("subscriber-subscribed-history", None, None)
+        .upsert_by_provider("discord", "subscriber-subscribed-history", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(owner.id, "Cats").await.unwrap();
@@ -431,7 +431,7 @@ async fn storage_failures_are_reported_as_storage_errors() {
     let history = SendHistoryRepository::new(pool.clone());
     let service = RandomService::new(Arc::new(pools.clone()), Arc::new(images), Arc::new(history));
     let user = users
-        .upsert_by_discord_key("storage-user-key", None, None)
+        .upsert_by_provider("discord", "storage-user-key", None, None)
         .await
         .unwrap();
     pools.create(user.id, "cats").await.unwrap();

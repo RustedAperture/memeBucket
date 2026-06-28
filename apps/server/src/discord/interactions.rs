@@ -787,7 +787,7 @@ async fn resolve_user(
     let discord_user_key = DiscordUserKey::derive(secret.as_bytes(), &discord_user.id);
     let stored_user = state
         .user_repo
-        .upsert_by_discord_key(discord_user_key.as_hex(), display_name, None)
+        .upsert_by_provider("discord", discord_user_key.as_hex(), display_name, None)
         .await
         .map_err(|_| DiscordAuthError::Storage)?;
 

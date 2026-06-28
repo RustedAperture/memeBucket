@@ -63,11 +63,11 @@ async fn delete_bucket_requires_owner_scope() {
     let users = UserRepository::new(pool.clone());
     let pools = BucketRepository::new(pool.clone());
     let alice = users
-        .upsert_by_discord_key("alice", None, None)
+        .upsert_by_provider("discord", "alice", None, None)
         .await
         .unwrap();
     let bob = users
-        .upsert_by_discord_key("bob", None, None)
+        .upsert_by_provider("discord", "bob", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(alice.id, "cats").await.unwrap();
@@ -83,7 +83,7 @@ async fn bucket_routes_support_owner_scoped_crud() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let user = users
-        .upsert_by_discord_key("owner", None, None)
+        .upsert_by_provider("discord", "owner", None, None)
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
@@ -95,9 +95,10 @@ async fn bucket_routes_support_owner_scoped_crud() {
         .header("content-type", "application/json")
         .body(Body::from(r#"{"name":"  Cats  "}"#))
         .unwrap();
-    create_request
-        .extensions_mut()
-        .insert(AuthenticatedUser { user_id: user.id });
+    create_request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
 
     let create_response = app.clone().oneshot(create_request).await.unwrap();
     assert_eq!(create_response.status(), StatusCode::OK);
@@ -115,9 +116,10 @@ async fn bucket_routes_support_owner_scoped_crud() {
         .uri("/api/buckets")
         .body(Body::empty())
         .unwrap();
-    list_request
-        .extensions_mut()
-        .insert(AuthenticatedUser { user_id: user.id });
+    list_request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
 
     let list_response = app.clone().oneshot(list_request).await.unwrap();
     assert_eq!(list_response.status(), StatusCode::OK);
@@ -136,9 +138,10 @@ async fn bucket_routes_support_owner_scoped_crud() {
         .uri(format!("/api/buckets/{bucket_id}"))
         .body(Body::empty())
         .unwrap();
-    delete_request
-        .extensions_mut()
-        .insert(AuthenticatedUser { user_id: user.id });
+    delete_request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
 
     let delete_response = app.clone().oneshot(delete_request).await.unwrap();
     assert_eq!(delete_response.status(), StatusCode::OK);
@@ -157,7 +160,7 @@ async fn create_bucket_rejects_blank_name() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let user = users
-        .upsert_by_discord_key("owner", None, None)
+        .upsert_by_provider("discord", "owner", None, None)
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
@@ -169,9 +172,10 @@ async fn create_bucket_rejects_blank_name() {
         .header("content-type", "application/json")
         .body(Body::from(r#"{"name":"   "}"#))
         .unwrap();
-    request
-        .extensions_mut()
-        .insert(AuthenticatedUser { user_id: user.id });
+    request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
 
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -184,7 +188,7 @@ async fn create_bucket_rejects_duplicate_name_for_same_owner() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let user = users
-        .upsert_by_discord_key("owner", None, None)
+        .upsert_by_provider("discord", "owner", None, None)
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
@@ -196,9 +200,10 @@ async fn create_bucket_rejects_duplicate_name_for_same_owner() {
         .header("content-type", "application/json")
         .body(Body::from(r#"{"name":"Cats"}"#))
         .unwrap();
-    first_request
-        .extensions_mut()
-        .insert(AuthenticatedUser { user_id: user.id });
+    first_request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
 
     let first_response = app.clone().oneshot(first_request).await.unwrap();
     assert_eq!(first_response.status(), StatusCode::OK);
@@ -211,7 +216,10 @@ async fn create_bucket_rejects_duplicate_name_for_same_owner() {
         .unwrap();
     duplicate_request
         .extensions_mut()
-        .insert(AuthenticatedUser { user_id: user.id });
+        .insert(AuthenticatedUser {
+            user_id: user.id,
+            role: "user".to_string(),
+        });
 
     let duplicate_response = app.clone().oneshot(duplicate_request).await.unwrap();
     assert_eq!(duplicate_response.status(), StatusCode::BAD_REQUEST);
@@ -229,11 +237,11 @@ async fn create_bucket_allows_same_name_for_different_owners() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let alice = users
-        .upsert_by_discord_key("alice", None, None)
+        .upsert_by_provider("discord", "alice", None, None)
         .await
         .unwrap();
     let bob = users
-        .upsert_by_discord_key("bob", None, None)
+        .upsert_by_provider("discord", "bob", None, None)
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
@@ -245,9 +253,10 @@ async fn create_bucket_allows_same_name_for_different_owners() {
         .header("content-type", "application/json")
         .body(Body::from(r#"{"name":"Cats"}"#))
         .unwrap();
-    alice_request
-        .extensions_mut()
-        .insert(AuthenticatedUser { user_id: alice.id });
+    alice_request.extensions_mut().insert(AuthenticatedUser {
+        user_id: alice.id,
+        role: "user".to_string(),
+    });
 
     let alice_response = app.clone().oneshot(alice_request).await.unwrap();
     assert_eq!(alice_response.status(), StatusCode::OK);
@@ -258,9 +267,10 @@ async fn create_bucket_allows_same_name_for_different_owners() {
         .header("content-type", "application/json")
         .body(Body::from(r#"{"name":"  cats  "}"#))
         .unwrap();
-    bob_request
-        .extensions_mut()
-        .insert(AuthenticatedUser { user_id: bob.id });
+    bob_request.extensions_mut().insert(AuthenticatedUser {
+        user_id: bob.id,
+        role: "user".to_string(),
+    });
 
     let bob_response = app.clone().oneshot(bob_request).await.unwrap();
     assert_eq!(bob_response.status(), StatusCode::OK);
@@ -305,7 +315,7 @@ async fn create_image_stores_resolved_metadata_image_url() {
     let users = UserRepository::new(pool.clone());
     let pools = BucketRepository::new(pool.clone());
     let user = users
-        .upsert_by_discord_key("owner", None, None)
+        .upsert_by_provider("discord", "owner", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(user.id, "cats").await.unwrap();
@@ -320,9 +330,10 @@ async fn create_image_stores_resolved_metadata_image_url() {
         .header("content-type", "application/json")
         .body(Body::from(format!(r#"{{"url":"{page_url}"}}"#)))
         .unwrap();
-    request
-        .extensions_mut()
-        .insert(AuthenticatedUser { user_id: user.id });
+    request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
 
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -339,11 +350,11 @@ async fn whitelist_enabled_blocks_existing_subscriber_image_access() {
     let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let owner = users
-        .upsert_by_discord_key("owner-whitelist", None, None)
+        .upsert_by_provider("discord", "owner-whitelist", None, None)
         .await
         .unwrap();
     let subscriber = users
-        .upsert_by_discord_key("subscriber-whitelist", None, None)
+        .upsert_by_provider("discord", "subscriber-whitelist", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(owner.id, "cats").await.unwrap();
@@ -387,11 +398,11 @@ async fn shared_pool_preview_uses_viewer_send_count_and_anonymous_gets_zero() {
     let images = ImageRepository::new(pool.clone());
     let send_history = SendHistoryRepository::new(pool.clone());
     let owner = users
-        .upsert_by_discord_key("owner-shared-preview", None, None)
+        .upsert_by_provider("discord", "owner-shared-preview", None, None)
         .await
         .unwrap();
     let subscriber = users
-        .upsert_by_discord_key("subscriber-shared-preview", None, None)
+        .upsert_by_provider("discord", "subscriber-shared-preview", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(owner.id, "cats").await.unwrap();
@@ -440,6 +451,7 @@ async fn shared_pool_preview_uses_viewer_send_count_and_anonymous_gets_zero() {
         .extensions_mut()
         .insert(AuthenticatedUser {
             user_id: subscriber.id,
+            role: "user".to_string(),
         });
 
     let subscriber_response = app.clone().oneshot(subscriber_request).await.unwrap();

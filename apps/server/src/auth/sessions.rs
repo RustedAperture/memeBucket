@@ -9,6 +9,7 @@ type HmacSha256 = Hmac<Sha256>;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuthenticatedUser {
     pub user_id: Uuid,
+    pub role: String, // "user" or "admin"
 }
 
 pub fn hash_csrf_token(session_secret: &str, token: &str) -> String {
@@ -105,10 +106,22 @@ pub async fn lookup_session_info(pool: &SqlitePool, session_id: &str) -> Option<
 }
 
 pub async fn lookup_session(pool: &SqlitePool, session_id: &str) -> Option<AuthenticatedUser> {
-    lookup_session_info(pool, session_id)
-        .await
-        .map(|info| AuthenticatedUser {
-            user_id: info.user_id,
+    let row = sqlx::query_as::<_, (String, String)>(
+        r#"SELECT s.user_id, u.role
+           FROM sessions s
+           JOIN users u ON u.id = s.user_id
+           WHERE s.id = ? AND s.expires_at > datetime('now')"#,
+    )
+    .bind(session_id)
+    .fetch_optional(pool)
+    .await
+    .ok()??;
+
+    Uuid::parse_str(&row.0)
+        .ok()
+        .map(|user_id| AuthenticatedUser {
+            user_id,
+            role: row.1,
         })
 }
 

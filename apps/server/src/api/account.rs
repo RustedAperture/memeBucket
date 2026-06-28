@@ -1,7 +1,14 @@
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 
 use crate::{
-    api::ValidatedJson, app_state::AppState, auth::sessions::AuthenticatedUser,
+    api::ValidatedJson,
+    app_state::AppState,
+    auth::{middleware::RequireCsrf, sessions::AuthenticatedUser},
     services::account::AccountService,
 };
 use serde::{Deserialize, Serialize};
@@ -141,4 +148,55 @@ pub async fn update_username(
     }
 
     get_profile(State(state), user).await
+}
+
+#[derive(Serialize)]
+pub struct IdentityResponse {
+    pub provider: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+}
+
+pub async fn list_identities(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+) -> Result<impl IntoResponse, crate::error::AppError> {
+    let identities = state.user_repo.get_identities(user.user_id).await?;
+    let response: Vec<IdentityResponse> = identities
+        .into_iter()
+        .map(|i| IdentityResponse {
+            provider: i.provider,
+            display_name: i.display_name,
+            avatar_url: i.avatar_url,
+        })
+        .collect();
+    Ok(Json(response))
+}
+
+pub async fn unlink_identity(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    _csrf: RequireCsrf,
+    Path(provider): Path<String>,
+) -> Result<impl IntoResponse, crate::error::AppError> {
+    let count = state.user_repo.count_identities(user.user_id).await?;
+    if count <= 1 {
+        return Ok((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Cannot remove your only login method"
+            })),
+        )
+            .into_response());
+    }
+
+    state
+        .user_repo
+        .unlink_identity(user.user_id, &provider)
+        .await?;
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({ "unlinked": true })),
+    )
+        .into_response())
 }

@@ -70,7 +70,20 @@ pub async fn connect_sqlite_pool(database_url: &str) -> anyhow::Result<SqlitePoo
     let options = SqliteConnectOptions::from_str(database_url)?
         .create_if_missing(true)
         .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
-        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal);
+        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+        .foreign_keys(true);
+    Ok(SqlitePool::connect_with(options).await?)
+}
+
+// Used only for running migrations — FK enforcement is disabled so that the
+// table-recreation dance in migration 0014 does not cascade-delete child rows.
+pub async fn connect_sqlite_pool_for_migrations(database_url: &str) -> anyhow::Result<SqlitePool> {
+    ensure_sqlite_parent_dir(database_url)?;
+    let options = SqliteConnectOptions::from_str(database_url)?
+        .create_if_missing(true)
+        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+        .foreign_keys(false);
     Ok(SqlitePool::connect_with(options).await?)
 }
 

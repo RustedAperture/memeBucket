@@ -1,6 +1,6 @@
 use memebucket_server::{
     app_state::AppState,
-    config::{Config, connect_sqlite_pool},
+    config::{Config, connect_sqlite_pool, connect_sqlite_pool_for_migrations},
     discord::commands::command_definitions,
     router::build_router,
 };
@@ -19,14 +19,17 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = Config::from_env()?;
-    let pool = connect_sqlite_pool(&config.database_url).await?;
 
     tracing::info!("Running database migrations...");
+    let migration_pool = connect_sqlite_pool_for_migrations(&config.database_url).await?;
     sqlx::migrate!("./migrations")
-        .run(&pool)
+        .run(&migration_pool)
         .await
         .expect("database migration failed");
+    migration_pool.close().await;
     tracing::info!("Database migrations complete.");
+
+    let pool = connect_sqlite_pool(&config.database_url).await?;
 
     // Register Discord slash commands asynchronously in the background if credentials are configured
     if !config.discord_application_id.is_empty() && !config.discord_bot_token.is_empty() {

@@ -18,6 +18,7 @@ function getCsrfToken(): string {
 
 export function ConnectedAccounts() {
   const [identities, setIdentities] = useState<Identity[]>([]);
+  const [telegramLinkUrl, setTelegramLinkUrl] = useState("");
 
   const fetchIdentities = async () => {
     try {
@@ -30,6 +31,13 @@ export function ConnectedAccounts() {
 
   useEffect(() => {
     fetchIdentities();
+  }, []);
+
+  useEffect(() => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL
+      ? `${process.env.NEXT_PUBLIC_API_URL}/auth/telegram/callback`
+      : "/auth/telegram/callback";
+    setTelegramLinkUrl(`${apiBase}?link_token=${getCsrfToken()}`);
   }, []);
 
   const isLinked = (provider: string) => identities.some(i => i.provider === provider);
@@ -97,13 +105,13 @@ export function ConnectedAccounts() {
           >
             Disconnect
           </Button>
-        ) : TELEGRAM_BOT_USERNAME ? (
+        ) : TELEGRAM_BOT_USERNAME && telegramLinkUrl ? (
           <Script
             src="https://telegram.org/js/telegram-widget.js?22"
             strategy="afterInteractive"
             data-telegram-login={TELEGRAM_BOT_USERNAME}
             data-size="small"
-            data-auth-url="/auth/telegram/callback"
+            data-auth-url={telegramLinkUrl}
             data-request-access="write"
           />
         ) : null}

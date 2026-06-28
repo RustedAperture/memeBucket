@@ -18,7 +18,7 @@ use crate::{
         },
         send_history::SendHistoryRepository,
     },
-    services::images::resolve_image_url,
+    services::{images::resolve_image_url, storage::StorageError, storage::StorageService},
 };
 use validator::Validate;
 
@@ -233,6 +233,47 @@ pub async fn create_image(
             &request.tags.unwrap_or_default(),
         )
         .await?;
+
+    // Async re-host Discord CDN URLs to B2 so they remain valid permanently.
+    // We spawn off-thread so the HTTP response is not delayed.
+    if StorageService::is_discord_cdn(&resolved_url) {
+        if let Some(storage) = state.storage().cloned() {
+            let original_url = resolved_url.clone();
+            let pool = state.pool.clone();
+            let image_id_for_cdn = image.id.to_string();
+            tokio::spawn(async move {
+                match storage.upload_from_url(&original_url).await {
+                    Ok(cdn_url) => {
+                        let _ = sqlx::query(
+                            "UPDATE images SET cdn_url = ?, cdn_status = 'migrated' WHERE id = ?",
+                        )
+                        .bind(&cdn_url)
+                        .bind(&image_id_for_cdn)
+                        .execute(&pool)
+                        .await;
+                    }
+                    Err(StorageError::FetchFailed(_)) => {
+                        let _ = sqlx::query("UPDATE images SET cdn_status = 'broken' WHERE id = ?")
+                            .bind(&image_id_for_cdn)
+                            .execute(&pool)
+                            .await;
+                    }
+                    Err(e) => {
+                        // UploadFailed — leave cdn_status as 'pending' for retry
+                        tracing::warn!("CDN re-host upload failed for {}: {}", original_url, e);
+                    }
+                }
+            });
+        }
+    } else {
+        // Non-Discord URLs are already stable — mark as migrated immediately.
+        let _ = sqlx::query("UPDATE images SET cdn_url = ?, cdn_status = 'migrated' WHERE id = ?")
+            .bind(&resolved_url)
+            .bind(image.id.to_string())
+            .execute(&state.pool)
+            .await;
+    }
+
     Ok(Json(image_response_from_stored(image, 0)))
 }
 

@@ -84,7 +84,7 @@ pub async fn handle_telegram_callback(
     let computed = hex::encode(mac.finalize().into_bytes());
 
     if computed != hash {
-        return StatusCode::UNAUTHORIZED.into_response();
+        return StatusCode::BAD_REQUEST.into_response();
     }
 
     // Auth verified. Determine display name.
@@ -112,8 +112,8 @@ pub async fn handle_telegram_callback(
             .iter()
             .any(|i| i.provider == "telegram");
 
-        if !already_linked {
-            let _ = state
+        if !already_linked
+            && let Err(e) = state
                 .user_repo
                 .link_identity(
                     active.user_id,
@@ -122,7 +122,12 @@ pub async fn handle_telegram_callback(
                     display_name.as_deref(),
                     avatar_url.as_deref(),
                 )
-                .await;
+                .await
+        {
+            tracing::warn!(
+                "Failed to link Telegram identity for user {}: {e}",
+                active.user_id
+            );
         }
 
         // Redirect back to settings

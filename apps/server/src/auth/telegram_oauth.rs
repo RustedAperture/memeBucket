@@ -151,8 +151,8 @@ pub async fn handle_telegram_callback(
             );
         }
 
-        // Redirect back to settings
-        return Redirect::to("/settings#connected-accounts").into_response();
+        // Redirect back to home (settings live in the account modal)
+        return Redirect::to("/").into_response();
     } else {
         // Login mode: look up or create user
         match state

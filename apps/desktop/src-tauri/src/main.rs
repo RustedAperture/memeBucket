@@ -293,17 +293,52 @@ fn main() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
+            use tauri_plugin_autostart::ManagerExt;
+            let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
+            let autostart_label = if autostart_enabled {
+                "✓ Launch at startup"
+            } else {
+                "Launch at startup"
+            };
+            let autostart_item = MenuItem::with_id(app, "autostart", autostart_label, true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&quit_item])?;
+            let menu = Menu::with_items(app, &[&autostart_item, &quit_item])?;
 
-            TrayIconBuilder::new()
+            TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("memeBucket Picker")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| {
-                    if event.id.as_ref() == "quit" {
-                        app.exit(0);
+                    match event.id.as_ref() {
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        "autostart" => {
+                            use tauri_plugin_autostart::ManagerExt;
+                            let manager = app.autolaunch();
+                            let currently_enabled = manager.is_enabled().unwrap_or(false);
+                            if currently_enabled {
+                                let _ = manager.disable();
+                            } else {
+                                let _ = manager.enable();
+                            }
+                            let new_label = if currently_enabled {
+                                "Launch at startup"
+                            } else {
+                                "✓ Launch at startup"
+                            };
+                            if let Some(tray) = app.tray_by_id("main") {
+                                let autostart_item = MenuItem::with_id(app, "autostart", new_label, true, None::<&str>)
+                                    .unwrap();
+                                let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)
+                                    .unwrap();
+                                if let Ok(menu) = Menu::with_items(app, &[&autostart_item, &quit_item]) {
+                                    let _ = tray.set_menu(Some(menu));
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 })
                 .on_tray_icon_event(|tray, event| {

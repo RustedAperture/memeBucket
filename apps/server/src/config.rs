@@ -13,7 +13,6 @@ pub struct Config {
     pub discord_bot_token: String,
     pub discord_public_key: String,
     pub klipy_api_key: Option<String>,
-    pub imgbb_api_key: Option<String>,
     pub static_dir: PathBuf,
     pub telegram_bot_token: Option<String>,
     pub telegram_bot_username: Option<String>,
@@ -36,7 +35,6 @@ impl Config {
         let discord_public_key = env::var("DISCORD_PUBLIC_KEY").unwrap_or_default();
         let session_secret = required_env("SESSION_SECRET")?;
         let klipy_api_key = env::var("KLIPY_API_KEY").ok().filter(|v| !v.is_empty());
-        let imgbb_api_key = env::var("IMGBB_API_KEY").ok().filter(|v| !v.is_empty());
         let telegram_bot_token = env::var("TELEGRAM_BOT_TOKEN")
             .ok()
             .filter(|v| !v.is_empty());
@@ -60,7 +58,6 @@ impl Config {
             discord_bot_token,
             discord_public_key,
             klipy_api_key,
-            imgbb_api_key,
             static_dir,
             telegram_bot_token,
             telegram_bot_username,

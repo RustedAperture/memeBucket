@@ -132,6 +132,17 @@ impl StorageService {
                     (bytes.to_vec(), "gif")
                 }
             }
+        } else if content_type.contains("video/mp4") || content_type.contains("video/webm") {
+            match super::video_converter::convert_video_bytes_to_webp(&bytes).await {
+                Ok(webp_bytes) => (webp_bytes, "webp"),
+                Err(e) => {
+                    tracing::warn!(
+                        "Video→WebP conversion failed for {}, storing original: {e}",
+                        url_for_log
+                    );
+                    (bytes.to_vec(), ext_from_content_type(&content_type))
+                }
+            }
         } else {
             (bytes.to_vec(), ext_from_content_type(&content_type))
         };
@@ -170,6 +181,36 @@ impl StorageService {
         }
 
         result.map_err(|e| StorageError::UploadFailed(e.to_string()))?;
+
+        Ok(format!("{}/{}", self.cdn_base_url, key))
+    }
+
+    /// Upload raw bytes to B2. The object key is derived deterministically
+    /// from `source_url` so repeated calls with the same URL are idempotent.
+    pub async fn upload_bytes(
+        &self,
+        source_url: &str,
+        bytes: Vec<u8>,
+        ext: &str,
+    ) -> Result<String, StorageError> {
+        let hash = hex::encode(Sha256::digest(source_url.as_bytes()));
+        let key = ObjPath::from(format!("{}.{}", hash, ext));
+
+        let attributes = Attributes::from_iter([(
+            Attribute::ContentType,
+            AttributeValue::from(mime_for_ext(ext)),
+        )]);
+        self.store
+            .put_opts(
+                &key,
+                bytes.into(),
+                PutOptions {
+                    attributes,
+                    ..Default::default()
+                },
+            )
+            .await
+            .map_err(|e| StorageError::UploadFailed(e.to_string()))?;
 
         Ok(format!("{}/{}", self.cdn_base_url, key))
     }

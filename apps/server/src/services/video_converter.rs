@@ -1,98 +1,83 @@
 use anyhow::{Context, Result};
-use reqwest::multipart;
-use serde::Deserialize;
 use tempfile::NamedTempFile;
 use tokio::fs;
 use tracing::{error, info};
 
-#[derive(Deserialize)]
-struct ImgBBUploadResponse {
-    data: Option<ImgBBData>,
-    success: bool,
-}
+use crate::services::storage::StorageService;
 
-#[derive(Deserialize)]
-struct ImgBBData {
-    url: String,
-}
-
-pub async fn convert_and_upload_mp4(url: &str, imgbb_api_key: &str) -> Result<String> {
-    info!("Downloading MP4 from {} for conversion", url);
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 memeBucketBot/1.0")
-        .build()
-        .context("Failed to build HTTP client")?;
-    let mp4_data = client
-        .get(url)
-        .send()
+/// Converts raw video bytes (mp4, webm) to an animated WebP using ffmpeg.
+/// The caller is responsible for ensuring ffmpeg is installed.
+pub async fn convert_video_bytes_to_webp(bytes: &[u8]) -> Result<Vec<u8>> {
+    let temp_input = NamedTempFile::new().context("Failed to create temp input file")?;
+    let temp_input_path = temp_input.path().to_path_buf();
+    fs::write(&temp_input_path, bytes)
         .await
-        .context("Failed to download MP4")?
-        .bytes()
-        .await
-        .context("Failed to read MP4 bytes")?;
+        .context("Failed to write temp video")?;
 
-    let temp_mp4 = NamedTempFile::new().context("Failed to create temp MP4 file")?;
-    let temp_mp4_path = temp_mp4.path().to_path_buf();
-    fs::write(&temp_mp4_path, &mp4_data)
-        .await
-        .context("Failed to write temp MP4")?;
+    let temp_webp = tempfile::Builder::new()
+        .suffix(".webp")
+        .tempfile()
+        .context("Failed to create temp WebP file")?;
+    let temp_webp_path = temp_webp.path().to_path_buf();
 
-    let temp_gif = NamedTempFile::new().context("Failed to create temp GIF file")?;
-    let temp_gif_path = temp_gif.path().to_path_buf();
-
-    info!("Running FFmpeg to convert MP4 to GIF");
     let output = tokio::process::Command::new("ffmpeg")
         .args([
             "-y",
             "-i",
-            temp_mp4_path.to_str().unwrap(),
+            temp_input_path.to_str().unwrap(),
             "-vf",
-            "fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+            "fps=15,scale=480:-1:flags=lanczos",
+            "-c:v",
+            "libwebp",
+            "-lossless",
+            "0",
+            "-quality",
+            "75",
             "-loop",
             "0",
-            "-f",
-            "gif",
-            temp_gif_path.to_str().unwrap(),
+            "-preset",
+            "default",
+            "-an",
+            temp_webp_path.to_str().unwrap(),
         ])
         .output()
         .await
-        .context("Failed to execute FFmpeg. Is it installed?")?;
+        .context("Failed to execute FFmpeg — is it installed?")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        error!("FFmpeg conversion failed: {}", stderr);
+        error!("FFmpeg video→WebP conversion failed: {}", stderr);
         anyhow::bail!("FFmpeg conversion failed");
     }
 
-    info!("Uploading converted GIF to ImgBB");
-    let gif_data = fs::read(&temp_gif_path)
+    let webp_data = fs::read(&temp_webp_path)
         .await
-        .context("Failed to read temp GIF")?;
+        .context("Failed to read temp WebP file")?;
 
-    let client = reqwest::Client::new();
-    let form = multipart::Form::new()
-        .text("key", imgbb_api_key.to_string())
-        .part(
-            "image",
-            multipart::Part::bytes(gif_data.to_vec())
-                .file_name("converted.gif")
-                .mime_str("image/gif")?,
-        );
+    Ok(webp_data)
+}
 
-    let res = client
-        .post("https://api.imgbb.com/1/upload")
-        .multipart(form)
+/// Downloads a video URL, converts it to animated WebP, and uploads to B2.
+/// Returns the CDN URL of the stored WebP.
+pub async fn convert_and_upload_video(url: &str, storage: &StorageService) -> Result<String> {
+    info!("Downloading video from {} for WebP conversion", url);
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (compatible; memeBucketBot/1.0)")
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .context("Failed to build HTTP client")?;
+    let video_bytes = client
+        .get(url)
         .send()
         .await
-        .context("Failed to send request to ImgBB")?;
+        .context("Failed to download video")?
+        .bytes()
+        .await
+        .context("Failed to read video bytes")?;
 
-    let res_text = res.text().await?;
-    let imgbb_res: ImgBBUploadResponse = serde_json::from_str(&res_text)
-        .context(format!("Failed to parse ImgBB response: {}", res_text))?;
-
-    if !imgbb_res.success || imgbb_res.data.is_none() {
-        anyhow::bail!("ImgBB upload failed: {}", res_text);
-    }
-
-    Ok(imgbb_res.data.unwrap().url)
+    let webp_bytes = convert_video_bytes_to_webp(&video_bytes).await?;
+    storage
+        .upload_bytes(url, webp_bytes, "webp")
+        .await
+        .map_err(|e| anyhow::anyhow!("B2 upload failed: {e}"))
 }

@@ -214,12 +214,13 @@ pub async fn create_image(
         base.ends_with(".mp4") || base.ends_with(".webm")
     };
 
-    if is_video && let Some(key) = &state.imgbb_api_key {
-        resolved_url = crate::services::video_converter::convert_and_upload_mp4(&resolved_url, key)
-            .await
-            .map_err(|err| {
-                AppError::InternalServerError(format!("Failed to convert video to GIF: {}", err))
-            })?;
+    if is_video && let Some(storage) = state.storage() {
+        resolved_url =
+            crate::services::video_converter::convert_and_upload_video(&resolved_url, storage)
+                .await
+                .map_err(|err| {
+                    AppError::InternalServerError(format!("Failed to convert video: {}", err))
+                })?;
     }
 
     let repo = state.image_repo.clone();

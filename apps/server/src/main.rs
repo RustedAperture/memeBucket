@@ -84,7 +84,6 @@ async fn main() -> anyhow::Result<()> {
             .with_discord_bot_token(config.discord_bot_token)
             .with_static_dir(config.static_dir.clone())
             .with_klipy_api_key(config.klipy_api_key)
-            .with_imgbb_api_key(config.imgbb_api_key)
             .with_telegram(
                 config.telegram_bot_token.unwrap_or_default(),
                 config.telegram_bot_username.unwrap_or_default(),

@@ -902,11 +902,13 @@ async fn handle_add_to_bucket_message_command(
         base.ends_with(".mp4") || base.ends_with(".webm")
     };
 
-    if is_video && let Some(key) = &state.imgbb_api_key {
-        match crate::services::video_converter::convert_and_upload_mp4(&resolved_url, key).await {
+    if is_video && let Some(storage) = state.storage() {
+        match crate::services::video_converter::convert_and_upload_video(&resolved_url, storage)
+            .await
+        {
             Ok(new_url) => resolved_url = new_url,
             Err(_) => {
-                return ephemeral_message("I hit an error converting that video to a GIF.");
+                return ephemeral_message("I hit an error converting that video.");
             }
         }
     }

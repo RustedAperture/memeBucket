@@ -27,9 +27,17 @@ impl StorageService {
         app_key: &str,
         cdn_base_url: &str,
     ) -> anyhow::Result<Self> {
+        // B2 region is the middle segment of the endpoint hostname:
+        // s3.us-west-004.backblazeb2.com → us-west-004
+        let region = endpoint
+            .trim_end_matches(".backblazeb2.com")
+            .strip_prefix("s3.")
+            .unwrap_or("us-west-004")
+            .to_string();
         let store = AmazonS3Builder::new()
             .with_bucket_name(bucket_name)
             .with_endpoint(format!("https://{}", endpoint))
+            .with_region(region)
             .with_access_key_id(key_id)
             .with_secret_access_key(app_key)
             // B2 S3-compatible endpoint requires path-style addressing

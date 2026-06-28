@@ -1,9 +1,14 @@
--- 1. Add role column to users
+-- 1. Add role column to users.
 ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user';
 
--- 2. Recreate users table without discord_user_key, preserving all data.
---    We do this BEFORE creating user_identities so no FK cascade can fire.
---    SQLite requires table recreation to remove a column.
+-- 2. Recreate users table without discord_user_key.
+--    We do this while capturing discord_user_key into a temp table first.
+--    user_identities does NOT exist yet so no FK cascade can fire on DROP TABLE users.
+CREATE TABLE discord_keys_temp AS
+    SELECT id AS user_id, discord_user_key, display_name, avatar_url
+    FROM users
+    WHERE discord_user_key IS NOT NULL;
+
 CREATE TABLE users_new (
     id TEXT PRIMARY KEY NOT NULL,
     display_name TEXT,
@@ -18,12 +23,10 @@ INSERT INTO users_new (id, display_name, avatar_url, username, role, created_at,
 SELECT id, display_name, avatar_url, username, role, created_at, updated_at
 FROM users;
 
--- Keep the old table alive until after we've captured discord_user_key values.
--- We rename users -> users_old so we can still SELECT from it below.
-ALTER TABLE users RENAME TO users_old;
+DROP TABLE users;
 ALTER TABLE users_new RENAME TO users;
 
--- 3. Create user_identities table now that users is the final table.
+-- 3. Create user_identities NOW that users is the clean final table.
 CREATE TABLE user_identities (
     id TEXT PRIMARY KEY NOT NULL,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -37,18 +40,15 @@ CREATE TABLE user_identities (
 
 CREATE INDEX idx_user_identities_user ON user_identities(user_id);
 
--- 4. Migrate existing Discord users from the preserved old table.
---    discord_user_key is the HMAC-derived hex of the real Discord user ID —
---    carry it forward as provider_user_id so auth lookup continues to work.
+-- 4. Populate identities from the captured keys (no-op on fresh databases).
 INSERT INTO user_identities (id, user_id, provider, provider_user_id, display_name, avatar_url)
 SELECT
     lower(hex(randomblob(16))),
-    id,
+    user_id,
     'discord',
     discord_user_key,
     display_name,
     avatar_url
-FROM users_old;
+FROM discord_keys_temp;
 
--- 5. Drop the old table now that migration is complete.
-DROP TABLE users_old;
+DROP TABLE discord_keys_temp;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Folder, Settings, X } from "lucide-react";
+import { Search, Folder, Settings, X, Minus, Move } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import type { ImageSearchResult, Bucket } from "@/lib/types";
 import { toast } from "sonner";
@@ -29,6 +29,7 @@ export default function PickerPage() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [serverUrl, setServerUrl] = useState("");
+  const [isTauriApp, setIsTauriApp] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
@@ -36,6 +37,7 @@ export default function PickerPage() {
 
   useEffect(() => {
     setServerUrl(window.location.origin);
+    setIsTauriApp(isTauri());
   }, []);
 
   useEffect(() => {
@@ -92,6 +94,16 @@ export default function PickerPage() {
       clearTimeout(timeout);
     };
   }, [query, bucketId]);
+
+  const handleMinimize = async () => {
+    const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+    await getCurrentWebviewWindow().minimize();
+  };
+
+  const handleClose = async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("hide_window");
+  };
 
   const handleSelectImage = async (url: string) => {
     if (isTauri()) {
@@ -215,8 +227,58 @@ export default function PickerPage() {
     searchInputRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    if (!isTauriApp) return;
+    let unlisten: (() => void) | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    (async () => {
+      const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+      const { invoke } = await import("@tauri-apps/api/core");
+      const win = getCurrentWebviewWindow();
+      unlisten = await win.onMoved(() => {
+        clearTimeout(timer);
+        timer = setTimeout(async () => {
+          const pos = await win.outerPosition();
+          const scale = await win.scaleFactor();
+          invoke("save_window_position", { x: pos.x / scale, y: pos.y / scale }).catch(() => {});
+        }, 500);
+      });
+    })();
+
+    return () => {
+      unlisten?.();
+      clearTimeout(timer);
+    };
+  }, [isTauriApp]);
+
   return (
     <div className="flex flex-col h-screen w-screen bg-background text-foreground overflow-hidden select-none rounded-[12px]">
+      {/* Drag handle (desktop only) */}
+      {isTauriApp && (
+        <div className="h-7 w-full shrink-0 flex items-center px-2 gap-2">
+          <div
+            data-tauri-drag-region
+            className="flex-1 flex items-center cursor-grab active:cursor-grabbing"
+          >
+            <Move className="h-3.5 w-3.5 text-muted-foreground/50 pointer-events-none" />
+          </div>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button
+              onClick={handleMinimize}
+              className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Minus className="h-3 w-3" />
+            </button>
+            <button
+              onClick={handleClose}
+              className="h-5 w-5 flex items-center justify-center rounded hover:bg-destructive hover:text-destructive-foreground text-muted-foreground transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="px-2.5 pt-2.5 pb-2 border-b bg-card/40 backdrop-blur-md flex flex-col gap-2 shrink-0">
         <div className="relative flex items-center">
@@ -293,7 +355,7 @@ export default function PickerPage() {
       </div>
 
       {/* Masonry image grid */}
-      <div className="flex-grow overflow-y-auto p-2 scrollbar-none bg-muted/10">
+      <div className="flex-grow min-h-0 overflow-y-auto p-2 scrollbar-none bg-muted/10">
         {loading && results.length === 0 ? (
           <div className="columns-2 gap-2">
             {Array.from({ length: 8 }).map((_, i) => (

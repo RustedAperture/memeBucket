@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.2 - Jun 28, 2026
+
+### Added
+
+- Added a **drag bar** to the Picker overlay with a four-arrow move icon, close button, and minimize button. Drag the bar to reposition the window; position is saved automatically after each move.
+
 ## v0.2.1 - Jun 28, 2026
 
 ### Added

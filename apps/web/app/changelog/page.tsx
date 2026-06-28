@@ -7,6 +7,13 @@ export default function ChangelogPage() {
       description="Notable changes to memeBucket."
       updated="Jun 28, 2026"
     >
+      <LegalSection title="v0.2.2 - Jun 28, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added a <strong>drag bar</strong> to the Picker overlay with a four-arrow move icon, close button, and minimize button. Drag the bar to reposition the window; position is saved automatically after each move.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.2.1 - Jun 28, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

@@ -7,6 +7,16 @@ export default function ChangelogPage() {
       description="Notable changes to memeBucket."
       updated="Jun 28, 2026"
     >
+      <LegalSection title="v0.2.1 - Jun 28, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added <strong>launch at startup</strong> toggle to the Picker tray menu: right-click the tray icon and click "Launch at startup" to toggle; a checkmark (✓) indicates when it's enabled.</li>
+          <li>Added <strong>draggable window</strong> to the Picker: drag by the top strip to reposition the overlay anywhere on screen. Position is saved and restored on next open.</li>
+          <li>Added <strong>screen-aware positioning</strong>: the Picker now clamps to monitor bounds when summoned via hotkey, so it never opens partially off-screen. If a previously saved position is no longer visible (e.g. after unplugging a monitor), it falls back to cursor-relative positioning.</li>
+          <li>Added <strong>auto-update</strong> to the Picker: the app checks for new releases in the background on startup. When an update is available, a "Restart to update (vX.Y.Z)" item appears in the tray menu; click it to download and apply the update.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.2.0 - Jun 28, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

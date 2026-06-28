@@ -6,7 +6,9 @@ use axum::{
 };
 
 use crate::{
-    api::ValidatedJson, app_state::AppState, auth::sessions::AuthenticatedUser,
+    api::ValidatedJson,
+    app_state::AppState,
+    auth::{middleware::RequireCsrf, sessions::AuthenticatedUser},
     services::account::AccountService,
 };
 use serde::{Deserialize, Serialize};
@@ -174,6 +176,7 @@ pub async fn list_identities(
 pub async fn unlink_identity(
     State(state): State<AppState>,
     user: AuthenticatedUser,
+    _csrf: RequireCsrf,
     Path(provider): Path<String>,
 ) -> Result<impl IntoResponse, crate::error::AppError> {
     let count = state.user_repo.count_identities(user.user_id).await?;

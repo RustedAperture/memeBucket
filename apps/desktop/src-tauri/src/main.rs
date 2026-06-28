@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
@@ -23,6 +24,9 @@ impl Default for Config {
         Self { server_url: None, window_x: None, window_y: None }
     }
 }
+
+// Holds a pending update download so the user can trigger install via a tray item.
+struct PendingUpdate(Mutex<Option<tauri_plugin_updater::Update>>);
 
 // Helper to get the path to the config file
 fn get_config_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -293,6 +297,9 @@ fn main() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
+            // Register managed state for a pending update the user can trigger via tray.
+            app.manage(PendingUpdate(Mutex::new(None)));
+
             use tauri_plugin_autostart::ManagerExt;
             let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
             let autostart_label = if autostart_enabled {
@@ -338,6 +345,22 @@ fn main() {
                                 }
                             }
                         }
+                        "restart_update" => {
+                            // User clicked "Restart to update" — download and install the
+                            // pending update that was stored when we detected it in the
+                            // background check. This triggers a restart when complete.
+                            let app2 = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Some(state) = app2.try_state::<PendingUpdate>() {
+                                    let update = state.0.lock().unwrap().take();
+                                    if let Some(update) = update {
+                                        if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
+                                            eprintln!("Update install failed: {e}");
+                                        }
+                                    }
+                                }
+                            });
+                        }
                         _ => {}
                     }
                 })
@@ -366,21 +389,37 @@ fn main() {
                 })
                 .build(app)?;
 
-            // Check for updates in the background on startup
+            // Check for updates in the background on startup.
+            // If an update is found: store it in managed state and add a tray item so
+            // the user can choose when to install (rather than auto-restarting silently).
             let app_handle = app.handle().clone();
             tokio::spawn(async move {
                 use tauri_plugin_updater::UpdaterExt;
+                use tauri_plugin_autostart::ManagerExt;
                 if let Ok(Some(update)) = app_handle.updater().unwrap().check().await {
-                    // Show a tray notification — log for now
-                    // (full notification UI can be added later)
+                    let version = update.version.clone();
                     println!(
                         "Update available: {} → {}",
                         update.current_version,
                         update.version
                     );
-                    // Download and install in-place; app restarts automatically on completion.
-                    if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
-                        eprintln!("Update install failed: {e}");
+                    // Store the pending update for user-triggered install.
+                    if let Some(state) = app_handle.try_state::<PendingUpdate>() {
+                        *state.0.lock().unwrap() = Some(update);
+                    }
+                    // Rebuild tray menu to surface a "Restart to update" item.
+                    if let Some(tray) = app_handle.tray_by_id("main") {
+                        let autostart_enabled = app_handle.autolaunch().is_enabled().unwrap_or(false);
+                        let autostart_label = if autostart_enabled { "✓ Launch at startup" } else { "Launch at startup" };
+                        if let (Ok(autostart_item), Ok(update_item), Ok(quit_item)) = (
+                            MenuItem::with_id(&app_handle, "autostart", autostart_label, true, None::<&str>),
+                            MenuItem::with_id(&app_handle, "restart_update", &format!("Restart to update (v{})", version), true, None::<&str>),
+                            MenuItem::with_id(&app_handle, "quit", "Quit", true, None::<&str>),
+                        ) {
+                            if let Ok(menu) = Menu::with_items(&app_handle, &[&autostart_item, &update_item, &quit_item]) {
+                                let _ = tray.set_menu(Some(menu));
+                            }
+                        }
                     }
                 }
             });
@@ -412,7 +451,63 @@ fn main() {
                                     .and_then(|c| c.window_x.zip(c.window_y));
 
                                 if let Some((sx, sy)) = saved_pos {
-                                    let _ = window.set_position(tauri::LogicalPosition::new(sx, sy));
+                                    // Validate that the saved position fits within at least one
+                                    // available monitor. If the monitor was disconnected since
+                                    // the position was saved the window would appear off-screen.
+                                    let fits = window.available_monitors()
+                                        .ok()
+                                        .unwrap_or_default()
+                                        .iter()
+                                        .any(|m| {
+                                            let scale = m.scale_factor();
+                                            let mpos = m.position();
+                                            let msize = m.size();
+                                            let wsize = window.outer_size()
+                                                .unwrap_or(tauri::PhysicalSize { width: 360, height: 500 });
+                                            let mon_lx = (mpos.x as f64 / scale) as i32;
+                                            let mon_ly = (mpos.y as f64 / scale) as i32;
+                                            let mon_lw = (msize.width as f64 / scale) as i32;
+                                            let mon_lh = (msize.height as f64 / scale) as i32;
+                                            let win_lw = (wsize.width as f64 / scale) as i32;
+                                            let win_lh = (wsize.height as f64 / scale) as i32;
+                                            let sx_i = sx as i32;
+                                            let sy_i = sy as i32;
+                                            sx_i >= mon_lx && sy_i >= mon_ly
+                                                && sx_i + win_lw <= mon_lx + mon_lw
+                                                && sy_i + win_lh <= mon_ly + mon_lh
+                                        });
+                                    if fits {
+                                        let _ = window.set_position(tauri::LogicalPosition::new(sx, sy));
+                                    } else {
+                                        // Saved position no longer valid — fall through to
+                                        // cursor-relative positioning.
+                                        let enigo = Enigo::new();
+                                        let (cx, cy) = enigo.mouse_location();
+                                        let positioned = if let Ok(Some(monitor)) = window.current_monitor() {
+                                            let scale = monitor.scale_factor();
+                                            let mpos = monitor.position();
+                                            let msize = monitor.size();
+                                            let wsize = window.outer_size()
+                                                .unwrap_or(tauri::PhysicalSize { width: 360, height: 500 });
+                                            let mon_lx = (mpos.x as f64 / scale) as i32;
+                                            let mon_ly = (mpos.y as f64 / scale) as i32;
+                                            let mon_lw = (msize.width as f64 / scale) as i32;
+                                            let mon_lh = (msize.height as f64 / scale) as i32;
+                                            let win_lw = (wsize.width as f64 / scale) as i32;
+                                            let win_lh = (wsize.height as f64 / scale) as i32;
+                                            let clamped_x = cx.clamp(mon_lx, (mon_lx + mon_lw - win_lw).max(mon_lx));
+                                            let clamped_y = (cy - win_lh).clamp(mon_ly, (mon_ly + mon_lh - win_lh).max(mon_ly));
+                                            let _ = window.set_position(tauri::LogicalPosition::new(clamped_x as f64, clamped_y as f64));
+                                            true
+                                        } else {
+                                            false
+                                        };
+                                        if !positioned {
+                                            let enigo = Enigo::new();
+                                            let (cx, cy) = enigo.mouse_location();
+                                            let _ = window.set_position(tauri::LogicalPosition::new(cx as f64, (cy - 500).max(0) as f64));
+                                        }
+                                    }
                                 } else {
                                     let enigo = Enigo::new();
                                     let (cx, cy) = enigo.mouse_location();

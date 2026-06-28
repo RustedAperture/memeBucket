@@ -2,6 +2,7 @@ use axum::{
     extract::FromRequestParts,
     http::{StatusCode, request::Parts},
 };
+use uuid::Uuid;
 
 use crate::{
     app_state::AppState,
@@ -44,6 +45,31 @@ impl FromRequestParts<AppState> for OptionalUser {
             .await
             .ok();
         Ok(Self(user))
+    }
+}
+
+pub struct AdminUser {
+    pub user_id: Uuid,
+}
+
+impl FromRequestParts<AppState> for AdminUser {
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let user = AuthenticatedUser::from_request_parts(parts, state)
+            .await
+            .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+        if user.role != "admin" {
+            return Err(StatusCode::FORBIDDEN);
+        }
+
+        Ok(AdminUser {
+            user_id: user.user_id,
+        })
     }
 }
 

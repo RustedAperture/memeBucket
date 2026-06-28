@@ -64,9 +64,10 @@ async fn test_bulk_delete_and_move_images() {
         .header("content-type", "application/json")
         .body(Body::from(serde_json::to_vec(&payload_move).unwrap()))
         .unwrap();
-    move_request
-        .extensions_mut()
-        .insert(AuthenticatedUser { user_id: user.id });
+    move_request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
 
     let move_response = app.clone().oneshot(move_request).await.unwrap();
     assert_eq!(move_response.status(), StatusCode::OK);
@@ -103,9 +104,10 @@ async fn test_bulk_delete_and_move_images() {
         .header("content-type", "application/json")
         .body(Body::from(serde_json::to_vec(&payload_delete).unwrap()))
         .unwrap();
-    delete_request
-        .extensions_mut()
-        .insert(AuthenticatedUser { user_id: user.id });
+    delete_request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
 
     let delete_response = app.clone().oneshot(delete_request).await.unwrap();
     assert_eq!(delete_response.status(), StatusCode::OK);

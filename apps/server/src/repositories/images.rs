@@ -192,6 +192,8 @@ pub trait ImageRepo: Send + Sync {
         image_id: Uuid,
         new_bucket_id: Uuid,
     ) -> Result<bool, sqlx::Error>;
+
+    async fn invalidate_image(&self, _owner_user_id: Uuid, _bucket_id: Uuid, _image_id: Uuid) {}
 }
 
 impl ImageRepository {

@@ -241,7 +241,10 @@ pub async fn create_image(
         if let Some(storage) = state.storage().cloned() {
             let original_url = resolved_url.clone();
             let pool = state.pool.clone();
+            let image_repo = state.image_repo.clone();
             let image_id_for_cdn = image.id.to_string();
+            let owner_user_id = user.user_id;
+            let image_uuid = image.id;
             tokio::spawn(async move {
                 match storage.upload_from_url(&original_url).await {
                     Ok(cdn_url) => {
@@ -252,11 +255,17 @@ pub async fn create_image(
                         .bind(&image_id_for_cdn)
                         .execute(&pool)
                         .await;
+                        image_repo
+                            .invalidate_image(owner_user_id, bucket_id, image_uuid)
+                            .await;
                     }
                     Err(StorageError::FetchFailed(_)) => {
                         let _ = sqlx::query("UPDATE images SET cdn_status = 'broken' WHERE id = ?")
                             .bind(&image_id_for_cdn)
                             .execute(&pool)
+                            .await;
+                        image_repo
+                            .invalidate_image(owner_user_id, bucket_id, image_uuid)
                             .await;
                     }
                     Err(e) => {

@@ -573,4 +573,11 @@ impl<R: ImageRepo> ImageRepo for CachedImageRepository<R> {
             .await;
         Ok(result)
     }
+
+    async fn invalidate_image(&self, owner_user_id: Uuid, bucket_id: Uuid, image_id: Uuid) {
+        self.list_for_bucket.invalidate_all();
+        self.get_for_owner
+            .invalidate(&(owner_user_id, bucket_id, image_id))
+            .await;
+    }
 }

@@ -3,6 +3,7 @@ use object_store::{
     path::Path as ObjPath,
 };
 use sha2::{Digest, Sha256};
+use std::io::Cursor;
 use std::sync::Arc;
 
 #[derive(Debug, thiserror::Error)]
@@ -89,33 +90,61 @@ impl StorageService {
         // WebP conversion is CPU-bound (decode + encode), so we offload it to a
         // blocking thread to avoid tying up a tokio worker.
         let url_for_log = url.to_string();
-        let (final_bytes, ext) =
-            if content_type.contains("image/png") || content_type.contains("image/jpeg") {
-                let bytes_clone = bytes.clone();
-                match tokio::task::spawn_blocking(move || convert_to_webp(&bytes_clone)).await {
-                    Ok(Ok(webp_bytes)) => (webp_bytes, "webp"),
-                    Ok(Err(e)) => {
-                        tracing::warn!(
-                            "WebP conversion failed for {}, storing original format: {e}",
-                            url_for_log
-                        );
-                        (bytes.to_vec(), ext_from_content_type(&content_type))
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            "WebP conversion task panicked for {}, storing original format: {e}",
-                            url_for_log
-                        );
-                        (bytes.to_vec(), ext_from_content_type(&content_type))
-                    }
+        let (final_bytes, ext) = if content_type.contains("image/png")
+            || content_type.contains("image/jpeg")
+        {
+            let bytes_clone = bytes.clone();
+            match tokio::task::spawn_blocking(move || convert_to_webp(&bytes_clone)).await {
+                Ok(Ok(webp_bytes)) => (webp_bytes, "webp"),
+                Ok(Err(e)) => {
+                    tracing::warn!(
+                        "WebP conversion failed for {}, storing original format: {e}",
+                        url_for_log
+                    );
+                    (bytes.to_vec(), ext_from_content_type(&content_type))
                 }
-            } else {
-                (bytes.to_vec(), ext_from_content_type(&content_type))
-            };
+                Err(e) => {
+                    tracing::warn!(
+                        "WebP conversion task panicked for {}, storing original format: {e}",
+                        url_for_log
+                    );
+                    (bytes.to_vec(), ext_from_content_type(&content_type))
+                }
+            }
+        } else if content_type.contains("image/gif") {
+            let bytes_clone = bytes.clone();
+            match tokio::task::spawn_blocking(move || convert_gif_to_animated_webp(&bytes_clone))
+                .await
+            {
+                Ok(Ok(webp_bytes)) => (webp_bytes, "webp"),
+                Ok(Err(e)) => {
+                    tracing::warn!(
+                        "Animated WebP conversion failed for {}, storing original GIF: {e}",
+                        url_for_log
+                    );
+                    (bytes.to_vec(), "gif")
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Animated WebP conversion task panicked for {}, storing original GIF: {e}",
+                        url_for_log
+                    );
+                    (bytes.to_vec(), "gif")
+                }
+            }
+        } else {
+            (bytes.to_vec(), ext_from_content_type(&content_type))
+        };
 
         // Deterministic key: sha256 of original URL + extension
         let hash = hex::encode(Sha256::digest(url.as_bytes()));
         let key = ObjPath::from(format!("{}.{}", hash, ext));
+
+        tracing::debug!(
+            "B2 upload attempt: key={key}, size={} bytes, content_type={}",
+            final_bytes.len(),
+            mime_for_ext(ext)
+        );
 
         // Set Content-Type so B2 serves the correct MIME type and browsers
         // render <img>/<video> elements without receiving octet-stream.
@@ -123,7 +152,8 @@ impl StorageService {
             Attribute::ContentType,
             AttributeValue::from(mime_for_ext(ext)),
         )]);
-        self.store
+        let result = self
+            .store
             .put_opts(
                 &key,
                 final_bytes.into(),
@@ -132,8 +162,14 @@ impl StorageService {
                     ..Default::default()
                 },
             )
-            .await
-            .map_err(|e| StorageError::UploadFailed(e.to_string()))?;
+            .await;
+
+        match &result {
+            Ok(_) => tracing::debug!("B2 upload succeeded: key={key}"),
+            Err(e) => tracing::error!("B2 upload error (put_opts): {e}"),
+        }
+
+        result.map_err(|e| StorageError::UploadFailed(e.to_string()))?;
 
         Ok(format!("{}/{}", self.cdn_base_url, key))
     }
@@ -142,11 +178,46 @@ impl StorageService {
 fn convert_to_webp(bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
     let img = image::load_from_memory(bytes)?;
     let mut output = Vec::new();
-    img.write_to(
-        &mut std::io::Cursor::new(&mut output),
-        image::ImageFormat::WebP,
-    )?;
+    img.write_to(&mut Cursor::new(&mut output), image::ImageFormat::WebP)?;
     Ok(output)
+}
+
+fn convert_gif_to_animated_webp(bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
+    use image::AnimationDecoder;
+    use image::codecs::gif::GifDecoder;
+
+    let decoder = GifDecoder::new(Cursor::new(bytes))?;
+    let frames = decoder.into_frames().collect_frames()?;
+
+    if frames.is_empty() {
+        anyhow::bail!("GIF has no frames");
+    }
+
+    let (width, height) = frames[0].buffer().dimensions();
+
+    // Collect (rgba_bytes, timestamp_ms) before creating the encoder so
+    // the data outlives the AnimFrame borrows stored inside AnimEncoder.
+    let mut frame_data: Vec<(Vec<u8>, i32)> = Vec::with_capacity(frames.len());
+    let mut timestamp_ms: i32 = 0;
+    for frame in &frames {
+        let (numer, denom) = frame.delay().numer_denom_ms();
+        let frame_ms = numer.checked_div(denom).unwrap_or(100) as i32;
+        frame_data.push((frame.buffer().as_raw().clone(), timestamp_ms));
+        timestamp_ms += frame_ms;
+    }
+
+    let config =
+        webp::WebPConfig::new().map_err(|_| anyhow::anyhow!("Failed to initialize WebPConfig"))?;
+    let mut encoder = webp::AnimEncoder::new(width, height, &config);
+
+    for (rgba, ts) in &frame_data {
+        encoder.add_frame(webp::AnimFrame::from_rgba(rgba, width, height, *ts));
+    }
+
+    let webp_mem = encoder
+        .try_encode()
+        .map_err(|e| anyhow::anyhow!("Animated WebP encode failed: {:?}", e))?;
+    Ok(webp_mem.to_vec())
 }
 
 fn ext_from_content_type(ct: &str) -> &'static str {

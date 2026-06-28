@@ -5,8 +5,18 @@ export default function ChangelogPage() {
     <LegalPage
       title="Changelog"
       description="Notable changes to memeBucket."
-      updated="Jun 26, 2026"
+      updated="Jun 27, 2026"
     >
+      <LegalSection title="v0.1.9 - Jun 27, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added <strong>Telegram Login</strong> as a second authentication provider. Users can now sign in with Telegram alongside Discord.</li>
+          <li>Added multi-provider identity model: one account can have multiple login methods (Discord and/or Telegram) linked to it.</li>
+          <li>Added <strong>Connected Accounts</strong> section to account settings for viewing and unlinking auth providers.</li>
+          <li>Added role-based access control (<code>role</code> column on users) for future admin panel support.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.1.8 - Jun 26, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

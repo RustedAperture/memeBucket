@@ -41,13 +41,20 @@ export default function PrivacyPage() {
       <LegalSection title="Third Parties">
         <p>
           memeBucket relies on Discord for OAuth, application commands, profile data, and
-          message delivery. It also uses the Klipy API for the GIF search feature, 
-          which means your search queries are sent to Klipy. When you add a raw video 
-          file (like an MP4) to your bucket, memeBucket may temporarily process that file and 
-          automatically upload it to ImgBB (api.imgbb.com) to convert it into a hosted 
-          GIF. Image and GIF URLs may point to third-party hosts; loading or viewing 
-          them may contact those hosts. Those services have their own terms and privacy 
+          message delivery. It also uses the Klipy API for the GIF search feature,
+          which means your search queries are sent to Klipy. When you add a raw video
+          file (like an MP4) to your bucket, memeBucket may temporarily process that file and
+          automatically upload it to ImgBB (api.imgbb.com) to convert it into a hosted
+          GIF. Image and GIF URLs may point to third-party hosts; loading or viewing
+          them may contact those hosts. Those services have their own terms and privacy
           policies.
+        </p>
+        <p className="mt-3">
+          memeBucket also supports <strong>Telegram Login</strong> as an authentication
+          provider. When you sign in or link your account with Telegram, the Telegram
+          Login Widget sends your Telegram user ID, first name, username (if set), and
+          profile photo URL to our server. This data is stored to identify your account
+          and display your profile in the dashboard.
         </p>
       </LegalSection>
 

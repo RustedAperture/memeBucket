@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.9 - Jun 27, 2026
+
+### Added
+
+- Added **Telegram Login** as a second authentication provider. Users can now sign in with Telegram alongside Discord.
+- Added multi-provider identity model: one account can have multiple login methods (Discord and/or Telegram) linked to it.
+- Added **Connected Accounts** section to account settings for viewing and unlinking auth providers.
+- Added role-based access control (`role` column on users) for future admin panel support.
+
 ## v0.1.8 - Jun 26, 2026
 
 ### Added

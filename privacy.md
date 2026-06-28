@@ -35,6 +35,8 @@ When you send an image through Discord, Discord and the recipients of that messa
 
 memeBucket relies on Discord for OAuth, application commands, user profile data, and message delivery. It also uses the Klipy API for the GIF search feature, meaning your search queries are sent to Klipy. When you add a raw video file (like an MP4) to your bucket, memeBucket may temporarily process that file and automatically upload it to ImgBB (api.imgbb.com) to convert it into a hosted GIF. Image and GIF URLs may point to third-party hosts; loading or viewing those URLs may contact the third-party host. Those services are governed by their own terms and privacy policies.
 
+memeBucket also supports **Telegram Login** as an authentication provider. When you sign in or link your account with Telegram, the Telegram Login Widget sends your Telegram user ID, first name, username (if set), and profile photo URL to our server. This data is stored to identify your account and display your profile in the dashboard.
+
 ## Retention
 
 memeBucket keeps account, bucket, image, sharing, subscription, whitelist, and command history data until it is deleted, the account is deleted, or the maintainers remove it for operational reasons. Session records expire and may be removed as part of normal maintenance.

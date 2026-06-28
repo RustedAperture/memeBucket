@@ -322,10 +322,46 @@ fn main() {
                                 use enigo::{Enigo, MouseControllable};
                                 let enigo = Enigo::new();
                                 let (cx, cy) = enigo.mouse_location();
-                                let _ = window.set_position(tauri::LogicalPosition::new(
-                                    cx as f64,
-                                    (cy - 500).max(0) as f64,
-                                ));
+
+                                // Clamp window to monitor bounds so it never opens partially off-screen.
+                                // enigo returns logical coordinates; monitor bounds are in physical pixels,
+                                // so convert them using the scale factor before clamping.
+                                let positioned = if let Ok(Some(monitor)) = window.current_monitor() {
+                                    let scale = monitor.scale_factor();
+                                    let mpos = monitor.position(); // PhysicalPosition<i32>
+                                    let msize = monitor.size();    // PhysicalSize<u32>
+                                    let wsize = window.outer_size()
+                                        .unwrap_or(tauri::PhysicalSize { width: 360, height: 500 });
+
+                                    // Convert monitor physical bounds to logical for comparison with cursor
+                                    let mon_lx = (mpos.x as f64 / scale) as i32;
+                                    let mon_ly = (mpos.y as f64 / scale) as i32;
+                                    let mon_lw = (msize.width as f64 / scale) as i32;
+                                    let mon_lh = (msize.height as f64 / scale) as i32;
+                                    let win_lw = (wsize.width as f64 / scale) as i32;
+                                    let win_lh = (wsize.height as f64 / scale) as i32;
+
+                                    let target_x = cx;
+                                    let target_y = cy - win_lh;
+
+                                    let clamped_x = target_x.clamp(mon_lx, (mon_lx + mon_lw - win_lw).max(mon_lx));
+                                    let clamped_y = target_y.clamp(mon_ly, (mon_ly + mon_lh - win_lh).max(mon_ly));
+
+                                    let _ = window.set_position(tauri::LogicalPosition::new(
+                                        clamped_x as f64,
+                                        clamped_y as f64,
+                                    ));
+                                    true
+                                } else {
+                                    false
+                                };
+
+                                if !positioned {
+                                    let _ = window.set_position(tauri::LogicalPosition::new(
+                                        cx as f64,
+                                        (cy - 500).max(0) as f64,
+                                    ));
+                                }
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }

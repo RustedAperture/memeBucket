@@ -146,7 +146,7 @@ impl UserRepo for UserRepository {
         tx.commit().await?;
 
         Ok(StoredUser {
-            id: Uuid::parse_str(&id).unwrap(),
+            id: Uuid::parse_str(&id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
             display_name,
             avatar_url,
             username,
@@ -168,15 +168,16 @@ impl UserRepo for UserRepository {
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row.map(
-            |(id, display_name, avatar_url, username, role)| StoredUser {
-                id: Uuid::parse_str(&id).unwrap(),
+        row.map(|(id, display_name, avatar_url, username, role)| {
+            Ok(StoredUser {
+                id: Uuid::parse_str(&id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 display_name,
                 avatar_url,
                 username,
                 role,
-            },
-        ))
+            })
+        })
+        .transpose()
     }
 
     async fn update_username(&self, id: Uuid, username: &str) -> Result<bool, sqlx::Error> {
@@ -207,18 +208,19 @@ impl UserRepo for UserRepository {
             .fetch_all(&self.pool)
             .await?;
 
-        Ok(rows
-            .into_iter()
+        rows.into_iter()
             .map(
-                |(id, provider, provider_user_id, display_name, avatar_url)| StoredIdentity {
-                    id: Uuid::parse_str(&id).unwrap(),
-                    provider,
-                    provider_user_id,
-                    display_name,
-                    avatar_url,
+                |(id, provider, provider_user_id, display_name, avatar_url)| {
+                    Ok(StoredIdentity {
+                        id: Uuid::parse_str(&id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+                        provider,
+                        provider_user_id,
+                        display_name,
+                        avatar_url,
+                    })
                 },
             )
-            .collect())
+            .collect()
     }
 
     async fn count_identities(&self, user_id: Uuid) -> Result<i64, sqlx::Error> {

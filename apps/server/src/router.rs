@@ -11,7 +11,8 @@ use tower_governor::{
 use crate::{
     api::{
         account::{
-            delete_account, export_account, get_profile, import_account, logout, update_username,
+            delete_account, export_account, get_profile, import_account, list_identities, logout,
+            unlink_identity, update_username,
         },
         buckets::{create_bucket, delete_bucket, list_buckets, rename_bucket},
         gifs::search_gifs,
@@ -119,6 +120,11 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
         .route(
             "/api/account/username",
             axum::routing::patch(update_username),
+        )
+        .route("/api/account/identities", get(list_identities))
+        .route(
+            "/api/account/identities/{provider}",
+            delete(unlink_identity),
         );
 
     if !is_test {

@@ -3,8 +3,10 @@ use memebucket_server::{
     config::{Config, connect_sqlite_pool, connect_sqlite_pool_for_migrations},
     discord::commands::command_definitions,
     router::build_router,
+    services::migration::run_cdn_migration,
     services::storage::StorageService,
 };
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -65,6 +67,15 @@ async fn main() -> anyhow::Result<()> {
             None
         }
     };
+
+    // Spawn CDN migration job if storage is configured
+    if let Some(ref storage_svc) = storage {
+        let pool_clone = pool.clone();
+        let storage_clone = Arc::new(storage_svc.clone());
+        tokio::spawn(async move {
+            run_cdn_migration(pool_clone, storage_clone).await;
+        });
+    }
 
     let app = build_router(
         AppState::new(pool)

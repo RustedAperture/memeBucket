@@ -393,7 +393,7 @@ fn main() {
             // If an update is found: store it in managed state and add a tray item so
             // the user can choose when to install (rather than auto-restarting silently).
             let app_handle = app.handle().clone();
-            tokio::spawn(async move {
+            tauri::async_runtime::spawn(async move {
                 use tauri_plugin_updater::UpdaterExt;
                 use tauri_plugin_autostart::ManagerExt;
                 if let Ok(Some(update)) = app_handle.updater().unwrap().check().await {

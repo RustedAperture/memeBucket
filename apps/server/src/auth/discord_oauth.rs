@@ -146,9 +146,10 @@ async fn complete_oauth_flow(state: &AppState, code: &str) -> anyhow::Result<(Uu
         )
     });
 
-    let users = state.user_repo.clone();
-    let stored_user = users
-        .upsert_by_discord_key(
+    let stored_user = state
+        .user_repo
+        .upsert_by_provider(
+            "discord",
             user_key.as_hex(),
             Some(&display_name),
             avatar_url.as_deref(),

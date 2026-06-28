@@ -29,7 +29,7 @@ async fn test_bulk_delete_and_move_images() {
     let images_repo = ImageRepository::new(pool.clone());
 
     let user = users
-        .upsert_by_discord_key("owner", None, None)
+        .upsert_by_provider("discord", "owner", None, None)
         .await
         .unwrap();
 

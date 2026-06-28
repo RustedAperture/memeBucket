@@ -23,7 +23,7 @@ async fn test_export_import_and_delete_account() {
 
     // 1. Create user, bucket, and image with full metadata
     let user = users
-        .upsert_by_discord_key("owner", None, None)
+        .upsert_by_provider("discord", "owner", None, None)
         .await
         .unwrap();
 
@@ -57,7 +57,7 @@ async fn test_export_import_and_delete_account() {
 
     // 4. Re-create user and import the exported data
     let new_user = users
-        .upsert_by_discord_key("owner", None, None)
+        .upsert_by_provider("discord", "owner", None, None)
         .await
         .unwrap();
 

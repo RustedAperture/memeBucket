@@ -63,11 +63,11 @@ async fn delete_bucket_requires_owner_scope() {
     let users = UserRepository::new(pool.clone());
     let pools = BucketRepository::new(pool.clone());
     let alice = users
-        .upsert_by_discord_key("alice", None, None)
+        .upsert_by_provider("discord", "alice", None, None)
         .await
         .unwrap();
     let bob = users
-        .upsert_by_discord_key("bob", None, None)
+        .upsert_by_provider("discord", "bob", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(alice.id, "cats").await.unwrap();
@@ -83,7 +83,7 @@ async fn bucket_routes_support_owner_scoped_crud() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let user = users
-        .upsert_by_discord_key("owner", None, None)
+        .upsert_by_provider("discord", "owner", None, None)
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
@@ -157,7 +157,7 @@ async fn create_bucket_rejects_blank_name() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let user = users
-        .upsert_by_discord_key("owner", None, None)
+        .upsert_by_provider("discord", "owner", None, None)
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
@@ -184,7 +184,7 @@ async fn create_bucket_rejects_duplicate_name_for_same_owner() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let user = users
-        .upsert_by_discord_key("owner", None, None)
+        .upsert_by_provider("discord", "owner", None, None)
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
@@ -229,11 +229,11 @@ async fn create_bucket_allows_same_name_for_different_owners() {
     let pool = test_pool().await;
     let users = UserRepository::new(pool.clone());
     let alice = users
-        .upsert_by_discord_key("alice", None, None)
+        .upsert_by_provider("discord", "alice", None, None)
         .await
         .unwrap();
     let bob = users
-        .upsert_by_discord_key("bob", None, None)
+        .upsert_by_provider("discord", "bob", None, None)
         .await
         .unwrap();
     let state = AppState::for_tests(pool);
@@ -305,7 +305,7 @@ async fn create_image_stores_resolved_metadata_image_url() {
     let users = UserRepository::new(pool.clone());
     let pools = BucketRepository::new(pool.clone());
     let user = users
-        .upsert_by_discord_key("owner", None, None)
+        .upsert_by_provider("discord", "owner", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(user.id, "cats").await.unwrap();
@@ -339,11 +339,11 @@ async fn whitelist_enabled_blocks_existing_subscriber_image_access() {
     let pools = BucketRepository::new(pool.clone());
     let images = ImageRepository::new(pool.clone());
     let owner = users
-        .upsert_by_discord_key("owner-whitelist", None, None)
+        .upsert_by_provider("discord", "owner-whitelist", None, None)
         .await
         .unwrap();
     let subscriber = users
-        .upsert_by_discord_key("subscriber-whitelist", None, None)
+        .upsert_by_provider("discord", "subscriber-whitelist", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(owner.id, "cats").await.unwrap();
@@ -387,11 +387,11 @@ async fn shared_pool_preview_uses_viewer_send_count_and_anonymous_gets_zero() {
     let images = ImageRepository::new(pool.clone());
     let send_history = SendHistoryRepository::new(pool.clone());
     let owner = users
-        .upsert_by_discord_key("owner-shared-preview", None, None)
+        .upsert_by_provider("discord", "owner-shared-preview", None, None)
         .await
         .unwrap();
     let subscriber = users
-        .upsert_by_discord_key("subscriber-shared-preview", None, None)
+        .upsert_by_provider("discord", "subscriber-shared-preview", None, None)
         .await
         .unwrap();
     let saved_pool = pools.create(owner.id, "cats").await.unwrap();

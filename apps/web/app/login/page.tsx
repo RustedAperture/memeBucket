@@ -1,5 +1,5 @@
-import Script from "next/script";
 import { Button } from "@/components/ui/button";
+import { TelegramWidget } from "@/components/telegram-widget";
 
 const TELEGRAM_BOT_USERNAME = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "";
 const TELEGRAM_AUTH_URL = process.env.NEXT_PUBLIC_API_URL
@@ -21,15 +21,7 @@ export default function LoginPage() {
 
         {TELEGRAM_BOT_USERNAME && (
           <div className="flex justify-center">
-            <Script
-              src="https://telegram.org/js/telegram-widget.js?22"
-              strategy="afterInteractive"
-              data-telegram-login={TELEGRAM_BOT_USERNAME}
-              data-size="large"
-              data-radius="8"
-              data-auth-url={TELEGRAM_AUTH_URL}
-              data-request-access="write"
-            />
+            <TelegramWidget botUsername={TELEGRAM_BOT_USERNAME} authUrl={TELEGRAM_AUTH_URL} />
           </div>
         )}
 

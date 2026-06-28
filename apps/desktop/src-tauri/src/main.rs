@@ -366,6 +366,25 @@ fn main() {
                 })
                 .build(app)?;
 
+            // Check for updates in the background on startup
+            let app_handle = app.handle().clone();
+            tokio::spawn(async move {
+                use tauri_plugin_updater::UpdaterExt;
+                if let Ok(Some(update)) = app_handle.updater().unwrap().check().await {
+                    // Show a tray notification — log for now
+                    // (full notification UI can be added later)
+                    println!(
+                        "Update available: {} → {}",
+                        update.current_version,
+                        update.version
+                    );
+                    // Download and install in-place; app restarts automatically on completion.
+                    if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
+                        eprintln!("Update install failed: {e}");
+                    }
+                }
+            });
+
             let _window = app.get_webview_window("main").unwrap();
 
             // Register global hotkey: CmdOrCtrl+Shift+M

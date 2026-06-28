@@ -41,5 +41,13 @@
       "icons/icon.ico",
       "icons/icon.png"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgMDVGRkI4NUU4NkRGNTVDQzIKUldUQ1hQVnQ2SVg3WDgxVURqdDhHWUhyVWU1cWxBaDYyQkowOEpSUU91WitFak52TDQwMERIRkYK",
+      "endpoints": [
+        "https://github.com/RustedAperture/ezgif/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

@@ -1,0 +1,127 @@
+:root {
+  --bg-color: #0c0f12;
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --primary-color: #50aced;
+  --primary-hover: #61bcfe;
+  --input-bg: rgba(13, 17, 23, 0.95);
+  --input-border: rgba(255, 255, 255, 0.1);
+  --input-focus: #50aced;
+  --error-color: #ef4444;
+  --btn-secondary-bg: rgba(255, 255, 255, 0.07);
+  --btn-secondary-hover: rgba(255, 255, 255, 0.12);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background: var(--bg-color);
+  color: var(--text-primary);
+  padding: 20px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.field { margin-bottom: 14px; }
+
+input[type="text"] {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: var(--input-focus);
+  box-shadow: 0 0 0 2px rgba(80, 172, 237, 0.15);
+}
+
+#hotkey-input {
+  cursor: pointer;
+  user-select: none;
+}
+
+#hotkey-input.recording {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(80, 172, 237, 0.25);
+  color: var(--text-secondary);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+}
+
+.checkbox-row span { font-size: 13px; }
+
+.error {
+  font-size: 11px;
+  color: var(--error-color);
+  margin-top: 4px;
+  display: none;
+}
+
+.error.visible { display: block; }
+
+.buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+}
+
+button {
+  flex: 1;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#cancel-btn {
+  background: var(--btn-secondary-bg);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+#cancel-btn:hover { background: var(--btn-secondary-hover); }
+
+#save-btn {
+  background: var(--primary-color);
+  color: #080b0e;
+}
+
+#save-btn:hover { background: var(--primary-hover); }
+#save-btn:disabled { opacity: 0.5; cursor: not-allowed; }

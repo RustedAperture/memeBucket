@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings</title>
+  <link rel="stylesheet" href="settings.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="field">
+    <label for="server-url">Server URL</label>
+    <input type="text" id="server-url" placeholder="e.g. memes.example.com" autocomplete="off">
+  </div>
+
+  <div class="field">
+    <label for="hotkey-input">Hotkey</label>
+    <input type="text" id="hotkey-input" readonly placeholder="Loading…">
+    <div id="hotkey-error" class="error"></div>
+  </div>
+
+  <div class="checkbox-row">
+    <input type="checkbox" id="autostart">
+    <span>Launch at startup</span>
+  </div>
+
+  <div id="save-error" class="error"></div>
+
+  <div class="buttons">
+    <button id="cancel-btn">Cancel</button>
+    <button id="save-btn">Save</button>
+  </div>
+
+  <script>
+    const serverUrlInput = document.getElementById('server-url');
+    const hotkeyInput    = document.getElementById('hotkey-input');
+    const hotkeyError    = document.getElementById('hotkey-error');
+    const autostartCheck = document.getElementById('autostart');
+    const saveError      = document.getElementById('save-error');
+    const saveBtn        = document.getElementById('save-btn');
+    const cancelBtn      = document.getElementById('cancel-btn');
+
+    let currentHotkey = 'CmdOrCtrl+Shift+M';
+    let pendingHotkey = null;
+    let recording = false;
+
+    // Convert a stored Tauri shortcut string to a human-readable display string.
+    function formatDisplay(shortcut) {
+      const isMac = navigator.platform.toUpperCase().includes('MAC');
+      return shortcut
+        .replace('CmdOrCtrl', isMac ? '⌘' : 'Ctrl')
+        .replace('+Shift', isMac ? '⇧' : '+Shift')
+        .replace('+Alt',   isMac ? '⌥' : '+Alt')
+        .replace('+Ctrl',  isMac ? '⌃' : '+Ctrl');
+    }
+
+    // Convert a keydown event to a Tauri shortcut string.
+    // Returns null if the combo is modifier-only or has no modifier.
+    function eventToShortcut(e) {
+      const MODIFIER_KEYS = ['Meta', 'Control', 'Alt', 'Shift', 'CapsLock', 'Tab', 'Escape'];
+      if (MODIFIER_KEYS.includes(e.key)) return null;
+      const parts = [];
+      if (e.metaKey || e.ctrlKey) parts.push('CmdOrCtrl');
+      if (e.altKey)  parts.push('Alt');
+      if (e.shiftKey) parts.push('Shift');
+      if (parts.length === 0) return null;
+      parts.push(e.key.length === 1 ? e.key.toUpperCase() : e.key);
+      return parts.join('+');
+    }
+
+    function startRecording() {
+      recording = true;
+      hotkeyInput.classList.add('recording');
+      hotkeyInput.value = 'Press shortcut…';
+      hotkeyError.classList.remove('visible');
+    }
+
+    function stopRecording(shortcut) {
+      recording = false;
+      hotkeyInput.classList.remove('recording');
+      if (shortcut) {
+        pendingHotkey = shortcut;
+        hotkeyInput.value = formatDisplay(shortcut);
+      } else {
+        hotkeyInput.value = formatDisplay(pendingHotkey || currentHotkey);
+      }
+    }
+
+    hotkeyInput.addEventListener('click', () => { if (!recording) startRecording(); });
+
+    document.addEventListener('keydown', (e) => {
+      if (!recording) return;
+      e.preventDefault();
+      if (e.key === 'Escape') { stopRecording(null); return; }
+      const shortcut = eventToShortcut(e);
+      if (shortcut) stopRecording(shortcut);
+    });
+
+    function waitForTauri(cb, retries = 20) {
+      if (window.__TAURI__ && window.__TAURI__.core) cb();
+      else if (retries > 0) setTimeout(() => waitForTauri(cb, retries - 1), 100);
+    }
+
+    waitForTauri(async () => {
+      try {
+        const s = await window.__TAURI__.core.invoke('get_settings');
+        serverUrlInput.value = s.server_url || '';
+        currentHotkey = s.hotkey;
+        hotkeyInput.value = formatDisplay(s.hotkey);
+        autostartCheck.checked = s.autostart;
+      } catch (e) {
+        saveError.textContent = 'Failed to load settings: ' + e;
+        saveError.classList.add('visible');
+      }
+    });
+
+    cancelBtn.addEventListener('click', async () => {
+      if (recording) stopRecording(null);
+      if (window.__TAURI__) {
+        await window.__TAURI__.window.getCurrentWindow().hide();
+      }
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      if (recording) stopRecording(null);
+      hotkeyError.classList.remove('visible');
+      saveError.classList.remove('visible');
+
+      const hotkey    = pendingHotkey || currentHotkey;
+      const serverUrl = serverUrlInput.value.trim();
+      const autostart = autostartCheck.checked;
+
+      saveBtn.disabled = true;
+      try {
+        await window.__TAURI__.core.invoke('save_settings', { serverUrl, hotkey, autostart });
+        currentHotkey = hotkey;
+        pendingHotkey = null;
+        await window.__TAURI__.window.getCurrentWindow().hide();
+      } catch (err) {
+        const msg = typeof err === 'string' ? err : (err.message || 'Save failed');
+        if (msg.toLowerCase().includes('shortcut') || msg.toLowerCase().includes('hotkey')) {
+          hotkeyError.textContent = msg;
+          hotkeyError.classList.add('visible');
+        } else {
+          saveError.textContent = msg;
+          saveError.classList.add('visible');
+        }
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -399,6 +399,12 @@
           "markdownDescription": "Allows reading the saved server URL."
         },
         {
+          "description": "Allows reading all app settings.",
+          "type": "string",
+          "const": "allow-get-settings",
+          "markdownDescription": "Allows reading all app settings."
+        },
+        {
           "description": "Allows hiding the picker window.",
           "type": "string",
           "const": "allow-hide-window",
@@ -409,6 +415,12 @@
           "type": "string",
           "const": "allow-navigate-to",
           "markdownDescription": "Allows Rust-driven WebView navigation."
+        },
+        {
+          "description": "Allows saving all app settings.",
+          "type": "string",
+          "const": "allow-save-settings",
+          "markdownDescription": "Allows saving all app settings."
         },
         {
           "description": "Allows saving the server URL.",

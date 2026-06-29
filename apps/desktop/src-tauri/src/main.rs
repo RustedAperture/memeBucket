@@ -9,19 +9,20 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::MacosLauncher;
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 struct Config {
     server_url: Option<String>,
+    hotkey: Option<String>,
     window_x: Option<f64>,
     window_y: Option<f64>,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self { server_url: None, window_x: None, window_y: None }
+        Self { server_url: None, hotkey: None, window_x: None, window_y: None }
     }
 }
 
@@ -36,6 +37,24 @@ fn get_config_path(app: &AppHandle) -> Result<PathBuf, String> {
     fs::create_dir_all(&config_dir).map_err(|e| e.to_string())?;
 
     Ok(config_dir.join("config.json"))
+}
+
+fn normalize_server_url(url: &str) -> String {
+    let mut normalized = url.trim().to_string();
+    let lower = normalized.to_lowercase();
+    if !lower.starts_with("http://") && !lower.starts_with("https://") {
+        normalized = format!("https://{}", normalized);
+    }
+    if normalized.ends_with('/') {
+        normalized.pop();
+    }
+    normalized = normalized
+        .replace("://localhost:", "://127.0.0.1:")
+        .replace("://localhost/", "://127.0.0.1/");
+    if normalized.ends_with("://localhost") {
+        normalized = normalized.replace("://localhost", "://127.0.0.1:3000");
+    }
+    normalized
 }
 
 // Read the server URL from local configuration
@@ -54,26 +73,7 @@ fn get_server_url(app: AppHandle) -> Result<Option<String>, String> {
 #[tauri::command]
 fn set_server_url(app: AppHandle, url: String) -> Result<String, String> {
     let path = get_config_path(&app)?;
-    let mut normalized_url = url.trim().to_string();
-
-    // Normalize protocol (case-insensitive check so "Https://" doesn't get double-prefixed)
-    let lower = normalized_url.to_lowercase();
-    if !lower.starts_with("http://") && !lower.starts_with("https://") {
-        normalized_url = format!("https://{}", normalized_url);
-    }
-    // Strip trailing slash
-    if normalized_url.ends_with('/') {
-        normalized_url.pop();
-    }
-    // Rewrite localhost → 127.0.0.1 to avoid session cookie origin mismatch
-    // (browsers treat them as different origins, so OAuth cookies won't carry over)
-    normalized_url = normalized_url
-        .replace("://localhost:", "://127.0.0.1:")
-        .replace("://localhost/", "://127.0.0.1/");
-    if normalized_url.ends_with("://localhost") {
-        normalized_url = normalized_url.replace("://localhost", "://127.0.0.1:3000");
-    }
-
+    let normalized_url = normalize_server_url(&url);
     let mut config: Config = if path.exists() {
         let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
         serde_json::from_str(&content).unwrap_or_default()
@@ -83,7 +83,6 @@ fn set_server_url(app: AppHandle, url: String) -> Result<String, String> {
     config.server_url = Some(normalized_url.clone());
     let content = serde_json::to_string(&config).map_err(|e| e.to_string())?;
     fs::write(path, content).map_err(|e| e.to_string())?;
-
     Ok(normalized_url)
 }
 
@@ -124,7 +123,7 @@ fn save_window_position(app: AppHandle, x: f64, y: f64) -> Result<(), String> {
         let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
         serde_json::from_str(&content).unwrap_or_default()
     } else {
-        Config { server_url: None, window_x: None, window_y: None }
+        Config::default()
     };
     config.window_x = Some(x);
     config.window_y = Some(y);
@@ -308,6 +307,179 @@ fn rebuild_tray_menu(app: &AppHandle, pending_version: Option<&str>) {
     }
 }
 
+fn position_near_cursor(window: &tauri::WebviewWindow) {
+    use enigo::{Enigo, MouseControllable};
+    let enigo = Enigo::new();
+    let (cx, cy) = enigo.mouse_location();
+    let positioned = if let Ok(Some(monitor)) = window.current_monitor() {
+        let scale = monitor.scale_factor();
+        let mpos = monitor.position();
+        let msize = monitor.size();
+        let wsize = window.outer_size()
+            .unwrap_or(tauri::PhysicalSize { width: 360, height: 500 });
+        let mon_lx = (mpos.x as f64 / scale) as i32;
+        let mon_ly = (mpos.y as f64 / scale) as i32;
+        let mon_lw = (msize.width as f64 / scale) as i32;
+        let mon_lh = (msize.height as f64 / scale) as i32;
+        let win_lw = (wsize.width as f64 / scale) as i32;
+        let win_lh = (wsize.height as f64 / scale) as i32;
+        let clamped_x = cx.clamp(mon_lx, (mon_lx + mon_lw - win_lw).max(mon_lx));
+        let clamped_y = (cy - win_lh).clamp(mon_ly, (mon_ly + mon_lh - win_lh).max(mon_ly));
+        let _ = window.set_position(tauri::LogicalPosition::new(clamped_x as f64, clamped_y as f64));
+        true
+    } else {
+        false
+    };
+    if !positioned {
+        let enigo = Enigo::new();
+        let (cx, cy) = enigo.mouse_location();
+        let _ = window.set_position(tauri::LogicalPosition::new(cx as f64, (cy - 500).max(0) as f64));
+    }
+}
+
+fn handle_hotkey(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
+    if event.state() != ShortcutState::Pressed {
+        return;
+    }
+    let Some(window) = app.get_webview_window("main") else { return };
+    let is_visible = window.is_visible().unwrap_or(false);
+    if is_visible {
+        let _ = window.hide();
+        return;
+    }
+
+    #[cfg(target_os = "macos")]
+    let _ = app.show();
+
+    let saved_pos: Option<(f64, f64)> = get_config_path(app)
+        .ok()
+        .and_then(|p| fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str::<Config>(&s).ok())
+        .and_then(|c| c.window_x.zip(c.window_y));
+
+    if let Some((sx, sy)) = saved_pos {
+        let fits = window.available_monitors()
+            .ok()
+            .unwrap_or_default()
+            .iter()
+            .any(|m| {
+                let scale = m.scale_factor();
+                let mpos = m.position();
+                let msize = m.size();
+                let wsize = window.outer_size()
+                    .unwrap_or(tauri::PhysicalSize { width: 360, height: 500 });
+                let mon_lx = (mpos.x as f64 / scale) as i32;
+                let mon_ly = (mpos.y as f64 / scale) as i32;
+                let mon_lw = (msize.width as f64 / scale) as i32;
+                let mon_lh = (msize.height as f64 / scale) as i32;
+                let win_lw = (wsize.width as f64 / scale) as i32;
+                let win_lh = (wsize.height as f64 / scale) as i32;
+                let sx_i = sx as i32;
+                let sy_i = sy as i32;
+                sx_i >= mon_lx && sy_i >= mon_ly
+                    && sx_i + win_lw <= mon_lx + mon_lw
+                    && sy_i + win_lh <= mon_ly + mon_lh
+            });
+        if fits {
+            let _ = window.set_position(tauri::LogicalPosition::new(sx, sy));
+        } else {
+            position_near_cursor(&window);
+        }
+    } else {
+        position_near_cursor(&window);
+    }
+
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
+#[derive(Serialize)]
+struct Settings {
+    server_url: Option<String>,
+    hotkey: String,
+    autostart: bool,
+}
+
+#[tauri::command]
+fn get_settings(app: AppHandle) -> Result<Settings, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let path = get_config_path(&app)?;
+    let config: Config = if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        Config::default()
+    };
+    Ok(Settings {
+        server_url: config.server_url,
+        hotkey: config.hotkey.unwrap_or_else(|| "CmdOrCtrl+Shift+M".to_string()),
+        autostart: app.autolaunch().is_enabled().unwrap_or(false),
+    })
+}
+
+#[tauri::command]
+fn save_settings(app: AppHandle, server_url: String, hotkey: String, autostart: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+
+    // Validate new shortcut before touching anything
+    let new_shortcut: Shortcut = hotkey
+        .parse()
+        .map_err(|_| format!("Invalid hotkey: {}", hotkey))?;
+
+    // Read current config
+    let path = get_config_path(&app)?;
+    let mut config: Config = if path.exists() {
+        let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        Config::default()
+    };
+    let old_hotkey = config.hotkey.clone().unwrap_or_else(|| "CmdOrCtrl+Shift+M".to_string());
+
+    // Swap global shortcut; roll back if the new one can't be registered
+    if let Ok(old_shortcut) = old_hotkey.parse::<Shortcut>() {
+        let _ = app.global_shortcut().unregister(old_shortcut);
+    }
+    if let Err(e) = app.global_shortcut().on_shortcut(new_shortcut, |app, shortcut, event| handle_hotkey(app, shortcut, event)) {
+        // Re-register the old shortcut so the app isn't left with no hotkey
+        if let Ok(old_shortcut) = old_hotkey.parse::<Shortcut>() {
+            let _ = app.global_shortcut().on_shortcut(old_shortcut, |app, shortcut, event| handle_hotkey(app, shortcut, event));
+        }
+        return Err(format!("Could not register shortcut (already in use?): {}", e));
+    }
+
+    // Toggle autostart
+    let autolaunch = app.autolaunch();
+    let currently_enabled = autolaunch.is_enabled().unwrap_or(false);
+    match (autostart, currently_enabled) {
+        (true, false) => { autolaunch.enable().map_err(|e| e.to_string())?; }
+        (false, true) => { autolaunch.disable().map_err(|e| e.to_string())?; }
+        _ => {}
+    }
+
+    // Persist config
+    let normalized_url = if server_url.trim().is_empty() {
+        None
+    } else {
+        Some(normalize_server_url(&server_url))
+    };
+    config.hotkey = Some(hotkey);
+    config.server_url = normalized_url.clone();
+    let content = serde_json::to_string(&config).map_err(|e| e.to_string())?;
+    fs::write(&path, content).map_err(|e| e.to_string())?;
+
+    // Navigate the main window to the new picker URL if a server URL is set
+    if let Some(url) = normalized_url {
+        if let Some(main_window) = app.get_webview_window("main") {
+            if let Ok(parsed) = format!("{}/picker", url).parse() {
+                let _ = main_window.navigate(parsed);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -321,6 +493,8 @@ fn main() {
             hide_window,
             copy_and_paste_link,
             save_window_position,
+            get_settings,
+            save_settings,
         ])
         .setup(|app| {
             // Hide from dock on macOS; the tray icon is the only entry point.
@@ -450,137 +624,18 @@ fn main() {
                 }
             });
 
-            let _window = app.get_webview_window("main").unwrap();
-
-            // Register global hotkey: CmdOrCtrl+Shift+M
-            let shortcut: Shortcut = "CmdOrCtrl+Shift+M".parse().unwrap();
+            // Load saved hotkey or fall back to default
+            let initial_hotkey = get_config_path(app.handle())
+                .ok()
+                .and_then(|p| fs::read_to_string(p).ok())
+                .and_then(|s| serde_json::from_str::<Config>(&s).ok())
+                .and_then(|c| c.hotkey)
+                .unwrap_or_else(|| "CmdOrCtrl+Shift+M".to_string());
+            let shortcut: Shortcut = initial_hotkey
+                .parse()
+                .unwrap_or_else(|_| "CmdOrCtrl+Shift+M".parse().unwrap());
             app.global_shortcut()
-                .on_shortcut(shortcut, move |app, _shortcut, event| {
-                    if event.state() == ShortcutState::Pressed {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let is_visible = window.is_visible().unwrap_or(false);
-                            if is_visible {
-                                let _ = window.hide();
-                            } else {
-                                // The paste flow hides the whole app (app.hide()), so unhide
-                                // the application before showing the window or it stays hidden.
-                                #[cfg(target_os = "macos")]
-                                let _ = app.show();
-
-                                use enigo::{Enigo, MouseControllable};
-
-                                // Check for a saved position first
-                                let saved_pos: Option<(f64, f64)> = get_config_path(&app)
-                                    .ok()
-                                    .and_then(|p| fs::read_to_string(p).ok())
-                                    .and_then(|s| serde_json::from_str::<Config>(&s).ok())
-                                    .and_then(|c| c.window_x.zip(c.window_y));
-
-                                if let Some((sx, sy)) = saved_pos {
-                                    // Validate that the saved position fits within at least one
-                                    // available monitor. If the monitor was disconnected since
-                                    // the position was saved the window would appear off-screen.
-                                    let fits = window.available_monitors()
-                                        .ok()
-                                        .unwrap_or_default()
-                                        .iter()
-                                        .any(|m| {
-                                            let scale = m.scale_factor();
-                                            let mpos = m.position();
-                                            let msize = m.size();
-                                            let wsize = window.outer_size()
-                                                .unwrap_or(tauri::PhysicalSize { width: 360, height: 500 });
-                                            let mon_lx = (mpos.x as f64 / scale) as i32;
-                                            let mon_ly = (mpos.y as f64 / scale) as i32;
-                                            let mon_lw = (msize.width as f64 / scale) as i32;
-                                            let mon_lh = (msize.height as f64 / scale) as i32;
-                                            let win_lw = (wsize.width as f64 / scale) as i32;
-                                            let win_lh = (wsize.height as f64 / scale) as i32;
-                                            let sx_i = sx as i32;
-                                            let sy_i = sy as i32;
-                                            sx_i >= mon_lx && sy_i >= mon_ly
-                                                && sx_i + win_lw <= mon_lx + mon_lw
-                                                && sy_i + win_lh <= mon_ly + mon_lh
-                                        });
-                                    if fits {
-                                        let _ = window.set_position(tauri::LogicalPosition::new(sx, sy));
-                                    } else {
-                                        // Saved position no longer valid — fall through to
-                                        // cursor-relative positioning.
-                                        let enigo = Enigo::new();
-                                        let (cx, cy) = enigo.mouse_location();
-                                        let positioned = if let Ok(Some(monitor)) = window.current_monitor() {
-                                            let scale = monitor.scale_factor();
-                                            let mpos = monitor.position();
-                                            let msize = monitor.size();
-                                            let wsize = window.outer_size()
-                                                .unwrap_or(tauri::PhysicalSize { width: 360, height: 500 });
-                                            let mon_lx = (mpos.x as f64 / scale) as i32;
-                                            let mon_ly = (mpos.y as f64 / scale) as i32;
-                                            let mon_lw = (msize.width as f64 / scale) as i32;
-                                            let mon_lh = (msize.height as f64 / scale) as i32;
-                                            let win_lw = (wsize.width as f64 / scale) as i32;
-                                            let win_lh = (wsize.height as f64 / scale) as i32;
-                                            let clamped_x = cx.clamp(mon_lx, (mon_lx + mon_lw - win_lw).max(mon_lx));
-                                            let clamped_y = (cy - win_lh).clamp(mon_ly, (mon_ly + mon_lh - win_lh).max(mon_ly));
-                                            let _ = window.set_position(tauri::LogicalPosition::new(clamped_x as f64, clamped_y as f64));
-                                            true
-                                        } else {
-                                            false
-                                        };
-                                        if !positioned {
-                                            let enigo = Enigo::new();
-                                            let (cx, cy) = enigo.mouse_location();
-                                            let _ = window.set_position(tauri::LogicalPosition::new(cx as f64, (cy - 500).max(0) as f64));
-                                        }
-                                    }
-                                } else {
-                                    let enigo = Enigo::new();
-                                    let (cx, cy) = enigo.mouse_location();
-
-                                    let positioned = if let Ok(Some(monitor)) = window.current_monitor() {
-                                        let scale = monitor.scale_factor();
-                                        let mpos = monitor.position();
-                                        let msize = monitor.size();
-                                        let wsize = window.outer_size()
-                                            .unwrap_or(tauri::PhysicalSize { width: 360, height: 500 });
-
-                                        let mon_lx = (mpos.x as f64 / scale) as i32;
-                                        let mon_ly = (mpos.y as f64 / scale) as i32;
-                                        let mon_lw = (msize.width as f64 / scale) as i32;
-                                        let mon_lh = (msize.height as f64 / scale) as i32;
-                                        let win_lw = (wsize.width as f64 / scale) as i32;
-                                        let win_lh = (wsize.height as f64 / scale) as i32;
-
-                                        let target_x = cx;
-                                        let target_y = cy - win_lh;
-                                        let clamped_x = target_x.clamp(mon_lx, (mon_lx + mon_lw - win_lw).max(mon_lx));
-                                        let clamped_y = target_y.clamp(mon_ly, (mon_ly + mon_lh - win_lh).max(mon_ly));
-
-                                        let _ = window.set_position(tauri::LogicalPosition::new(
-                                            clamped_x as f64,
-                                            clamped_y as f64,
-                                        ));
-                                        true
-                                    } else {
-                                        false
-                                    };
-
-                                    if !positioned {
-                                        let enigo = Enigo::new();
-                                        let (cx, cy) = enigo.mouse_location();
-                                        let _ = window.set_position(tauri::LogicalPosition::new(
-                                            cx as f64,
-                                            (cy - 500).max(0) as f64,
-                                        ));
-                                    }
-                                }
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
-                        }
-                    }
-                })
+                .on_shortcut(shortcut, |app, shortcut, event| handle_hotkey(app, shortcut, event))
                 .map_err(|e| e.to_string())?;
 
             Ok(())

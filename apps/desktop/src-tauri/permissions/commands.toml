@@ -22,3 +22,13 @@ commands.allow = ["hide_window"]
 identifier = "allow-copy-and-paste-link"
 description = "Allows copying a link and pasting it into the active window."
 commands.allow = ["copy_and_paste_link"]
+
+[[permission]]
+identifier = "allow-get-settings"
+description = "Allows reading all app settings."
+commands.allow = ["get_settings"]
+
+[[permission]]
+identifier = "allow-save-settings"
+description = "Allows saving all app settings."
+commands.allow = ["save_settings"]

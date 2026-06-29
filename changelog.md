@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.5 - Jun 29, 2026
+
+### Fixed
+
+- Fixed **Restart to update** not doing anything when clicked: the app now relaunches automatically after the update installs instead of silently installing in the background.
+
 ## v0.2.4 - Jun 29, 2026
 
 ### Added

@@ -540,8 +540,9 @@ fn main() {
                                 if let Some(state) = app2.try_state::<PendingUpdate>() {
                                     let update = state.0.lock().unwrap().take();
                                     if let Some(update) = update {
-                                        if let Err(e) = update.download_and_install(|_, _| {}, || {}).await {
-                                            eprintln!("Update install failed: {e}");
+                                        match update.download_and_install(|_, _| {}, || {}).await {
+                                            Ok(_) => app2.restart(),
+                                            Err(e) => eprintln!("Update install failed: {e}"),
                                         }
                                     }
                                 }

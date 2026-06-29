@@ -7,6 +7,13 @@ export default function ChangelogPage() {
       description="Notable changes to memeBucket."
       updated="Jun 29, 2026"
     >
+      <LegalSection title="v0.2.5 - Jun 29, 2026">
+        <h3 className="font-medium text-foreground">Fixed</h3>
+        <LegalList>
+          <li>Fixed <strong>Restart to update</strong> not doing anything when clicked: the app now relaunches automatically after the update installs instead of silently installing in the background.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.2.4 - Jun 29, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

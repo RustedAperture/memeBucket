@@ -1,6 +1,6 @@
 {
   "productName": "memeBucket Picker",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.memebucket.picker",
   "build": {
     "beforeDevCommand": "",
@@ -33,6 +33,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -46,7 +47,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgMDVGRkI4NUU4NkRGNTVDQzIKUldUQ1hQVnQ2SVg3WDgxVURqdDhHWUhyVWU1cWxBaDYyQkowOEpSUU91WitFak52TDQwMERIRkYK",
       "endpoints": [
-        "https://github.com/RustedAperture/ezgif/releases/latest/download/latest.json"
+        "https://github.com/RustedAperture/memeBucket/releases/latest/download/latest.json"
       ]
     }
   }

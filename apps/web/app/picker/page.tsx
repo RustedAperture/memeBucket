@@ -289,7 +289,7 @@ export default function PickerPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Type to search your buckets..."
-            className="h-8 pl-8 text-sm rounded-md"
+            className="h-8 pl-8 text-base md:text-sm rounded-md"
           />
         </div>
 

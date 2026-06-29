@@ -50,6 +50,19 @@ impl StorageService {
         })
     }
 
+    #[cfg(test)]
+    pub fn new_with_store(
+        store: Arc<dyn ObjectStore>,
+        cdn_base_url: &str,
+        pool: SqlitePool,
+    ) -> Self {
+        Self {
+            store,
+            cdn_base_url: cdn_base_url.trim_end_matches('/').to_string(),
+            pool,
+        }
+    }
+
     pub fn is_discord_cdn(url: &str) -> bool {
         url.contains("cdn.discordapp.com") || url.contains("media.discordapp.net")
     }
@@ -413,5 +426,59 @@ mod dedup_tests {
         // BLAKE3 of "hello world" is deterministic
         assert_eq!(hash.len(), 64); // 32 bytes = 64 hex chars
         assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[tokio::test]
+    async fn store_bytes_on_miss_uploads_and_inserts() {
+        use object_store::memory::InMemory;
+        let pool = setup_test_db().await;
+        let store = Arc::new(InMemory::new());
+        let svc =
+            StorageService::new_with_store(store.clone(), "https://cdn.example.com", pool.clone());
+
+        let bytes = b"hello world".to_vec();
+        let hash = blake3_hash_bytes(&bytes);
+        let result = svc.store_bytes(bytes, "webp").await.unwrap();
+
+        // Correct CDN URL returned
+        assert_eq!(result, format!("https://cdn.example.com/{hash}.webp"));
+
+        // Object was uploaded to the store
+        let key = object_store::path::Path::from(format!("{hash}.webp"));
+        let stored = store.get(&key).await.unwrap();
+        assert_eq!(stored.bytes().await.unwrap().as_ref(), b"hello world");
+
+        // cdn_objects row was inserted
+        let cdn_url = lookup_cdn_object(&pool, &hash).await.unwrap();
+        assert_eq!(cdn_url.as_deref(), Some(result.as_str()));
+    }
+
+    #[tokio::test]
+    async fn store_bytes_on_hit_returns_existing_url_without_uploading() {
+        use object_store::memory::InMemory;
+        let pool = setup_test_db().await;
+        let store = Arc::new(InMemory::new());
+        let svc =
+            StorageService::new_with_store(store.clone(), "https://cdn.example.com", pool.clone());
+
+        let bytes = b"hello world".to_vec();
+        let hash = blake3_hash_bytes(&bytes);
+        let existing_url = "https://cdn.example.com/pre-existing.webp";
+
+        // Pre-seed the cdn_objects table (simulates a prior upload)
+        insert_cdn_object(&pool, &hash, existing_url).await.unwrap();
+
+        // Call store_bytes — should hit the cache
+        let result = svc.store_bytes(bytes, "webp").await.unwrap();
+
+        // Returns the pre-existing URL, not a newly generated one
+        assert_eq!(result, existing_url);
+
+        // B2 was NOT called — store is empty
+        let key = object_store::path::Path::from(format!("{hash}.webp"));
+        assert!(
+            store.get(&key).await.is_err(),
+            "B2 should not have been called on a dedup hit"
+        );
     }
 }

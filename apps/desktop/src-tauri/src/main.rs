@@ -575,6 +575,16 @@ fn main() {
                 })
                 .build(app)?;
 
+            if let Some(settings_window) = app.get_webview_window("settings") {
+                let win = settings_window.clone();
+                settings_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = win.hide();
+                    }
+                });
+            }
+
             // Check for updates in the background on startup.
             // If an update is found: store it in managed state and add a tray item so
             // the user can choose when to install (rather than auto-restarting silently).
@@ -607,9 +617,16 @@ fn main() {
             let shortcut: Shortcut = initial_hotkey
                 .parse()
                 .unwrap_or_else(|_| "CmdOrCtrl+Shift+M".parse().unwrap());
-            app.global_shortcut()
-                .on_shortcut(shortcut, |app, shortcut, event| handle_hotkey(app, shortcut, event))
-                .map_err(|e| e.to_string())?;
+            let register_result = app.global_shortcut()
+                .on_shortcut(shortcut, |app, s, e| handle_hotkey(app, s, e));
+            if register_result.is_err() && initial_hotkey != "CmdOrCtrl+Shift+M" {
+                // Saved custom shortcut failed to register — fall back to the default.
+                if let Ok(fallback) = "CmdOrCtrl+Shift+M".parse::<Shortcut>() {
+                    let _ = app.global_shortcut()
+                        .on_shortcut(fallback, |app, s, e| handle_hotkey(app, s, e));
+                }
+            }
+            // Do not propagate — app must start even if the hotkey can't be registered.
 
             Ok(())
         })

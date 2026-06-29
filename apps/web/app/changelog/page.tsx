@@ -5,8 +5,28 @@ export default function ChangelogPage() {
     <LegalPage
       title="Changelog"
       description="Notable changes to memeBucket."
-      updated="Jun 28, 2026"
+      updated="Jun 29, 2026"
     >
+      <LegalSection title="v0.2.4 - Jun 29, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added a <strong>Settings window</strong> accessible from the tray menu with fields for Server URL, global hotkey, and Launch at startup. Click "Settings…" in the tray to open it.</li>
+          <li>Added <strong>live hotkey capture</strong> in the Settings window: click the Hotkey field and press any key combination to set a new global shortcut. The new hotkey takes effect immediately on save.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Changed</h3>
+        <LegalList>
+          <li>Moved the <strong>Launch at startup</strong> toggle from the tray menu into the Settings window.</li>
+        </LegalList>
+
+        <h3 className="font-medium text-foreground mt-4">Fixed</h3>
+        <LegalList>
+          <li>Fixed a startup crash when a saved custom hotkey was already in use by another app: the app now falls back to the default hotkey (<code>CmdOrCtrl+Shift+M</code>) instead of panicking.</li>
+          <li>Fixed the Settings window red close button destroying the window instead of hiding it; the window is now always hidden on close so it can be reopened from the tray.</li>
+          <li>Fixed the hotkey recorder accepting <code>Shift</code>-only combos (e.g. <code>Shift+A</code>) that would hijack normal typing; a non-Shift modifier (Cmd, Ctrl, or Alt) is now required.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.2.3 - Jun 28, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

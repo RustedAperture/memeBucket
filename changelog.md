@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.2.4 - Jun 29, 2026
+
+### Added
+
+- Added a **Settings window** accessible from the tray menu with fields for Server URL, global hotkey, and Launch at startup. Click "Settings…" in the tray to open it.
+- Added **live hotkey capture** in the Settings window: click the Hotkey field and press any key combination to set a new global shortcut. The new hotkey takes effect immediately on save.
+
+### Changed
+
+- Moved the **Launch at startup** toggle from the tray menu into the Settings window.
+
+### Fixed
+
+- Fixed a startup crash when a saved custom hotkey was already in use by another app: the app now falls back to the default hotkey (`CmdOrCtrl+Shift+M`) instead of panicking.
+- Fixed the Settings window red close button destroying the window instead of hiding it; the window is now always hidden on close so it can be reopened from the tray.
+- Fixed the hotkey recorder accepting `Shift`-only combos (e.g. `Shift+A`) that would hijack normal typing; a non-Shift modifier (Cmd, Ctrl, or Alt) is now required.
+
 ## v0.2.3 - Jun 28, 2026
 
 ### Added

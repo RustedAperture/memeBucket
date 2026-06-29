@@ -63,9 +63,10 @@
       if (MODIFIER_KEYS.includes(e.key)) return null;
       const parts = [];
       if (e.metaKey || e.ctrlKey) parts.push('CmdOrCtrl');
-      if (e.altKey)  parts.push('Alt');
+      if (e.altKey) parts.push('Alt');
       if (e.shiftKey) parts.push('Shift');
-      if (parts.length === 0) return null;
+      // Require at least one non-Shift modifier to avoid hijacking normal typing
+      if (!e.metaKey && !e.ctrlKey && !e.altKey) return null;
       parts.push(e.key.length === 1 ? e.key.toUpperCase() : e.key);
       return parts.join('+');
     }

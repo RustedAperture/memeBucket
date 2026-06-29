@@ -278,6 +278,36 @@ fn copy_and_paste_link(app: AppHandle, url: String) -> Result<(), String> {
     Ok(())
 }
 
+fn rebuild_tray_menu(app: &AppHandle, pending_version: Option<&str>) {
+    use tauri_plugin_autostart::ManagerExt;
+    let Some(tray) = app.tray_by_id("main") else {
+        return;
+    };
+    let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
+    let autostart_label = if autostart_enabled { "✓ Launch at startup" } else { "Launch at startup" };
+
+    let (Ok(autostart_item), Ok(quit_item)) = (
+        MenuItem::with_id(app, "autostart", autostart_label, true, None::<&str>),
+        MenuItem::with_id(app, "quit", "Quit", true, None::<&str>),
+    ) else {
+        return;
+    };
+
+    if let Some(version) = pending_version {
+        if let Ok(update_item) = MenuItem::with_id(app, "restart_update", &format!("Restart to update (v{})", version), true, None::<&str>) {
+            if let Ok(menu) = Menu::with_items(app, &[&autostart_item, &update_item, &quit_item]) {
+                let _ = tray.set_menu(Some(menu));
+            }
+        }
+    } else {
+        if let Ok(check_item) = MenuItem::with_id(app, "check_updates", "Check for updates", true, None::<&str>) {
+            if let Ok(menu) = Menu::with_items(app, &[&autostart_item, &check_item, &quit_item]) {
+                let _ = tray.set_menu(Some(menu));
+            }
+        }
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -308,8 +338,9 @@ fn main() {
                 "Launch at startup"
             };
             let autostart_item = MenuItem::with_id(app, "autostart", autostart_label, true, None::<&str>)?;
+            let check_updates_item = MenuItem::with_id(app, "check_updates", "Check for updates", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&autostart_item, &quit_item])?;
+            let menu = Menu::with_items(app, &[&autostart_item, &check_updates_item, &quit_item])?;
 
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
@@ -330,20 +361,28 @@ fn main() {
                             } else {
                                 let _ = manager.enable();
                             }
-                            let new_label = if currently_enabled {
-                                "Launch at startup"
-                            } else {
-                                "✓ Launch at startup"
-                            };
-                            if let Some(tray) = app.tray_by_id("main") {
-                                let autostart_item = MenuItem::with_id(app, "autostart", new_label, true, None::<&str>)
-                                    .unwrap();
-                                let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)
-                                    .unwrap();
-                                if let Ok(menu) = Menu::with_items(app, &[&autostart_item, &quit_item]) {
-                                    let _ = tray.set_menu(Some(menu));
+                            let pending_version = app
+                                .try_state::<PendingUpdate>()
+                                .and_then(|s| s.0.lock().ok().and_then(|g| g.as_ref().map(|u| u.version.clone())));
+                            rebuild_tray_menu(app, pending_version.as_deref());
+                        }
+                        "check_updates" => {
+                            let app2 = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                use tauri_plugin_updater::UpdaterExt;
+                                let updater = match app2.updater() {
+                                    Ok(u) => u,
+                                    Err(_) => return,
+                                };
+                                if let Ok(Some(update)) = updater.check().await {
+                                    let version = update.version.clone();
+                                    if let Some(state) = app2.try_state::<PendingUpdate>() {
+                                        *state.0.lock().unwrap() = Some(update);
+                                    }
+                                    rebuild_tray_menu(&app2, Some(&version));
                                 }
-                            }
+                                // No update found: leave menu as-is
+                            });
                         }
                         "restart_update" => {
                             // User clicked "Restart to update" — download and install the
@@ -408,19 +447,7 @@ fn main() {
                         *state.0.lock().unwrap() = Some(update);
                     }
                     // Rebuild tray menu to surface a "Restart to update" item.
-                    if let Some(tray) = app_handle.tray_by_id("main") {
-                        let autostart_enabled = app_handle.autolaunch().is_enabled().unwrap_or(false);
-                        let autostart_label = if autostart_enabled { "✓ Launch at startup" } else { "Launch at startup" };
-                        if let (Ok(autostart_item), Ok(update_item), Ok(quit_item)) = (
-                            MenuItem::with_id(&app_handle, "autostart", autostart_label, true, None::<&str>),
-                            MenuItem::with_id(&app_handle, "restart_update", &format!("Restart to update (v{})", version), true, None::<&str>),
-                            MenuItem::with_id(&app_handle, "quit", "Quit", true, None::<&str>),
-                        ) {
-                            if let Ok(menu) = Menu::with_items(&app_handle, &[&autostart_item, &update_item, &quit_item]) {
-                                let _ = tray.set_menu(Some(menu));
-                            }
-                        }
-                    }
+                    rebuild_tray_menu(&app_handle, Some(&version));
                 }
             });
 

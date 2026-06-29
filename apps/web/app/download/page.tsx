@@ -151,9 +151,9 @@ export default function DownloadPage() {
               </ol>
             ) : (
               <ol className="space-y-2 text-sm text-muted-foreground list-decimal list-inside">
-                <li>Open <span className="font-medium text-foreground">{origin ? `${origin}/picker` : "memeBucket/picker"}</span> in Chrome</li>
+                <li>Open <span className="font-medium text-foreground">{origin ? `${origin}/picker` : "memeBucket/picker"}</span> in Chrome or Firefox</li>
                 <li>Tap the <span className="font-medium text-foreground">menu (⋮)</span> in the top-right corner</li>
-                <li>Tap <span className="font-medium text-foreground">Add to Home Screen</span> or <span className="font-medium text-foreground">Install app</span></li>
+                <li><span className="font-medium text-foreground">Chrome:</span> tap <span className="font-medium text-foreground">Add to Home Screen</span> — <span className="font-medium text-foreground">Firefox:</span> tap <span className="font-medium text-foreground">Install</span></li>
                 <li>Tap <span className="font-medium text-foreground">Add</span> — the picker opens like an app</li>
               </ol>
             )}
@@ -252,10 +252,11 @@ export default function DownloadPage() {
                 </ol>
               </div>
               <div className="rounded-md bg-muted p-3 space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Android (Chrome)</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Android (Chrome / Firefox)</p>
                 <ol className="space-y-1 text-xs text-muted-foreground list-decimal list-inside">
                   <li>Open <span className="font-medium text-foreground">{origin ? `${origin}/picker` : "memeBucket/picker"}</span></li>
-                  <li>Tap <span className="font-medium text-foreground">Menu (⋮) → Add to Home Screen</span></li>
+                  <li><span className="font-medium text-foreground">Chrome:</span> tap Menu (⋮) → <span className="font-medium text-foreground">Add to Home Screen</span></li>
+                  <li><span className="font-medium text-foreground">Firefox:</span> tap Menu (⋮) → <span className="font-medium text-foreground">Install</span></li>
                   <li>Tap <span className="font-medium text-foreground">Add</span></li>
                 </ol>
               </div>

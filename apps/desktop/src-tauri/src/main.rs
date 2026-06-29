@@ -278,29 +278,21 @@ fn copy_and_paste_link(app: AppHandle, url: String) -> Result<(), String> {
 }
 
 fn rebuild_tray_menu(app: &AppHandle, pending_version: Option<&str>) {
-    use tauri_plugin_autostart::ManagerExt;
-    let Some(tray) = app.tray_by_id("main") else {
-        return;
-    };
-    let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
-    let autostart_label = if autostart_enabled { "✓ Launch at startup" } else { "Launch at startup" };
-
-    let (Ok(autostart_item), Ok(quit_item)) = (
-        MenuItem::with_id(app, "autostart", autostart_label, true, None::<&str>),
+    let Some(tray) = app.tray_by_id("main") else { return };
+    let (Ok(settings_item), Ok(quit_item)) = (
+        MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>),
         MenuItem::with_id(app, "quit", "Quit", true, None::<&str>),
-    ) else {
-        return;
-    };
+    ) else { return };
 
     if let Some(version) = pending_version {
         if let Ok(update_item) = MenuItem::with_id(app, "restart_update", &format!("Restart to update (v{})", version), true, None::<&str>) {
-            if let Ok(menu) = Menu::with_items(app, &[&autostart_item, &update_item, &quit_item]) {
+            if let Ok(menu) = Menu::with_items(app, &[&settings_item, &update_item, &quit_item]) {
                 let _ = tray.set_menu(Some(menu));
             }
         }
     } else {
         if let Ok(check_item) = MenuItem::with_id(app, "check_updates", "Check for updates", true, None::<&str>) {
-            if let Ok(menu) = Menu::with_items(app, &[&autostart_item, &check_item, &quit_item]) {
+            if let Ok(menu) = Menu::with_items(app, &[&settings_item, &check_item, &quit_item]) {
                 let _ = tray.set_menu(Some(menu));
             }
         }
@@ -504,17 +496,10 @@ fn main() {
             // Register managed state for a pending update the user can trigger via tray.
             app.manage(PendingUpdate(Mutex::new(None)));
 
-            use tauri_plugin_autostart::ManagerExt;
-            let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
-            let autostart_label = if autostart_enabled {
-                "✓ Launch at startup"
-            } else {
-                "Launch at startup"
-            };
-            let autostart_item = MenuItem::with_id(app, "autostart", autostart_label, true, None::<&str>)?;
+            let settings_item = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
             let check_updates_item = MenuItem::with_id(app, "check_updates", "Check for updates", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&autostart_item, &check_updates_item, &quit_item])?;
+            let menu = Menu::with_items(app, &[&settings_item, &check_updates_item, &quit_item])?;
 
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
@@ -526,19 +511,11 @@ fn main() {
                         "quit" => {
                             app.exit(0);
                         }
-                        "autostart" => {
-                            use tauri_plugin_autostart::ManagerExt;
-                            let manager = app.autolaunch();
-                            let currently_enabled = manager.is_enabled().unwrap_or(false);
-                            if currently_enabled {
-                                let _ = manager.disable();
-                            } else {
-                                let _ = manager.enable();
+                        "settings" => {
+                            if let Some(window) = app.get_webview_window("settings") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
                             }
-                            let pending_version = app
-                                .try_state::<PendingUpdate>()
-                                .and_then(|s| s.0.lock().ok().and_then(|g| g.as_ref().map(|u| u.version.clone())));
-                            rebuild_tray_menu(app, pending_version.as_deref());
                         }
                         "check_updates" => {
                             let app2 = app.clone();
@@ -555,13 +532,9 @@ fn main() {
                                     }
                                     rebuild_tray_menu(&app2, Some(&version));
                                 }
-                                // No update found: leave menu as-is
                             });
                         }
                         "restart_update" => {
-                            // User clicked "Restart to update" — download and install the
-                            // pending update that was stored when we detected it in the
-                            // background check. This triggers a restart when complete.
                             let app2 = app.clone();
                             tauri::async_runtime::spawn(async move {
                                 if let Some(state) = app2.try_state::<PendingUpdate>() {

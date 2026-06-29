@@ -51,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
         &config.cdn_base_url,
     ) {
         (Some(key_id), Some(app_key), Some(bucket), Some(endpoint), Some(cdn_url)) => {
-            match StorageService::new(bucket, endpoint, key_id, app_key, cdn_url) {
+            match StorageService::new(bucket, endpoint, key_id, app_key, cdn_url, pool.clone()) {
                 Ok(svc) => {
                     tracing::info!("B2 storage configured, CDN: {}", cdn_url);
                     Some(svc)

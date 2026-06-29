@@ -2,7 +2,7 @@ use object_store::{
     Attribute, AttributeValue, Attributes, ObjectStore, PutOptions, aws::AmazonS3Builder,
     path::Path as ObjPath,
 };
-use sha2::{Digest, Sha256};
+use sqlx::SqlitePool;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -18,6 +18,7 @@ pub enum StorageError {
 pub struct StorageService {
     store: Arc<dyn ObjectStore>,
     cdn_base_url: String,
+    pool: SqlitePool,
 }
 
 impl StorageService {
@@ -27,9 +28,8 @@ impl StorageService {
         key_id: &str,
         app_key: &str,
         cdn_base_url: &str,
+        pool: SqlitePool,
     ) -> anyhow::Result<Self> {
-        // B2 region is the middle segment of the endpoint hostname:
-        // s3.us-west-004.backblazeb2.com → us-west-004
         let region = endpoint
             .trim_end_matches(".backblazeb2.com")
             .strip_prefix("s3.")
@@ -41,12 +41,12 @@ impl StorageService {
             .with_region(region)
             .with_access_key_id(key_id)
             .with_secret_access_key(app_key)
-            // B2 S3-compatible endpoint requires path-style addressing
             .with_virtual_hosted_style_request(false)
             .build()?;
         Ok(Self {
             store: Arc::new(store),
             cdn_base_url: cdn_base_url.trim_end_matches('/').to_string(),
+            pool,
         })
     }
 
@@ -55,7 +55,6 @@ impl StorageService {
     }
 
     pub async fn upload_from_url(&self, url: &str) -> Result<String, StorageError> {
-        // Fetch source with timeout
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
@@ -86,9 +85,6 @@ impl StorageService {
             .await
             .map_err(|e| StorageError::FetchFailed(e.to_string()))?;
 
-        // Determine output format and convert if needed.
-        // WebP conversion is CPU-bound (decode + encode), so we offload it to a
-        // blocking thread to avoid tying up a tokio worker.
         let url_for_log = url.to_string();
         let (final_bytes, ext) = if content_type.contains("image/png")
             || content_type.contains("image/jpeg")
@@ -147,18 +143,45 @@ impl StorageService {
             (bytes.to_vec(), ext_from_content_type(&content_type))
         };
 
-        // Deterministic key: sha256 of original URL + extension
-        let hash = hex::encode(Sha256::digest(url.as_bytes()));
-        let key = ObjPath::from(format!("{}.{}", hash, ext));
+        self.store_bytes(final_bytes, ext).await
+    }
+
+    /// Upload raw bytes to B2, deduplicating by content hash.
+    /// `source_url` is unused for keying — kept for API compatibility.
+    pub async fn upload_bytes(
+        &self,
+        _source_url: &str,
+        bytes: Vec<u8>,
+        ext: &str,
+    ) -> Result<String, StorageError> {
+        self.store_bytes(bytes, ext).await
+    }
+
+    /// Core upload path: hash bytes, check cdn_objects, upload on miss.
+    async fn store_bytes(&self, bytes: Vec<u8>, ext: &str) -> Result<String, StorageError> {
+        let content_hash = blake3_hash_bytes(&bytes);
+
+        // Dedup check — non-fatal on DB error
+        match lookup_cdn_object(&self.pool, &content_hash).await {
+            Ok(Some(cdn_url)) => {
+                tracing::debug!("Dedup hit for hash {content_hash}, reusing {cdn_url}");
+                return Ok(cdn_url);
+            }
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!("cdn_objects lookup failed, falling through to upload: {e}");
+            }
+        }
+
+        let key = ObjPath::from(format!("{}.{}", content_hash, ext));
+        let cdn_url = format!("{}/{}", self.cdn_base_url, key);
 
         tracing::debug!(
             "B2 upload attempt: key={key}, size={} bytes, content_type={}",
-            final_bytes.len(),
+            bytes.len(),
             mime_for_ext(ext)
         );
 
-        // Set Content-Type so B2 serves the correct MIME type and browsers
-        // render <img>/<video> elements without receiving octet-stream.
         let attributes = Attributes::from_iter([(
             Attribute::ContentType,
             AttributeValue::from(mime_for_ext(ext)),
@@ -167,7 +190,7 @@ impl StorageService {
             .store
             .put_opts(
                 &key,
-                final_bytes.into(),
+                bytes.into(),
                 PutOptions {
                     attributes,
                     ..Default::default()
@@ -182,38 +205,39 @@ impl StorageService {
 
         result.map_err(|e| StorageError::UploadFailed(e.to_string()))?;
 
-        Ok(format!("{}/{}", self.cdn_base_url, key))
+        if let Err(e) = insert_cdn_object(&self.pool, &content_hash, &cdn_url).await {
+            tracing::warn!("cdn_objects insert failed (non-fatal): {e}");
+        }
+
+        Ok(cdn_url)
     }
+}
 
-    /// Upload raw bytes to B2. The object key is derived deterministically
-    /// from `source_url` so repeated calls with the same URL are idempotent.
-    pub async fn upload_bytes(
-        &self,
-        source_url: &str,
-        bytes: Vec<u8>,
-        ext: &str,
-    ) -> Result<String, StorageError> {
-        let hash = hex::encode(Sha256::digest(source_url.as_bytes()));
-        let key = ObjPath::from(format!("{}.{}", hash, ext));
+pub(crate) fn blake3_hash_bytes(bytes: &[u8]) -> String {
+    hex::encode(blake3::hash(bytes).as_bytes())
+}
 
-        let attributes = Attributes::from_iter([(
-            Attribute::ContentType,
-            AttributeValue::from(mime_for_ext(ext)),
-        )]);
-        self.store
-            .put_opts(
-                &key,
-                bytes.into(),
-                PutOptions {
-                    attributes,
-                    ..Default::default()
-                },
-            )
-            .await
-            .map_err(|e| StorageError::UploadFailed(e.to_string()))?;
+async fn lookup_cdn_object(
+    pool: &SqlitePool,
+    content_hash: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    sqlx::query_scalar::<_, String>("SELECT cdn_url FROM cdn_objects WHERE content_hash = ?")
+        .bind(content_hash)
+        .fetch_optional(pool)
+        .await
+}
 
-        Ok(format!("{}/{}", self.cdn_base_url, key))
-    }
+async fn insert_cdn_object(
+    pool: &SqlitePool,
+    content_hash: &str,
+    cdn_url: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("INSERT OR IGNORE INTO cdn_objects (content_hash, cdn_url) VALUES (?, ?)")
+        .bind(content_hash)
+        .bind(cdn_url)
+        .execute(pool)
+        .await
+        .map(|_| ())
 }
 
 fn convert_to_webp(bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
@@ -236,8 +260,6 @@ fn convert_gif_to_animated_webp(bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
 
     let (width, height) = frames[0].buffer().dimensions();
 
-    // Collect (rgba_bytes, timestamp_ms) before creating the encoder so
-    // the data outlives the AnimFrame borrows stored inside AnimEncoder.
     let mut frame_data: Vec<(Vec<u8>, i32)> = Vec::with_capacity(frames.len());
     let mut timestamp_ms: i32 = 0;
     for frame in &frames {
@@ -279,9 +301,6 @@ fn ext_from_content_type(ct: &str) -> &'static str {
     }
 }
 
-/// Maps a file extension to the appropriate MIME Content-Type string.
-/// Used when uploading to B2 so browsers receive the correct type for
-/// <img> and <video> rendering rather than `application/octet-stream`.
 fn mime_for_ext(ext: &str) -> &'static str {
     match ext {
         "webp" => "image/webp",
@@ -333,5 +352,66 @@ mod tests {
         assert_eq!(mime_for_ext("webm"), "video/webm");
         assert_eq!(mime_for_ext("bin"), "application/octet-stream");
         assert_eq!(mime_for_ext("unknown"), "application/octet-stream");
+    }
+}
+
+#[cfg(test)]
+mod dedup_tests {
+    use super::*;
+    use sqlx::SqlitePool;
+
+    async fn setup_test_db() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::query(
+            "CREATE TABLE cdn_objects (
+                content_hash TEXT PRIMARY KEY NOT NULL,
+                cdn_url TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        pool
+    }
+
+    #[tokio::test]
+    async fn lookup_cdn_object_returns_none_when_empty() {
+        let pool = setup_test_db().await;
+        let result = lookup_cdn_object(&pool, "abc123").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn lookup_cdn_object_returns_url_after_insert() {
+        let pool = setup_test_db().await;
+        insert_cdn_object(&pool, "abc123", "https://cdn.example.com/abc123.webp")
+            .await
+            .unwrap();
+        let result = lookup_cdn_object(&pool, "abc123").await.unwrap();
+        assert_eq!(
+            result.as_deref(),
+            Some("https://cdn.example.com/abc123.webp")
+        );
+    }
+
+    #[tokio::test]
+    async fn insert_cdn_object_is_idempotent() {
+        let pool = setup_test_db().await;
+        insert_cdn_object(&pool, "abc123", "https://cdn.example.com/abc123.webp")
+            .await
+            .unwrap();
+        // Second insert with same hash must not error (INSERT OR IGNORE)
+        let result =
+            insert_cdn_object(&pool, "abc123", "https://cdn.example.com/abc123.webp").await;
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn blake3_hash_bytes_returns_hex_string() {
+        let hash = blake3_hash_bytes(b"hello world");
+        // BLAKE3 of "hello world" is deterministic
+        assert_eq!(hash.len(), 64); // 32 bytes = 64 hex chars
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
     }
 }

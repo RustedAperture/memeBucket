@@ -47,11 +47,13 @@
     // Convert a stored Tauri shortcut string to a human-readable display string.
     function formatDisplay(shortcut) {
       const isMac = navigator.platform.toUpperCase().includes('MAC');
+      if (!isMac) return shortcut;
       return shortcut
-        .replace('CmdOrCtrl', isMac ? '⌘' : 'Ctrl')
-        .replace('+Shift', isMac ? '⇧' : '+Shift')
-        .replace('+Alt',   isMac ? '⌥' : '+Alt')
-        .replace('+Ctrl',  isMac ? '⌃' : '+Ctrl');
+        .replace('CmdOrCtrl', '⌘')
+        .replace('+Shift', '⇧')
+        .replace('+Alt', '⌥')
+        .replace('+Ctrl', '⌃')
+        .replace(/\+/g, '');
     }
 
     // Convert a keydown event to a Tauri shortcut string.

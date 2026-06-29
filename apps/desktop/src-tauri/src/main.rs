@@ -434,7 +434,6 @@ fn main() {
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 use tauri_plugin_updater::UpdaterExt;
-                use tauri_plugin_autostart::ManagerExt;
                 if let Ok(Some(update)) = app_handle.updater().unwrap().check().await {
                     let version = update.version.clone();
                     println!(

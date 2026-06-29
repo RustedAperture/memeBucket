@@ -7,6 +7,14 @@ export default function ChangelogPage() {
       description="Notable changes to memeBucket."
       updated="Jun 28, 2026"
     >
+      <LegalSection title="v0.2.3 - Jun 28, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added <strong>B2 content deduplication</strong>: uploaded media is now hashed with BLAKE3 after conversion, and identical content is stored only once in B2 regardless of how many users upload it. Subsequent uploads of the same image return the existing CDN URL instantly without re-uploading.</li>
+          <li>Added <strong>mobile instructions</strong> to the Download page: Android and iOS users are shown platform-specific steps to add the Picker as a home screen shortcut (no install required). Desktop visitors also see a side-by-side iOS/Android guide card.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.2.2 - Jun 28, 2026">
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>

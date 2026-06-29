@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { Download, Apple, Monitor, Cpu } from "lucide-react";
+import { Download, Apple, Monitor, Cpu, Smartphone } from "lucide-react";
 
 const REPO = "RustedAperture/memeBucket";
 
-type Platform = "mac-arm" | "windows" | "linux-appimage" | "linux-deb" | "unknown";
+type Platform = "mac-arm" | "windows" | "linux-appimage" | "linux-deb" | "ios" | "android" | "unknown";
 
 interface Asset {
   name: string;
@@ -31,6 +31,8 @@ interface PlatformAsset {
 function detectPlatform(): Platform {
   if (typeof navigator === "undefined") return "unknown";
   const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua)) return "ios";
+  if (/Android/.test(ua)) return "android";
   if (/Mac/.test(ua)) {
     // Can't reliably detect Apple Silicon from the browser UA, default to ARM
     // since most recent Macs are Apple Silicon.
@@ -47,8 +49,14 @@ function categorizeAssets(assets: Asset[]): Record<Platform, Asset | undefined> 
     "windows": assets.find((a) => a.name.endsWith(".msi")),
     "linux-appimage": assets.find((a) => a.name.endsWith(".AppImage")),
     "linux-deb": assets.find((a) => a.name.endsWith(".deb")),
+    "ios": undefined,
+    "android": undefined,
     "unknown": undefined,
   };
+}
+
+function isMobilePlatform(p: Platform) {
+  return p === "ios" || p === "android";
 }
 
 function formatSize(bytes: number) {
@@ -119,8 +127,41 @@ export default function DownloadPage() {
           </div>
         )}
 
+        {/* Mobile primary card */}
+        {isMobilePlatform(platform) && (
+          <div className="rounded-lg border bg-card p-6 space-y-4">
+            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              Recommended for your device
+            </p>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-muted rounded-md text-foreground">
+                <Smartphone className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-semibold">{platform === "ios" ? "iPhone / iPad" : "Android"}</p>
+                <p className="text-sm text-muted-foreground">Add to Home Screen</p>
+              </div>
+            </div>
+            {platform === "ios" ? (
+              <ol className="space-y-2 text-sm text-muted-foreground list-decimal list-inside">
+                <li>Open <span className="font-medium text-foreground">{origin ? `${origin}/picker` : "memeBucket/picker"}</span> in Safari</li>
+                <li>Tap the <span className="font-medium text-foreground">Share</span> button (the box with an arrow pointing up)</li>
+                <li>Scroll down and tap <span className="font-medium text-foreground">Add to Home Screen</span></li>
+                <li>Tap <span className="font-medium text-foreground">Add</span> — the picker opens like an app</li>
+              </ol>
+            ) : (
+              <ol className="space-y-2 text-sm text-muted-foreground list-decimal list-inside">
+                <li>Open <span className="font-medium text-foreground">{origin ? `${origin}/picker` : "memeBucket/picker"}</span> in Chrome</li>
+                <li>Tap the <span className="font-medium text-foreground">menu (⋮)</span> in the top-right corner</li>
+                <li>Tap <span className="font-medium text-foreground">Add to Home Screen</span> or <span className="font-medium text-foreground">Install app</span></li>
+                <li>Tap <span className="font-medium text-foreground">Add</span> — the picker opens like an app</li>
+              </ol>
+            )}
+          </div>
+        )}
+
         {/* Primary download */}
-        {!error && (
+        {!error && !isMobilePlatform(platform) && (
           <div className="rounded-lg border bg-card p-6 space-y-4">
             <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
               Recommended for your device
@@ -159,7 +200,7 @@ export default function DownloadPage() {
         )}
 
         {/* Other platforms */}
-        {!error && (
+        {!error && !isMobilePlatform(platform) && (
           <div className="space-y-3">
             <p className="text-sm font-medium text-muted-foreground">Other platforms</p>
             <div className="divide-y rounded-lg border bg-card">
@@ -191,6 +232,38 @@ export default function DownloadPage() {
           </div>
         )}
 
+        {/* Mobile section for desktop visitors */}
+        {!isMobilePlatform(platform) && (
+          <div className="rounded-lg border bg-card p-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-muted-foreground" />
+              <p className="text-sm font-medium">iPhone, iPad &amp; Android</p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              On mobile, add the picker to your home screen for quick access — no install required.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md bg-muted p-3 space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">iOS (Safari)</p>
+                <ol className="space-y-1 text-xs text-muted-foreground list-decimal list-inside">
+                  <li>Open <span className="font-medium text-foreground">{origin ? `${origin}/picker` : "memeBucket/picker"}</span></li>
+                  <li>Tap <span className="font-medium text-foreground">Share →  Add to Home Screen</span></li>
+                  <li>Tap <span className="font-medium text-foreground">Add</span></li>
+                </ol>
+              </div>
+              <div className="rounded-md bg-muted p-3 space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Android (Chrome)</p>
+                <ol className="space-y-1 text-xs text-muted-foreground list-decimal list-inside">
+                  <li>Open <span className="font-medium text-foreground">{origin ? `${origin}/picker` : "memeBucket/picker"}</span></li>
+                  <li>Tap <span className="font-medium text-foreground">Menu (⋮) → Add to Home Screen</span></li>
+                  <li>Tap <span className="font-medium text-foreground">Add</span></li>
+                </ol>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isMobilePlatform(platform) && (
         <div className="rounded-lg border bg-card p-4 space-y-2">
           <p className="text-sm font-medium">macOS: "app is damaged" warning</p>
           <p className="text-sm text-muted-foreground">
@@ -199,6 +272,7 @@ export default function DownloadPage() {
           <pre className="rounded-md bg-muted px-3 py-2 text-xs font-mono">xattr -cr "/Applications/memeBucket Picker.app"</pre>
           <p className="text-xs text-muted-foreground">Then open the app normally.</p>
         </div>
+        )}
 
         {/* Getting started */}
         <div className="space-y-4">

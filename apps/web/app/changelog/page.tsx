@@ -5,8 +5,15 @@ export default function ChangelogPage() {
     <LegalPage
       title="Changelog"
       description="Notable changes to memeBucket."
-      updated="Jun 29, 2026"
+      updated="Jul 7, 2026"
     >
+      <LegalSection title="v0.2.6 - Jul 7, 2026">
+        <h3 className="font-medium text-foreground">Fixed</h3>
+        <LegalList>
+          <li>Fixed the Picker popup appearing on screen every time the app launches (including automatically at login via <strong>Launch at startup</strong>); it now stays hidden until summoned via the tray icon or the global hotkey.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.2.5 - Jun 29, 2026">
         <h3 className="font-medium text-foreground">Fixed</h3>
         <LegalList>

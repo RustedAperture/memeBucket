@@ -1,6 +1,6 @@
 {
   "productName": "memeBucket Picker",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "identifier": "com.memebucket.picker",
   "build": {
     "beforeDevCommand": "",
@@ -21,7 +21,7 @@
         "fullscreen": false,
         "decorations": false,
         "alwaysOnTop": true,
-        "visible": true,
+        "visible": false,
         "transparent": true,
         "skipTaskbar": true
       },

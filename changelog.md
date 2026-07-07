@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.6 - Jul 7, 2026
+
+### Fixed
+
+- Fixed the Picker popup appearing on screen every time the app launches (including automatically at login via **Launch at startup**); it now stays hidden until summoned via the tray icon or the global hotkey.
+
 ## v0.2.5 - Jun 29, 2026
 
 ### Fixed

@@ -71,6 +71,10 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
   const [randomWeightValue, setRandomWeightValue] = useState(1);
   const [tagsValue, setTagsValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
+  const [editingUrl, setEditingUrl] = useState(false);
+  const [urlValue, setUrlValue] = useState("");
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [urlSaving, setUrlSaving] = useState(false);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkFavorite, setBulkFavorite] = useState<BulkFavoriteValue>("unchanged");
   const [bulkWeight, setBulkWeight] = useState("");
@@ -155,6 +159,9 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
     setTagsValue(image.tags.join(", "));
     setNotesValue(image.notes || "");
     setEditingMetadata(false);
+    setEditingUrl(false);
+    setUrlValue(image.url);
+    setUrlError(null);
   }
 
   function dragImageIdsFor(imageId: string) {
@@ -203,6 +210,42 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
       setEditingMetadata(false);
     } catch {
       toast.error("Failed to save image details");
+    }
+  }
+
+  async function handleSaveUrl() {
+    if (!selectedImage) return;
+    const trimmedUrl = urlValue.trim();
+    if (!trimmedUrl) {
+      setUrlError("URL is required");
+      return;
+    }
+    try {
+      new URL(trimmedUrl);
+    } catch {
+      setUrlError("Enter a valid URL");
+      return;
+    }
+    setUrlError(null);
+    setUrlSaving(true);
+    try {
+      await apiPatch(`/api/buckets/${bucketId}/images/${selectedImage.id}`, {
+        url: trimmedUrl,
+      });
+      const loadedImages = await load();
+      const updatedImage = loadedImages.find((image) => image.id === selectedImage.id) ?? {
+        ...selectedImage,
+        url: trimmedUrl,
+      };
+      setSelectedImage(updatedImage);
+      setUrlValue(updatedImage.url);
+      setEditingUrl(false);
+      toast.success("Image link updated");
+    } catch (err) {
+      setUrlError(err instanceof Error ? err.message : "Failed to update image link");
+      toast.error("Failed to update image link");
+    } finally {
+      setUrlSaving(false);
     }
   }
 
@@ -786,18 +829,66 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
               </div>
 
               <div className="space-y-2 min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Link</p>
-                <div className="flex min-w-0 gap-2">
-                  <Input readOnly value={selectedImage.url} title={selectedImage.url} />
-                  <Button
-                    variant="secondary"
-                    size="icon"
-                    aria-label="Open image link"
-                    render={<a href={selectedImage.url} target="_blank" rel="noreferrer" />}
-                  >
-                    <ExternalLink />
-                  </Button>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Link</p>
+                  {!readonly && !editingUrl ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => {
+                        setUrlValue(selectedImage.url);
+                        setUrlError(null);
+                        setEditingUrl(true);
+                      }}
+                    >
+                      <Edit2 className="h-3 w-3 mr-1" /> Edit
+                    </Button>
+                  ) : null}
                 </div>
+
+                {editingUrl ? (
+                  <div className="space-y-1.5">
+                    <Input
+                      value={urlValue}
+                      onChange={(event) => setUrlValue(event.target.value)}
+                      placeholder="https://example.com/image.gif"
+                      disabled={urlSaving}
+                    />
+                    {urlError ? (
+                      <p className="text-xs font-medium text-destructive">{urlError}</p>
+                    ) : null}
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={urlSaving}
+                        onClick={() => {
+                          setEditingUrl(false);
+                          setUrlValue(selectedImage.url);
+                          setUrlError(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button size="sm" onClick={handleSaveUrl} disabled={urlSaving}>
+                        {urlSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex min-w-0 gap-2">
+                    <Input readOnly value={selectedImage.url} title={selectedImage.url} />
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      aria-label="Open image link"
+                      render={<a href={selectedImage.url} target="_blank" rel="noreferrer" />}
+                    >
+                      <ExternalLink />
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {buckets.length > 1 && !readonly && (

@@ -333,6 +333,69 @@ async fn resolve_oembed_photo_url(
     Ok(None)
 }
 
+#[derive(serde::Deserialize)]
+struct SyndicationPhoto {
+    url: String,
+}
+
+#[derive(serde::Deserialize)]
+struct SyndicationVideoVariant {
+    bitrate: Option<u64>,
+    src: String,
+}
+
+#[derive(serde::Deserialize)]
+struct SyndicationVideo {
+    variants: Vec<SyndicationVideoVariant>,
+}
+
+#[derive(serde::Deserialize)]
+struct SyndicationResponse {
+    photos: Vec<SyndicationPhoto>,
+    video: Option<SyndicationVideo>,
+}
+
+fn parse_syndication_response(body: &str) -> Result<String, ImageUrlValidationError> {
+    let response: SyndicationResponse =
+        serde_json::from_str(body).map_err(|_| ImageUrlValidationError::FetchFailed)?;
+
+    if let Some(photo) = response.photos.first() {
+        return Ok(photo.url.clone());
+    }
+
+    if let Some(video) = response.video
+        && let Some(best) = video
+            .variants
+            .into_iter()
+            .max_by_key(|variant| variant.bitrate.unwrap_or(0))
+    {
+        return Ok(best.src);
+    }
+
+    Err(ImageUrlValidationError::UnsupportedContentType)
+}
+
+#[allow(dead_code)]
+async fn resolve_twitter_status(id: &str) -> Result<String, ImageUrlValidationError> {
+    let api_url = format!(
+        "https://cdn.syndication.twimg.com/tweet-result?id={}&lang=en&token=memebucket",
+        id
+    );
+
+    resolve_twitter_status_from_api_url(&api_url).await
+}
+
+/// Split out from `resolve_twitter_status` so tests can point it at a local
+/// mock server instead of the real syndication endpoint.
+async fn resolve_twitter_status_from_api_url(
+    api_url: &str,
+) -> Result<String, ImageUrlValidationError> {
+    let response = fetch_success(api_url).await?;
+    let body = read_limited_text(response).await?;
+
+    parse_syndication_response(&body)
+}
+
 fn find_oembed_url(page_url: &str, html: &str) -> Option<String> {
     find_start_tags(html, "link")
         .into_iter()
@@ -661,5 +724,90 @@ mod tests {
             extract_twitter_status_id("https://x.com/someuser/status/not-a-number"),
             None
         );
+    }
+
+    #[test]
+    fn parse_syndication_response_prefers_photos() {
+        let body =
+            r#"{"photos":[{"url":"https://pbs.twimg.com/media/abc.jpg:large"}],"video":null}"#;
+        let result = parse_syndication_response(body).unwrap();
+        assert_eq!(result, "https://pbs.twimg.com/media/abc.jpg:large");
+    }
+
+    #[test]
+    fn parse_syndication_response_picks_highest_bitrate_video_variant() {
+        let body = r#"{"photos":[],"video":{"variants":[
+            {"type":"video/mp4","bitrate":832000,"src":"https://video.twimg.com/med.mp4"},
+            {"type":"video/mp4","bitrate":2176000,"src":"https://video.twimg.com/high.mp4"},
+            {"type":"video/mp4","bitrate":256000,"src":"https://video.twimg.com/low.mp4"}
+        ]}}"#;
+        let result = parse_syndication_response(body).unwrap();
+        assert_eq!(result, "https://video.twimg.com/high.mp4");
+    }
+
+    #[test]
+    fn parse_syndication_response_handles_gif_single_variant() {
+        let body = r#"{"photos":[],"video":{"variants":[
+            {"type":"video/mp4","bitrate":0,"src":"https://video.twimg.com/tweet_video/abc.mp4"}
+        ]}}"#;
+        let result = parse_syndication_response(body).unwrap();
+        assert_eq!(result, "https://video.twimg.com/tweet_video/abc.mp4");
+    }
+
+    #[test]
+    fn parse_syndication_response_errors_on_no_media() {
+        let body = r#"{"photos":[],"video":null}"#;
+        let result = parse_syndication_response(body);
+        assert!(matches!(
+            result,
+            Err(ImageUrlValidationError::UnsupportedContentType)
+        ));
+    }
+
+    #[test]
+    fn parse_syndication_response_errors_on_malformed_json() {
+        let result = parse_syndication_response("not json");
+        assert!(matches!(result, Err(ImageUrlValidationError::FetchFailed)));
+    }
+
+    #[tokio::test]
+    async fn resolve_twitter_status_from_api_url_returns_photo_url_on_success() {
+        async fn ok_photo() -> Response {
+            (
+                [(header::CONTENT_TYPE, "application/json")],
+                r#"{"photos":[{"url":"https://pbs.twimg.com/media/abc.jpg:large"}],"video":null}"#,
+            )
+                .into_response()
+        }
+        let app = Router::new().route("/tweet-result", get(ok_photo));
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let result = resolve_twitter_status_from_api_url(&format!("http://{address}/tweet-result"))
+            .await
+            .unwrap();
+
+        assert_eq!(result, "https://pbs.twimg.com/media/abc.jpg:large");
+    }
+
+    #[tokio::test]
+    async fn resolve_twitter_status_from_api_url_returns_fetch_failed_on_404() {
+        async fn not_found() -> axum::http::StatusCode {
+            axum::http::StatusCode::NOT_FOUND
+        }
+        let app = Router::new().route("/tweet-result", get(not_found));
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        let result =
+            resolve_twitter_status_from_api_url(&format!("http://{address}/tweet-result")).await;
+
+        assert!(matches!(result, Err(ImageUrlValidationError::FetchFailed)));
     }
 }

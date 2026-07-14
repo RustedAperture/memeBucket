@@ -11,6 +11,7 @@ export default function ChangelogPage() {
         <h3 className="font-medium text-foreground">Added</h3>
         <LegalList>
           <li>Added <strong>X/Twitter link support</strong>: pasting a link to an X (formerly Twitter) post now extracts the attached photo, video, or GIF, converts it to WebP, and uploads it to your bucket — the same as any other image URL.</li>
+          <li>Added the ability to <strong>edit an image's link</strong>: open any image's details in the dashboard and click Edit on the Link card to replace its URL. The new link goes through the same extraction/conversion pipeline as adding a fresh image (including X/Twitter links), while keeping the image's title, tags, notes, and favorite status intact.</li>
         </LegalList>
       </LegalSection>
 

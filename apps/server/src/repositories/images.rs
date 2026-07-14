@@ -31,6 +31,7 @@ pub struct UpdateImageMetadataPatch {
     pub favorite: Option<bool>,
     pub random_weight: Option<i64>,
     pub tags: Option<Vec<String>>,
+    pub url: Option<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -660,6 +661,18 @@ impl ImageRepo for ImageRepository {
         if let Some(tags) = &patch.tags {
             self.replace_tags(&mut tx, owner_user_id, image_id, tags)
                 .await?;
+        }
+
+        if let Some(url) = &patch.url {
+            sqlx::query(
+                "UPDATE images SET url = ?, cdn_url = NULL, cdn_status = 'pending' WHERE owner_user_id = ? AND bucket_id = ? AND id = ?",
+            )
+            .bind(url)
+            .bind(owner_user_id.to_string())
+            .bind(bucket_id.to_string())
+            .bind(image_id.to_string())
+            .execute(&mut *tx)
+            .await?;
         }
 
         tx.commit().await?;

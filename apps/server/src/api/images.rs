@@ -84,6 +84,7 @@ pub struct UpdateImageRequest {
     #[serde(rename = "randomWeight")]
     pub random_weight: Option<i64>,
     pub tags: Option<Vec<String>>,
+    pub url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -332,6 +333,11 @@ pub async fn update_image(
         .await?
         .ok_or(AppError::NotFound)?;
 
+    let resolved_url = match &request.url {
+        Some(new_url) => Some(resolve_and_upload_url(&state, new_url).await?),
+        None => None,
+    };
+
     let patch = UpdateImageMetadataPatch {
         title: match request.title {
             Some(title) => Some(validate_title(title)?),
@@ -344,6 +350,7 @@ pub async fn update_image(
             .map(validate_random_weight)
             .transpose()?,
         tags: request.tags,
+        url: resolved_url.clone(),
     };
 
     let updated = repo
@@ -352,6 +359,10 @@ pub async fn update_image(
 
     if !updated {
         return Err(AppError::NotFound);
+    }
+
+    if let Some(resolved_url) = resolved_url {
+        finalize_cdn_status(&state, user.user_id, bucket_id, image_id, resolved_url).await;
     }
 
     Ok(Json(serde_json::json!({ "updated": true })))

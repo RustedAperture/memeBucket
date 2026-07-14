@@ -1,6 +1,9 @@
 use axum::{
+    Router,
     body::Body,
-    http::{Request, StatusCode},
+    http::{Request, StatusCode, header},
+    response::{IntoResponse, Response},
+    routing::get,
 };
 use http_body_util::BodyExt;
 use memebucket_server::{
@@ -13,12 +16,45 @@ use memebucket_server::{
     router::build_router_for_tests,
 };
 use sqlx::SqlitePool;
+use std::ffi::OsString;
+use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 use tower::ServiceExt;
 
 async fn test_pool() -> SqlitePool {
     let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
     pool
+}
+
+static LOCAL_IP_TEST_LOCK: Mutex<()> = Mutex::const_new(());
+
+struct EnvVarGuard {
+    name: &'static str,
+    previous: Option<OsString>,
+}
+
+impl EnvVarGuard {
+    fn set(name: &'static str, value: &str) -> Self {
+        let previous = std::env::var_os(name);
+        unsafe {
+            std::env::set_var(name, value);
+        }
+        Self { name, previous }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        match &self.previous {
+            Some(value) => unsafe {
+                std::env::set_var(self.name, value);
+            },
+            None => unsafe {
+                std::env::remove_var(self.name);
+            },
+        }
+    }
 }
 
 #[tokio::test]
@@ -127,4 +163,206 @@ async fn test_bulk_delete_and_move_images() {
         .await
         .unwrap();
     assert_eq!(images_b_after.len(), 0);
+}
+
+#[tokio::test]
+async fn update_image_with_url_resolves_and_replaces_content() {
+    let _local_ip_guard = LOCAL_IP_TEST_LOCK.lock().await;
+    let _allow_local_ips = EnvVarGuard::set("MEMEBUCKET_ALLOW_LOCAL_IPS_IN_TESTS", "1");
+
+    async fn new_image() -> Response {
+        ([(header::CONTENT_TYPE, "image/gif")], "new-gif-bytes").into_response()
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app_server = Router::new().route("/new.gif", get(new_image));
+    tokio::spawn(async move {
+        axum::serve(listener, app_server).await.unwrap();
+    });
+    let new_url = format!("http://{address}/new.gif");
+
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let buckets = BucketRepository::new(pool.clone());
+    let images_repo = ImageRepository::new(pool.clone());
+    let user = users
+        .upsert_by_provider("discord", "url-editor", None, None)
+        .await
+        .unwrap();
+    let bucket = buckets.create(user.id, "Bucket").await.unwrap();
+    let image = images_repo
+        .create(user.id, bucket.id, "https://example.com/old.png")
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool.clone());
+    let app = build_router_for_tests(state);
+
+    let mut request = Request::builder()
+        .method("PATCH")
+        .uri(format!("/api/buckets/{}/images/{}", bucket.id, image.id))
+        .header("content-type", "application/json")
+        .body(Body::from(format!(r#"{{"url":"{new_url}"}}"#)))
+        .unwrap();
+    request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let updated = images_repo
+        .get_for_owner(user.id, bucket.id, image.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(updated.url, new_url);
+    assert_eq!(updated.cdn_url.as_deref(), Some(new_url.as_str()));
+    assert_eq!(updated.cdn_status.as_deref(), Some("migrated"));
+}
+
+#[tokio::test]
+async fn update_image_with_invalid_url_returns_bad_request_and_leaves_row_unchanged() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let buckets = BucketRepository::new(pool.clone());
+    let images_repo = ImageRepository::new(pool.clone());
+    let user = users
+        .upsert_by_provider("discord", "url-editor-invalid", None, None)
+        .await
+        .unwrap();
+    let bucket = buckets.create(user.id, "Bucket").await.unwrap();
+    let image = images_repo
+        .create(user.id, bucket.id, "https://example.com/old.png")
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool.clone());
+    let app = build_router_for_tests(state);
+
+    let mut request = Request::builder()
+        .method("PATCH")
+        .uri(format!("/api/buckets/{}/images/{}", bucket.id, image.id))
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"url":"not-a-url"}"#))
+        .unwrap();
+    request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let unchanged = images_repo
+        .get_for_owner(user.id, bucket.id, image.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(unchanged.url, "https://example.com/old.png");
+}
+
+#[tokio::test]
+async fn update_image_without_url_leaves_existing_url_untouched() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let buckets = BucketRepository::new(pool.clone());
+    let images_repo = ImageRepository::new(pool.clone());
+    let user = users
+        .upsert_by_provider("discord", "url-editor-notouch", None, None)
+        .await
+        .unwrap();
+    let bucket = buckets.create(user.id, "Bucket").await.unwrap();
+    let image = images_repo
+        .create(user.id, bucket.id, "https://example.com/old.png")
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool.clone());
+    let app = build_router_for_tests(state);
+
+    let mut request = Request::builder()
+        .method("PATCH")
+        .uri(format!("/api/buckets/{}/images/{}", bucket.id, image.id))
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"title":"New Title"}"#))
+        .unwrap();
+    request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let unchanged = images_repo
+        .get_for_owner(user.id, bucket.id, image.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(unchanged.url, "https://example.com/old.png");
+    assert_eq!(unchanged.title.as_deref(), Some("New Title"));
+}
+
+#[tokio::test]
+async fn update_image_with_url_resolving_to_video_routes_through_video_path() {
+    let _local_ip_guard = LOCAL_IP_TEST_LOCK.lock().await;
+    let _allow_local_ips = EnvVarGuard::set("MEMEBUCKET_ALLOW_LOCAL_IPS_IN_TESTS", "1");
+
+    // Serve from a path ending in `.mp4` with a video content-type: `is_video` in
+    // resolve_and_upload_url checks the resolved URL's suffix, and
+    // `resolve_image_url` only accepts the URL directly (without HTML-scraping)
+    // when the live content-type starts with `video/`.
+    async fn video() -> Response {
+        ([(header::CONTENT_TYPE, "video/mp4")], "fake-mp4-bytes").into_response()
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app_server = Router::new().route("/clip.mp4", get(video));
+    tokio::spawn(async move {
+        axum::serve(listener, app_server).await.unwrap();
+    });
+    let video_url = format!("http://{address}/clip.mp4");
+
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let buckets = BucketRepository::new(pool.clone());
+    let images_repo = ImageRepository::new(pool.clone());
+    let user = users
+        .upsert_by_provider("discord", "url-editor-video", None, None)
+        .await
+        .unwrap();
+    let bucket = buckets.create(user.id, "Bucket").await.unwrap();
+    let image = images_repo
+        .create(user.id, bucket.id, "https://example.com/old.png")
+        .await
+        .unwrap();
+
+    // No storage configured in AppState::for_tests, so the video force-upload
+    // branch is skipped (state.storage() is None) — this test proves the URL
+    // still resolves to a `.mp4` and is accepted, without requiring real B2/ffmpeg.
+    let state = AppState::for_tests(pool.clone());
+    let app = build_router_for_tests(state);
+
+    let mut request = Request::builder()
+        .method("PATCH")
+        .uri(format!("/api/buckets/{}/images/{}", bucket.id, image.id))
+        .header("content-type", "application/json")
+        .body(Body::from(format!(r#"{{"url":"{video_url}"}}"#)))
+        .unwrap();
+    request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let updated = images_repo
+        .get_for_owner(user.id, bucket.id, image.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(updated.url, video_url);
 }

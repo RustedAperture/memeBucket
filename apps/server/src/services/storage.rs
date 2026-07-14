@@ -67,6 +67,10 @@ impl StorageService {
         url.contains("cdn.discordapp.com") || url.contains("media.discordapp.net")
     }
 
+    pub fn is_twitter_media(url: &str) -> bool {
+        url.contains("pbs.twimg.com") || url.contains("video.twimg.com")
+    }
+
     pub async fn upload_from_url(&self, url: &str) -> Result<String, StorageError> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
@@ -342,6 +346,22 @@ mod tests {
             "https://example.com/image.png"
         ));
         assert!(!StorageService::is_discord_cdn(
+            "https://media.memebucket.app/abc123.webp"
+        ));
+    }
+
+    #[test]
+    fn is_twitter_media_detects_both_hosts() {
+        assert!(StorageService::is_twitter_media(
+            "https://pbs.twimg.com/media/abc123.jpg:large"
+        ));
+        assert!(StorageService::is_twitter_media(
+            "https://video.twimg.com/tweet_video/abc123.mp4"
+        ));
+        assert!(!StorageService::is_twitter_media(
+            "https://example.com/image.png"
+        ));
+        assert!(!StorageService::is_twitter_media(
             "https://media.memebucket.app/abc123.webp"
         ));
     }

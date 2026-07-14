@@ -213,6 +213,7 @@ pub async fn create_image(
             .to_lowercase();
         base.ends_with(".mp4") || base.ends_with(".webm")
     };
+    let is_twitter_photo = !is_video && StorageService::is_twitter_media(&resolved_url);
 
     if is_video && let Some(storage) = state.storage() {
         resolved_url =
@@ -221,6 +222,13 @@ pub async fn create_image(
                 .map_err(|err| {
                     AppError::InternalServerError(format!("Failed to convert video: {}", err))
                 })?;
+    } else if is_twitter_photo && let Some(storage) = state.storage() {
+        resolved_url = storage
+            .upload_from_url(&resolved_url)
+            .await
+            .map_err(|err| {
+                AppError::InternalServerError(format!("Failed to upload image: {}", err))
+            })?;
     }
 
     let repo = state.image_repo.clone();

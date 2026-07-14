@@ -25,7 +25,7 @@ export default function ChangelogPage() {
       {entries.map((entry) => (
         <LegalSection key={entry.version} title={`v${entry.version} - ${entry.date}`}>
           {entry.sections.map((section, index) => (
-            <Fragment key={section.heading + index}>
+            <Fragment key={index}>
               <h3 className={index > 0 ? "font-medium text-foreground mt-4" : "font-medium text-foreground"}>
                 {section.heading}
               </h3>

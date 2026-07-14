@@ -403,6 +403,7 @@ export default function PickerPage() {
           <button
             onClick={handleOpenChangelog}
             className="text-left flex-1 min-w-0 truncate hover:underline"
+            aria-label={`View changelog for version ${changelogBanner.version}`}
           >
             New update available (v{changelogBanner.version}, {changelogBanner.date}) — see what&apos;s new
           </button>

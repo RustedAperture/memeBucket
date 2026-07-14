@@ -705,8 +705,8 @@ async fn handle_bucket_add(
         return ephemeral_message("Image URL is required.");
     };
 
-    let resolved_url = match resolve_image_url(url).await {
-        Ok(url) => url,
+    let resolved = match resolve_image_url(url).await {
+        Ok(resolved) => resolved,
         Err(err) => return ephemeral_message(err.user_message()),
     };
 
@@ -719,8 +719,15 @@ async fn handle_bucket_add(
         return ephemeral_message("I could not find that bucket.");
     };
 
-    match images.create(user_id, bucket.id, &resolved_url).await {
-        Ok(_) => ephemeral_message(&format!("Added image to \"{}\".", bucket.name)),
+    match images.create(user_id, bucket.id, &resolved.url).await {
+        Ok(image) => {
+            if let Some(notes) = &resolved.notes {
+                let _ = images
+                    .update_notes(user_id, bucket.id, image.id, Some(notes))
+                    .await;
+            }
+            ephemeral_message(&format!("Added image to \"{}\".", bucket.name))
+        }
         Err(sqlx::Error::RowNotFound) => ephemeral_message("I could not find that bucket."),
         Err(_) => ephemeral_message("I hit a storage error while saving image."),
     }
@@ -888,10 +895,12 @@ async fn handle_add_to_bucket_message_command(
         url
     };
 
-    let mut resolved_url = match resolve_image_url(&url).await {
-        Ok(url) => url,
+    let resolved = match resolve_image_url(&url).await {
+        Ok(resolved) => resolved,
         Err(err) => return ephemeral_message(err.user_message()),
     };
+    let mut resolved_url = resolved.url;
+    let auto_notes = resolved.notes;
 
     let is_video = {
         let base = resolved_url
@@ -929,7 +938,14 @@ async fn handle_add_to_bucket_message_command(
 
     let images = state.image_repo.clone();
     match images.create(user_id, bucket.id, &resolved_url).await {
-        Ok(_) => ephemeral_message(&format!("Added image to \"{}\".", bucket.name)),
+        Ok(image) => {
+            if let Some(notes) = &auto_notes {
+                let _ = images
+                    .update_notes(user_id, bucket.id, image.id, Some(notes))
+                    .await;
+            }
+            ephemeral_message(&format!("Added image to \"{}\".", bucket.name))
+        }
         Err(_) => ephemeral_message("I hit a storage error while saving the image."),
     }
 }

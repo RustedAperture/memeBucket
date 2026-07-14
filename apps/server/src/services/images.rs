@@ -43,20 +43,32 @@ pub async fn validate_image_url(value: &str) -> Result<(), ImageUrlValidationErr
     validate_image_url_internal(value).await
 }
 
-pub async fn resolve_image_url(value: &str) -> Result<String, ImageUrlValidationError> {
+pub struct ResolvedImage {
+    pub url: String,
+    pub notes: Option<String>,
+}
+
+pub async fn resolve_image_url(value: &str) -> Result<ResolvedImage, ImageUrlValidationError> {
     if !validate_http_url(value) {
         return Err(ImageUrlValidationError::InvalidHttpUrl);
     }
 
     if let Some(status_id) = extract_twitter_status_id(value) {
-        return resolve_twitter_status(&status_id).await;
+        let media = resolve_twitter_status(&status_id).await?;
+        return Ok(ResolvedImage {
+            url: media.url,
+            notes: media.notes,
+        });
     }
 
     let value_normalized = normalize_tenor_url(value);
     let value = &value_normalized;
 
     if validate_image_url_internal(value).await.is_ok() {
-        return Ok(value.to_string());
+        return Ok(ResolvedImage {
+            url: value.to_string(),
+            notes: None,
+        });
     }
 
     let response = fetch_success(value).await?;
@@ -73,7 +85,10 @@ pub async fn resolve_image_url(value: &str) -> Result<String, ImageUrlValidation
     if let Some(oembed_url) = find_oembed_url(value, &html)
         && let Some(media_url) = resolve_oembed_photo_url(&oembed_url).await?
     {
-        return Ok(normalize_tenor_url(&media_url));
+        return Ok(ResolvedImage {
+            url: normalize_tenor_url(&media_url),
+            notes: None,
+        });
     }
 
     for candidate in find_page_image_candidates(value, &html) {
@@ -82,7 +97,10 @@ pub async fn resolve_image_url(value: &str) -> Result<String, ImageUrlValidation
             .await
             .is_ok()
         {
-            return Ok(candidate_normalized);
+            return Ok(ResolvedImage {
+                url: candidate_normalized,
+                notes: None,
+            });
         }
     }
 
@@ -353,32 +371,57 @@ struct SyndicationVideo {
 }
 
 #[derive(serde::Deserialize)]
+struct SyndicationUser {
+    screen_name: String,
+}
+
+#[derive(serde::Deserialize)]
 struct SyndicationResponse {
     photos: Vec<SyndicationPhoto>,
     video: Option<SyndicationVideo>,
+    text: Option<String>,
+    user: Option<SyndicationUser>,
 }
 
-fn parse_syndication_response(body: &str) -> Result<String, ImageUrlValidationError> {
+struct TwitterMedia {
+    url: String,
+    notes: Option<String>,
+}
+
+fn format_twitter_notes(screen_name: &str, text: &str) -> String {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        format!("@{screen_name}")
+    } else {
+        format!("@{screen_name}: {trimmed}")
+    }
+}
+
+fn parse_syndication_response(body: &str) -> Result<TwitterMedia, ImageUrlValidationError> {
     let response: SyndicationResponse =
         serde_json::from_str(body).map_err(|_| ImageUrlValidationError::FetchFailed)?;
 
-    if let Some(photo) = response.photos.first() {
-        return Ok(photo.url.clone());
-    }
-
-    if let Some(video) = response.video
+    let url = if let Some(photo) = response.photos.first() {
+        photo.url.clone()
+    } else if let Some(video) = response.video
         && let Some(best) = video
             .variants
             .into_iter()
             .max_by_key(|variant| variant.bitrate.unwrap_or(0))
     {
-        return Ok(best.src);
-    }
+        best.src
+    } else {
+        return Err(ImageUrlValidationError::UnsupportedContentType);
+    };
 
-    Err(ImageUrlValidationError::UnsupportedContentType)
+    let notes = response.user.map(|user| {
+        format_twitter_notes(&user.screen_name, response.text.as_deref().unwrap_or(""))
+    });
+
+    Ok(TwitterMedia { url, notes })
 }
 
-async fn resolve_twitter_status(id: &str) -> Result<String, ImageUrlValidationError> {
+async fn resolve_twitter_status(id: &str) -> Result<TwitterMedia, ImageUrlValidationError> {
     let api_url = format!(
         "https://cdn.syndication.twimg.com/tweet-result?id={}&lang=en&token=memebucket",
         id
@@ -391,7 +434,7 @@ async fn resolve_twitter_status(id: &str) -> Result<String, ImageUrlValidationEr
 /// mock server instead of the real syndication endpoint.
 async fn resolve_twitter_status_from_api_url(
     api_url: &str,
-) -> Result<String, ImageUrlValidationError> {
+) -> Result<TwitterMedia, ImageUrlValidationError> {
     let response = fetch_success(api_url).await?;
     let body = read_limited_text(response).await?;
 
@@ -575,7 +618,7 @@ mod tests {
 
         let resolved = resolve_image_url(&url).await.unwrap();
 
-        assert_eq!(resolved, url);
+        assert_eq!(resolved.url, url);
     }
 
     #[tokio::test]
@@ -586,7 +629,17 @@ mod tests {
         // proving the Twitter branch doesn't intercept unrelated hosts.
         let resolved = resolve_image_url(&url).await.unwrap();
 
-        assert_eq!(resolved, url);
+        assert_eq!(resolved.url, url);
+    }
+
+    #[tokio::test]
+    async fn resolve_image_url_returns_none_notes_for_non_twitter_urls() {
+        let url = spawn_content_type_server("image/gif").await;
+
+        let resolved = resolve_image_url(&url).await.unwrap();
+
+        assert_eq!(resolved.url, url);
+        assert_eq!(resolved.notes, None);
     }
 
     #[tokio::test]
@@ -640,7 +693,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(resolved, format!("http://{address}/image.gif"));
+        assert_eq!(resolved.url, format!("http://{address}/image.gif"));
     }
 
     #[tokio::test]
@@ -679,7 +732,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(resolved, format!("http://{address}/image.gif"));
+        assert_eq!(resolved.url, format!("http://{address}/image.gif"));
     }
 
     #[test]
@@ -744,7 +797,7 @@ mod tests {
         let body =
             r#"{"photos":[{"url":"https://pbs.twimg.com/media/abc.jpg:large"}],"video":null}"#;
         let result = parse_syndication_response(body).unwrap();
-        assert_eq!(result, "https://pbs.twimg.com/media/abc.jpg:large");
+        assert_eq!(result.url, "https://pbs.twimg.com/media/abc.jpg:large");
     }
 
     #[test]
@@ -755,7 +808,7 @@ mod tests {
             {"type":"video/mp4","bitrate":256000,"src":"https://video.twimg.com/low.mp4"}
         ]}}"#;
         let result = parse_syndication_response(body).unwrap();
-        assert_eq!(result, "https://video.twimg.com/high.mp4");
+        assert_eq!(result.url, "https://video.twimg.com/high.mp4");
     }
 
     #[test]
@@ -764,7 +817,7 @@ mod tests {
             {"type":"video/mp4","bitrate":0,"src":"https://video.twimg.com/tweet_video/abc.mp4"}
         ]}}"#;
         let result = parse_syndication_response(body).unwrap();
-        assert_eq!(result, "https://video.twimg.com/tweet_video/abc.mp4");
+        assert_eq!(result.url, "https://video.twimg.com/tweet_video/abc.mp4");
     }
 
     #[test]
@@ -781,6 +834,48 @@ mod tests {
     fn parse_syndication_response_errors_on_malformed_json() {
         let result = parse_syndication_response("not json");
         assert!(matches!(result, Err(ImageUrlValidationError::FetchFailed)));
+    }
+
+    #[test]
+    fn format_twitter_notes_includes_handle_and_text() {
+        let result = format_twitter_notes("protogenElvis", "You know I've been thinking lately");
+        assert_eq!(result, "@protogenElvis: You know I've been thinking lately");
+    }
+
+    #[test]
+    fn format_twitter_notes_falls_back_to_handle_only_when_text_is_empty() {
+        assert_eq!(format_twitter_notes("protogenElvis", ""), "@protogenElvis");
+        assert_eq!(
+            format_twitter_notes("protogenElvis", "   "),
+            "@protogenElvis"
+        );
+    }
+
+    #[test]
+    fn parse_syndication_response_includes_notes_when_user_and_text_present() {
+        let body = r#"{"photos":[{"url":"https://pbs.twimg.com/media/abc.jpg:large"}],"video":null,"text":"You know I've been thinking lately","user":{"screen_name":"protogenElvis"}}"#;
+        let result = parse_syndication_response(body).unwrap();
+        assert_eq!(result.url, "https://pbs.twimg.com/media/abc.jpg:large");
+        assert_eq!(
+            result.notes.as_deref(),
+            Some("@protogenElvis: You know I've been thinking lately")
+        );
+    }
+
+    #[test]
+    fn parse_syndication_response_notes_falls_back_to_handle_only_when_text_empty() {
+        let body = r#"{"photos":[{"url":"https://pbs.twimg.com/media/abc.jpg:large"}],"video":null,"text":"","user":{"screen_name":"protogenElvis"}}"#;
+        let result = parse_syndication_response(body).unwrap();
+        assert_eq!(result.notes.as_deref(), Some("@protogenElvis"));
+    }
+
+    #[test]
+    fn parse_syndication_response_notes_is_none_when_user_field_absent() {
+        let body =
+            r#"{"photos":[{"url":"https://pbs.twimg.com/media/abc.jpg:large"}],"video":null}"#;
+        let result = parse_syndication_response(body).unwrap();
+        assert_eq!(result.url, "https://pbs.twimg.com/media/abc.jpg:large");
+        assert_eq!(result.notes, None);
     }
 
     #[tokio::test]
@@ -803,7 +898,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(result, "https://pbs.twimg.com/media/abc.jpg:large");
+        assert_eq!(result.url, "https://pbs.twimg.com/media/abc.jpg:large");
+        assert_eq!(result.notes, None);
     }
 
     #[tokio::test]

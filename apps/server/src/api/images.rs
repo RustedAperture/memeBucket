@@ -195,10 +195,15 @@ pub async fn search_images(
     ))
 }
 
-async fn resolve_and_upload_url(state: &AppState, submitted_url: &str) -> Result<String, AppError> {
-    let mut resolved_url = resolve_image_url(submitted_url)
+async fn resolve_and_upload_url(
+    state: &AppState,
+    submitted_url: &str,
+) -> Result<(String, Option<String>), AppError> {
+    let resolved = resolve_image_url(submitted_url)
         .await
         .map_err(|err| AppError::BadRequest(err.user_message().to_string()))?;
+    let mut resolved_url = resolved.url;
+    let notes = resolved.notes;
 
     let is_video = {
         let base = resolved_url
@@ -226,7 +231,7 @@ async fn resolve_and_upload_url(state: &AppState, submitted_url: &str) -> Result
             })?;
     }
 
-    Ok(resolved_url)
+    Ok((resolved_url, notes))
 }
 
 async fn finalize_cdn_status(
@@ -290,10 +295,10 @@ pub async fn create_image(
     ValidatedJson(request): ValidatedJson<CreateImageRequest>,
 ) -> Result<Json<ImageResponse>, AppError> {
     let title = validate_title(request.title)?;
-    let resolved_url = resolve_and_upload_url(&state, &request.url).await?;
+    let (resolved_url, auto_notes) = resolve_and_upload_url(&state, &request.url).await?;
 
     let repo = state.image_repo.clone();
-    let image = repo
+    let mut image = repo
         .create_with_metadata(
             user.user_id,
             bucket_id,
@@ -304,6 +309,15 @@ pub async fn create_image(
             &request.tags.unwrap_or_default(),
         )
         .await?;
+
+    if let Some(notes) = &auto_notes
+        && repo
+            .update_notes(user.user_id, bucket_id, image.id, Some(notes))
+            .await
+            .unwrap_or(false)
+    {
+        image.notes = Some(notes.clone());
+    }
 
     finalize_cdn_status(&state, user.user_id, bucket_id, image.id, resolved_url).await;
 
@@ -329,7 +343,8 @@ pub async fn update_image(
     Json(request): Json<UpdateImageRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let repo = state.image_repo.clone();
-    repo.get_for_owner(user.user_id, bucket_id, image_id)
+    let existing = repo
+        .get_for_owner(user.user_id, bucket_id, image_id)
         .await?
         .ok_or(AppError::NotFound)?;
 
@@ -344,14 +359,19 @@ pub async fn update_image(
         .transpose()?;
 
     // Now do expensive I/O
-    let resolved_url = match &request.url {
-        Some(new_url) => Some(resolve_and_upload_url(&state, new_url).await?),
-        None => None,
+    let (resolved_url, auto_notes) = match &request.url {
+        Some(new_url) => {
+            let (url, notes) = resolve_and_upload_url(&state, new_url).await?;
+            (Some(url), notes)
+        }
+        None => (None, None),
     };
+
+    let notes_patch = compute_notes_patch(request.notes, auto_notes, existing.notes.as_deref());
 
     let patch = UpdateImageMetadataPatch {
         title,
-        notes: request.notes.map(normalize_optional_text),
+        notes: notes_patch,
         favorite: request.favorite,
         random_weight,
         tags: request.tags,
@@ -561,6 +581,24 @@ fn normalize_optional_text(value: Option<String>) -> Option<String> {
     }
 }
 
+fn compute_notes_patch(
+    explicit_notes: Option<Option<String>>,
+    auto_notes: Option<String>,
+    existing_notes: Option<&str>,
+) -> Option<Option<String>> {
+    if let Some(explicit) = explicit_notes {
+        return Some(normalize_optional_text(explicit));
+    }
+
+    let auto = auto_notes?;
+    let existing_is_empty = existing_notes.map(str::trim).is_none_or(str::is_empty);
+    if existing_is_empty {
+        Some(Some(auto))
+    } else {
+        None
+    }
+}
+
 fn deserialize_optional_nullable<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
 where
     D: Deserializer<'de>,
@@ -680,5 +718,55 @@ mod tests {
         let image = make_stored_image(original, None, None);
         let response = image_response_from_stored(image, 0);
         assert_eq!(response.url, original);
+    }
+
+    #[test]
+    fn compute_notes_patch_explicit_notes_always_wins() {
+        // Explicit notes present, even though auto-fill notes are also available and existing notes are empty.
+        let result = compute_notes_patch(
+            Some(Some("My own note".to_string())),
+            Some("@handle: tweet text".to_string()),
+            None,
+        );
+        assert_eq!(result, Some(Some("My own note".to_string())));
+    }
+
+    #[test]
+    fn compute_notes_patch_explicit_null_clears_notes_even_with_auto_available() {
+        let result = compute_notes_patch(
+            Some(None),
+            Some("@handle: tweet text".to_string()),
+            Some("existing notes"),
+        );
+        assert_eq!(result, Some(None));
+    }
+
+    #[test]
+    fn compute_notes_patch_auto_fills_when_existing_notes_are_empty() {
+        let result = compute_notes_patch(None, Some("@handle: tweet text".to_string()), None);
+        assert_eq!(result, Some(Some("@handle: tweet text".to_string())));
+    }
+
+    #[test]
+    fn compute_notes_patch_auto_fills_when_existing_notes_are_whitespace_only() {
+        let result =
+            compute_notes_patch(None, Some("@handle: tweet text".to_string()), Some("   "));
+        assert_eq!(result, Some(Some("@handle: tweet text".to_string())));
+    }
+
+    #[test]
+    fn compute_notes_patch_does_not_overwrite_existing_notes() {
+        let result = compute_notes_patch(
+            None,
+            Some("@handle: tweet text".to_string()),
+            Some("Already have notes here"),
+        );
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn compute_notes_patch_no_change_when_no_auto_notes_available() {
+        let result = compute_notes_patch(None, None, None);
+        assert_eq!(result, None);
     }
 }

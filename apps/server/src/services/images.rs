@@ -110,6 +110,26 @@ fn normalize_tenor_url(url_str: &str) -> String {
     url_str.to_string()
 }
 
+#[allow(dead_code)]
+fn extract_twitter_status_id(url_str: &str) -> Option<String> {
+    let url = Url::parse(url_str).ok()?;
+    let host = url.host_str()?;
+
+    if !matches!(host, "x.com" | "twitter.com" | "mobile.twitter.com") {
+        return None;
+    }
+
+    let segments: Vec<&str> = url.path_segments()?.collect();
+    let status_index = segments.iter().position(|segment| *segment == "status")?;
+    let id = segments.get(status_index + 1)?;
+
+    if !id.chars().all(|c| c.is_ascii_digit()) || id.is_empty() {
+        return None;
+    }
+
+    Some(id.to_string())
+}
+
 fn is_safe_ip(ip: &IpAddr) -> bool {
     #[cfg(test)]
     if ip.is_loopback() {
@@ -584,5 +604,62 @@ mod tests {
             .unwrap();
 
         assert_eq!(resolved, format!("http://{address}/image.gif"));
+    }
+
+    #[test]
+    fn extract_twitter_status_id_matches_x_com() {
+        assert_eq!(
+            extract_twitter_status_id(
+                "https://x.com/protogenElvis/status/2076683958096646274?s=20"
+            ),
+            Some("2076683958096646274".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_twitter_status_id_matches_twitter_com() {
+        assert_eq!(
+            extract_twitter_status_id(
+                "https://twitter.com/AriesArtistFIN/status/2076662019177021747"
+            ),
+            Some("2076662019177021747".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_twitter_status_id_matches_mobile_twitter_com() {
+        assert_eq!(
+            extract_twitter_status_id("https://mobile.twitter.com/someuser/status/123456"),
+            Some("123456".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_twitter_status_id_matches_with_trailing_photo_segment() {
+        assert_eq!(
+            extract_twitter_status_id("https://x.com/someuser/status/123456/photo/1"),
+            Some("123456".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_twitter_status_id_returns_none_for_non_status_path() {
+        assert_eq!(extract_twitter_status_id("https://x.com/someuser"), None);
+    }
+
+    #[test]
+    fn extract_twitter_status_id_returns_none_for_other_hosts() {
+        assert_eq!(
+            extract_twitter_status_id("https://example.com/someuser/status/123456"),
+            None
+        );
+    }
+
+    #[test]
+    fn extract_twitter_status_id_returns_none_for_non_numeric_id() {
+        assert_eq!(
+            extract_twitter_status_id("https://x.com/someuser/status/not-a-number"),
+            None
+        );
     }
 }

@@ -194,14 +194,8 @@ pub async fn search_images(
     ))
 }
 
-pub async fn create_image(
-    State(state): State<AppState>,
-    user: AuthenticatedUser,
-    Path(bucket_id): Path<Uuid>,
-    ValidatedJson(request): ValidatedJson<CreateImageRequest>,
-) -> Result<Json<ImageResponse>, AppError> {
-    let title = validate_title(request.title)?;
-    let mut resolved_url = resolve_image_url(&request.url)
+async fn resolve_and_upload_url(state: &AppState, submitted_url: &str) -> Result<String, AppError> {
+    let mut resolved_url = resolve_image_url(submitted_url)
         .await
         .map_err(|err| AppError::BadRequest(err.user_message().to_string()))?;
 
@@ -231,6 +225,72 @@ pub async fn create_image(
             })?;
     }
 
+    Ok(resolved_url)
+}
+
+async fn finalize_cdn_status(
+    state: &AppState,
+    owner_user_id: Uuid,
+    bucket_id: Uuid,
+    image_id: Uuid,
+    resolved_url: String,
+) {
+    // Async re-host Discord CDN URLs to B2 so they remain valid permanently.
+    // We spawn off-thread so the caller is not delayed.
+    if StorageService::is_discord_cdn(&resolved_url) {
+        if let Some(storage) = state.storage().cloned() {
+            let pool = state.pool.clone();
+            let image_repo = state.image_repo.clone();
+            let image_id_str = image_id.to_string();
+            tokio::spawn(async move {
+                match storage.upload_from_url(&resolved_url).await {
+                    Ok(cdn_url) => {
+                        let _ = sqlx::query(
+                            "UPDATE images SET cdn_url = ?, cdn_status = 'migrated' WHERE id = ?",
+                        )
+                        .bind(&cdn_url)
+                        .bind(&image_id_str)
+                        .execute(&pool)
+                        .await;
+                        image_repo
+                            .invalidate_image(owner_user_id, bucket_id, image_id)
+                            .await;
+                    }
+                    Err(StorageError::FetchFailed(_)) => {
+                        let _ = sqlx::query("UPDATE images SET cdn_status = 'broken' WHERE id = ?")
+                            .bind(&image_id_str)
+                            .execute(&pool)
+                            .await;
+                        image_repo
+                            .invalidate_image(owner_user_id, bucket_id, image_id)
+                            .await;
+                    }
+                    Err(e) => {
+                        // UploadFailed — leave cdn_status as 'pending' for retry
+                        tracing::warn!("CDN re-host upload failed for {}: {}", resolved_url, e);
+                    }
+                }
+            });
+        }
+    } else {
+        // Non-Discord URLs are already stable — mark as migrated immediately.
+        let _ = sqlx::query("UPDATE images SET cdn_url = ?, cdn_status = 'migrated' WHERE id = ?")
+            .bind(&resolved_url)
+            .bind(image_id.to_string())
+            .execute(&state.pool)
+            .await;
+    }
+}
+
+pub async fn create_image(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Path(bucket_id): Path<Uuid>,
+    ValidatedJson(request): ValidatedJson<CreateImageRequest>,
+) -> Result<Json<ImageResponse>, AppError> {
+    let title = validate_title(request.title)?;
+    let resolved_url = resolve_and_upload_url(&state, &request.url).await?;
+
     let repo = state.image_repo.clone();
     let image = repo
         .create_with_metadata(
@@ -244,54 +304,7 @@ pub async fn create_image(
         )
         .await?;
 
-    // Async re-host Discord CDN URLs to B2 so they remain valid permanently.
-    // We spawn off-thread so the HTTP response is not delayed.
-    if StorageService::is_discord_cdn(&resolved_url) {
-        if let Some(storage) = state.storage().cloned() {
-            let original_url = resolved_url.clone();
-            let pool = state.pool.clone();
-            let image_repo = state.image_repo.clone();
-            let image_id_for_cdn = image.id.to_string();
-            let owner_user_id = user.user_id;
-            let image_uuid = image.id;
-            tokio::spawn(async move {
-                match storage.upload_from_url(&original_url).await {
-                    Ok(cdn_url) => {
-                        let _ = sqlx::query(
-                            "UPDATE images SET cdn_url = ?, cdn_status = 'migrated' WHERE id = ?",
-                        )
-                        .bind(&cdn_url)
-                        .bind(&image_id_for_cdn)
-                        .execute(&pool)
-                        .await;
-                        image_repo
-                            .invalidate_image(owner_user_id, bucket_id, image_uuid)
-                            .await;
-                    }
-                    Err(StorageError::FetchFailed(_)) => {
-                        let _ = sqlx::query("UPDATE images SET cdn_status = 'broken' WHERE id = ?")
-                            .bind(&image_id_for_cdn)
-                            .execute(&pool)
-                            .await;
-                        image_repo
-                            .invalidate_image(owner_user_id, bucket_id, image_uuid)
-                            .await;
-                    }
-                    Err(e) => {
-                        // UploadFailed — leave cdn_status as 'pending' for retry
-                        tracing::warn!("CDN re-host upload failed for {}: {}", original_url, e);
-                    }
-                }
-            });
-        }
-    } else {
-        // Non-Discord URLs are already stable — mark as migrated immediately.
-        let _ = sqlx::query("UPDATE images SET cdn_url = ?, cdn_status = 'migrated' WHERE id = ?")
-            .bind(&resolved_url)
-            .bind(image.id.to_string())
-            .execute(&state.pool)
-            .await;
-    }
+    finalize_cdn_status(&state, user.user_id, bucket_id, image.id, resolved_url).await;
 
     Ok(Json(image_response_from_stored(image, 0)))
 }

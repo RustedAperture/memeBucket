@@ -65,16 +65,15 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
   const [bulkMoveDialogOpen, setBulkMoveDialogOpen] = useState(false);
   const [bulkMoveBucketId, setBulkMoveBucketId] = useState("");
   const [isBulkMoving, setIsBulkMoving] = useState(false);
-  const [editingMetadata, setEditingMetadata] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
   const [titleValue, setTitleValue] = useState("");
   const [favoriteValue, setFavoriteValue] = useState(false);
   const [randomWeightValue, setRandomWeightValue] = useState(1);
   const [tagsValue, setTagsValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
-  const [editingUrl, setEditingUrl] = useState(false);
   const [urlValue, setUrlValue] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
-  const [urlSaving, setUrlSaving] = useState(false);
+  const [savingDetails, setSavingDetails] = useState(false);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [bulkFavorite, setBulkFavorite] = useState<BulkFavoriteValue>("unchanged");
   const [bulkWeight, setBulkWeight] = useState("");
@@ -113,7 +112,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
       setSelectedImageIds(new Set());
       setImageToDelete(null);
       setBulkDialogOpen(false);
-      setEditingMetadata(false);
+      setEditingDetails(false);
       resetBulkForm();
     });
     let request: Promise<any>;
@@ -158,10 +157,9 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
     setRandomWeightValue(image.randomWeight);
     setTagsValue(image.tags.join(", "));
     setNotesValue(image.notes || "");
-    setEditingMetadata(false);
-    setEditingUrl(false);
     setUrlValue(image.url);
     setUrlError(null);
+    setEditingDetails(false);
   }
 
   function dragImageIdsFor(imageId: string) {
@@ -183,37 +181,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
     }
   }
 
-  async function handleSaveMetadata() {
-    if (!selectedImage) return;
-    const normalizedTags = parseTagInput(tagsValue);
-    const normalizedTitle = titleValue.trim() || null;
-    const normalizedNotes = notesValue.trim() || null;
-    const normalizedWeight = clampRandomWeight(randomWeightValue);
-    try {
-      await apiPatch(`/api/buckets/${bucketId}/images/${selectedImage.id}`, {
-        title: normalizedTitle,
-        notes: normalizedNotes,
-        favorite: favoriteValue,
-        randomWeight: normalizedWeight,
-        tags: normalizedTags,
-      });
-      const loadedImages = await load();
-      const updatedImage = loadedImages.find((image) => image.id === selectedImage.id) ?? {
-        ...selectedImage,
-        title: normalizedTitle,
-        notes: normalizedNotes,
-        favorite: favoriteValue,
-        randomWeight: normalizedWeight,
-        tags: normalizedTags,
-      };
-      setSelectedImage(updatedImage);
-      setEditingMetadata(false);
-    } catch {
-      toast.error("Failed to save image details");
-    }
-  }
-
-  async function handleSaveUrl() {
+  async function handleSaveDetails() {
     if (!selectedImage) return;
     const trimmedUrl = urlValue.trim();
     if (!trimmedUrl) {
@@ -227,25 +195,46 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
       return;
     }
     setUrlError(null);
-    setUrlSaving(true);
+
+    const normalizedTags = parseTagInput(tagsValue);
+    const normalizedTitle = titleValue.trim() || null;
+    const normalizedNotes = notesValue.trim() || null;
+    const normalizedWeight = clampRandomWeight(randomWeightValue);
+    // Only send the url field when it actually changed — the server re-resolves
+    // and re-uploads it on every url PATCH, which is unnecessary work (and a
+    // multi-second delay for video/Twitter links) for a metadata-only edit.
+    const urlChanged = trimmedUrl !== selectedImage.url;
+
+    setSavingDetails(true);
     try {
       await apiPatch(`/api/buckets/${bucketId}/images/${selectedImage.id}`, {
-        url: trimmedUrl,
+        title: normalizedTitle,
+        notes: normalizedNotes,
+        favorite: favoriteValue,
+        randomWeight: normalizedWeight,
+        tags: normalizedTags,
+        ...(urlChanged ? { url: trimmedUrl } : {}),
       });
       const loadedImages = await load();
       const updatedImage = loadedImages.find((image) => image.id === selectedImage.id) ?? {
         ...selectedImage,
-        url: trimmedUrl,
+        title: normalizedTitle,
+        notes: normalizedNotes,
+        favorite: favoriteValue,
+        randomWeight: normalizedWeight,
+        tags: normalizedTags,
+        url: urlChanged ? trimmedUrl : selectedImage.url,
       };
       setSelectedImage(updatedImage);
       setUrlValue(updatedImage.url);
-      setEditingUrl(false);
-      toast.success("Image link updated");
+      setEditingDetails(false);
     } catch (err) {
-      setUrlError(err instanceof Error ? err.message : "Failed to update image link");
-      toast.error("Failed to update image link");
+      if (urlChanged) {
+        setUrlError(err instanceof Error ? err.message : "Failed to update image link");
+      }
+      toast.error(err instanceof Error ? err.message : "Failed to save image details");
     } finally {
-      setUrlSaving(false);
+      setSavingDetails(false);
     }
   }
 
@@ -668,16 +657,30 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
 
               <div className="space-y-3 rounded-lg border border-border/70 p-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Metadata</p>
-                  {!readonly && !editingMetadata ? (
-                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEditingMetadata(true)}>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Details</p>
+                  {!readonly && !editingDetails ? (
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEditingDetails(true)}>
                       <Edit2 className="h-3 w-3 mr-1" /> Edit
                     </Button>
                   ) : null}
                 </div>
 
-                {editingMetadata ? (
+                {editingDetails ? (
                   <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="image-url">Link</Label>
+                      <Input
+                        id="image-url"
+                        value={urlValue}
+                        onChange={(event) => setUrlValue(event.target.value)}
+                        placeholder="https://example.com/image.gif"
+                        disabled={savingDetails}
+                      />
+                      {urlError ? (
+                        <p className="text-xs font-medium text-destructive">{urlError}</p>
+                      ) : null}
+                    </div>
+
                     <div className="space-y-1.5">
                       <Label htmlFor="image-title">Title</Label>
                       <Input
@@ -686,6 +689,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                         maxLength={200}
                         onChange={(event) => setTitleValue(event.target.value)}
                         placeholder="Untitled"
+                        disabled={savingDetails}
                       />
                     </div>
 
@@ -697,6 +701,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                           value={tagsValue}
                           onChange={(event) => setTagsValue(event.target.value)}
                           placeholder="cat, reaction, happy"
+                          disabled={savingDetails}
                         />
                       </div>
                       <div className="space-y-1.5">
@@ -725,6 +730,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                           step={1}
                           value={randomWeightValue}
                           onChange={(event) => setRandomWeightValue(clampRandomWeight(Number(event.target.value)))}
+                          disabled={savingDetails}
                         />
                       </div>
                     </div>
@@ -739,9 +745,10 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                           id="image-favorite"
                           checked={favoriteValue}
                           onCheckedChange={setFavoriteValue}
+                          disabled={savingDetails}
                         />
                       </div>
-                      
+
                       <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2">
                         <Label htmlFor="image-weight-disable" className="flex items-center gap-2 cursor-pointer">
                           <Ban className={randomWeightValue === 0 ? "h-4 w-4 text-destructive" : "h-4 w-4 text-muted-foreground"} />
@@ -752,6 +759,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                           checked={randomWeightValue === 0}
                           onCheckedChange={(checked) => setRandomWeightValue(checked ? 0 : 1)}
                           className="data-[state=checked]:bg-destructive"
+                          disabled={savingDetails}
                         />
                       </div>
                     </div>
@@ -764,6 +772,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                         onChange={(event) => setNotesValue(event.target.value)}
                         placeholder="Add notes, credits, or context..."
                         className="resize-none h-24"
+                        disabled={savingDetails}
                       />
                     </div>
 
@@ -771,22 +780,38 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={savingDetails}
                         onClick={() => {
-                          setEditingMetadata(false);
+                          setEditingDetails(false);
                           setTitleValue(selectedImage.title || "");
                           setFavoriteValue(selectedImage.favorite);
                           setRandomWeightValue(selectedImage.randomWeight);
                           setTagsValue(selectedImage.tags.join(", "));
                           setNotesValue(selectedImage.notes || "");
+                          setUrlValue(selectedImage.url);
+                          setUrlError(null);
                         }}
                       >
                         Cancel
                       </Button>
-                      <Button size="sm" onClick={handleSaveMetadata}>Save</Button>
+                      <Button size="sm" onClick={handleSaveDetails} disabled={savingDetails}>
+                        {savingDetails ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                      </Button>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
+                    <div className="flex min-w-0 gap-2">
+                      <Input readOnly value={selectedImage.url} title={selectedImage.url} />
+                      <Button
+                        variant="secondary"
+                        size="icon"
+                        aria-label="Open image link"
+                        render={<a href={selectedImage.url} target="_blank" rel="noreferrer" />}
+                      >
+                        <ExternalLink />
+                      </Button>
+                    </div>
                     <div className="grid gap-2 text-sm sm:grid-cols-3">
                       <div>
                         <p className="text-xs text-muted-foreground">Favorite</p>
@@ -824,69 +849,6 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                         {selectedImage.notes || "No notes provided."}
                       </p>
                     </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2 min-w-0">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Link</p>
-                  {!readonly && !editingUrl ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-xs"
-                      onClick={() => {
-                        setUrlValue(selectedImage.url);
-                        setUrlError(null);
-                        setEditingUrl(true);
-                      }}
-                    >
-                      <Edit2 className="h-3 w-3 mr-1" /> Edit
-                    </Button>
-                  ) : null}
-                </div>
-
-                {editingUrl ? (
-                  <div className="space-y-1.5">
-                    <Input
-                      value={urlValue}
-                      onChange={(event) => setUrlValue(event.target.value)}
-                      placeholder="https://example.com/image.gif"
-                      disabled={urlSaving}
-                    />
-                    {urlError ? (
-                      <p className="text-xs font-medium text-destructive">{urlError}</p>
-                    ) : null}
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={urlSaving}
-                        onClick={() => {
-                          setEditingUrl(false);
-                          setUrlValue(selectedImage.url);
-                          setUrlError(null);
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button size="sm" onClick={handleSaveUrl} disabled={urlSaving}>
-                        {urlSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex min-w-0 gap-2">
-                    <Input readOnly value={selectedImage.url} title={selectedImage.url} />
-                    <Button
-                      variant="secondary"
-                      size="icon"
-                      aria-label="Open image link"
-                      render={<a href={selectedImage.url} target="_blank" rel="noreferrer" />}
-                    >
-                      <ExternalLink />
-                    </Button>
                   </div>
                 )}
               </div>

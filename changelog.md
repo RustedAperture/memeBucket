@@ -5,7 +5,7 @@
 ### Added
 
 - Added **X/Twitter link support**: pasting a link to an X (formerly Twitter) post now extracts the attached photo, video, or GIF, converts it to WebP, and uploads it to your bucket — the same as any other image URL.
-- Added the ability to **edit an image's link**: open any image's details in the dashboard and click Edit on the Link card to replace its URL. The new link goes through the same extraction/conversion pipeline as adding a fresh image (including X/Twitter links), while keeping the image's title, tags, notes, and favorite status intact.
+- Added the ability to **edit an image's link**: open any image's details in the dashboard, click Edit, and replace its URL alongside the rest of its details. The new link goes through the same extraction/conversion pipeline as adding a fresh image (including X/Twitter links), while keeping the image's title, tags, notes, and favorite status intact.
 - Added a **changelog update notice** to the Picker: when a new changelog entry is published, the Picker shows a small banner linking to it, so desktop users don't have to check the website manually.
 
 ## v0.2.6 - Jul 7, 2026

@@ -30,6 +30,7 @@ export default function PickerPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [serverUrl, setServerUrl] = useState("");
   const [isTauriApp, setIsTauriApp] = useState(false);
+  const [changelogBanner, setChangelogBanner] = useState<{ version: string; date: string } | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
@@ -38,6 +39,34 @@ export default function PickerPage() {
   useEffect(() => {
     setServerUrl(window.location.origin);
     setIsTauriApp(isTauri());
+  }, []);
+
+  useEffect(() => {
+    async function checkChangelog() {
+      try {
+        const response = await fetch("/changelog.json", { cache: "no-store" });
+        if (!response.ok) return;
+        const data: { version: string; date: string }[] = await response.json();
+        const latest = data[0];
+        if (!latest) return;
+
+        const lastSeen = localStorage.getItem("lastSeenChangelogVersion");
+        if (lastSeen === null) {
+          localStorage.setItem("lastSeenChangelogVersion", latest.version);
+          return;
+        }
+        if (lastSeen !== latest.version) {
+          localStorage.setItem("lastSeenChangelogVersion", latest.version);
+          setChangelogBanner({ version: latest.version, date: latest.date });
+        }
+      } catch {
+        // Offline or transient failure — the banner just doesn't show this time.
+      }
+    }
+
+    checkChangelog();
+    window.addEventListener("focus", checkChangelog);
+    return () => window.removeEventListener("focus", checkChangelog);
   }, []);
 
   useEffect(() => {
@@ -103,6 +132,21 @@ export default function PickerPage() {
   const handleClose = async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("hide_window");
+  };
+
+  const handleOpenChangelog = async () => {
+    const changelogUrl = `${window.location.origin}/changelog`;
+    if (isTauri()) {
+      try {
+        const { open } = await import("@tauri-apps/plugin-shell");
+        await open(changelogUrl);
+      } catch {
+        window.open(changelogUrl, "_blank");
+      }
+    } else {
+      window.open(changelogUrl, "_blank");
+    }
+    setChangelogBanner(null);
   };
 
   const handleSelectImage = async (url: string) => {
@@ -353,6 +397,24 @@ export default function PickerPage() {
           </div>
         )}
       </div>
+
+      {changelogBanner && (
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-primary/10 border-b text-xs shrink-0">
+          <button
+            onClick={handleOpenChangelog}
+            className="text-left flex-1 min-w-0 truncate hover:underline"
+          >
+            New update available (v{changelogBanner.version}, {changelogBanner.date}) — see what&apos;s new
+          </button>
+          <button
+            onClick={() => setChangelogBanner(null)}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            aria-label="Dismiss"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
 
       {/* Masonry image grid */}
       <div className="flex-grow min-h-0 overflow-y-auto p-2 scrollbar-none bg-muted/10">

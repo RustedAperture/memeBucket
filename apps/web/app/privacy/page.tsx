@@ -47,7 +47,9 @@ export default function PrivacyPage() {
           automatically upload it to ImgBB (api.imgbb.com) to convert it into a hosted
           GIF. Image and GIF URLs may point to third-party hosts; loading or viewing
           them may contact those hosts. Those services have their own terms and privacy
-          policies.
+          policies. When you submit an X/Twitter post link, memeBucket requests X's
+          syndication API (cdn.syndication.twimg.com) to identify attached media, then
+          re-hosts it on Backblaze B2.
         </p>
         <p className="mt-3">
           memeBucket also supports <strong>Telegram Login</strong> as an authentication

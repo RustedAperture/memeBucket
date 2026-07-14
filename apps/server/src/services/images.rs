@@ -114,7 +114,6 @@ fn normalize_tenor_url(url_str: &str) -> String {
     url_str.to_string()
 }
 
-#[allow(dead_code)]
 fn extract_twitter_status_id(url_str: &str) -> Option<String> {
     let url = Url::parse(url_str).ok()?;
     let host = url.host_str()?;
@@ -379,7 +378,6 @@ fn parse_syndication_response(body: &str) -> Result<String, ImageUrlValidationEr
     Err(ImageUrlValidationError::UnsupportedContentType)
 }
 
-#[allow(dead_code)]
 async fn resolve_twitter_status(id: &str) -> Result<String, ImageUrlValidationError> {
     let api_url = format!(
         "https://cdn.syndication.twimg.com/tweet-result?id={}&lang=en&token=memebucket",

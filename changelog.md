@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.7 - Jul 13, 2026
+
+### Added
+
+- Added **X/Twitter link support**: pasting a link to an X (formerly Twitter) post now extracts the attached photo, video, or GIF, converts it to WebP, and uploads it to your bucket — the same as any other image URL.
+
 ## v0.2.6 - Jul 7, 2026
 
 ### Fixed

@@ -5,8 +5,15 @@ export default function ChangelogPage() {
     <LegalPage
       title="Changelog"
       description="Notable changes to memeBucket."
-      updated="Jul 7, 2026"
+      updated="Jul 13, 2026"
     >
+      <LegalSection title="v0.2.7 - Jul 13, 2026">
+        <h3 className="font-medium text-foreground">Added</h3>
+        <LegalList>
+          <li>Added <strong>X/Twitter link support</strong>: pasting a link to an X (formerly Twitter) post now extracts the attached photo, video, or GIF, converts it to WebP, and uploads it to your bucket — the same as any other image URL.</li>
+        </LegalList>
+      </LegalSection>
+
       <LegalSection title="v0.2.6 - Jul 7, 2026">
         <h3 className="font-medium text-foreground">Fixed</h3>
         <LegalList>

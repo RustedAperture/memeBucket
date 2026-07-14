@@ -48,6 +48,10 @@ pub async fn resolve_image_url(value: &str) -> Result<String, ImageUrlValidation
         return Err(ImageUrlValidationError::InvalidHttpUrl);
     }
 
+    if let Some(status_id) = extract_twitter_status_id(value) {
+        return resolve_twitter_status(&status_id).await;
+    }
+
     let value_normalized = normalize_tenor_url(value);
     let value = &value_normalized;
 
@@ -571,6 +575,17 @@ mod tests {
     async fn resolve_image_url_keeps_direct_image_urls() {
         let url = spawn_content_type_server("image/gif").await;
 
+        let resolved = resolve_image_url(&url).await.unwrap();
+
+        assert_eq!(resolved, url);
+    }
+
+    #[tokio::test]
+    async fn resolve_image_url_ignores_non_twitter_hosts() {
+        let url = spawn_content_type_server("image/gif").await;
+
+        // A non-Twitter URL must still go through the generic scraper path,
+        // proving the Twitter branch doesn't intercept unrelated hosts.
         let resolved = resolve_image_url(&url).await.unwrap();
 
         assert_eq!(resolved, url);

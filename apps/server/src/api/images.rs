@@ -333,22 +333,27 @@ pub async fn update_image(
         .await?
         .ok_or(AppError::NotFound)?;
 
+    // Validate cheap fields first, before expensive I/O
+    let title = match request.title {
+        Some(title) => Some(validate_title(title)?),
+        None => None,
+    };
+    let random_weight = request
+        .random_weight
+        .map(validate_random_weight)
+        .transpose()?;
+
+    // Now do expensive I/O
     let resolved_url = match &request.url {
         Some(new_url) => Some(resolve_and_upload_url(&state, new_url).await?),
         None => None,
     };
 
     let patch = UpdateImageMetadataPatch {
-        title: match request.title {
-            Some(title) => Some(validate_title(title)?),
-            None => None,
-        },
+        title,
         notes: request.notes.map(normalize_optional_text),
         favorite: request.favorite,
-        random_weight: request
-            .random_weight
-            .map(validate_random_weight)
-            .transpose()?,
+        random_weight,
         tags: request.tags,
         url: resolved_url.clone(),
     };

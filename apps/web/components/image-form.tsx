@@ -12,12 +12,29 @@ import { GifSearchModal } from "./gif-search-modal";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { toast } from "sonner";
 
+// Client-side heuristic mirroring the server's is_video / is_twitter_media
+// checks (apps/server/src/api/images.rs, apps/server/src/services/storage.rs)
+// closely enough to decide whether to warn the user a submission may take a
+// while to convert. Not authoritative — just a hint for the loading UI.
+function looksLikeSlowMedia(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
+    if (path.endsWith(".mp4") || path.endsWith(".webm")) return true;
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    return host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com";
+  } catch {
+    return false;
+  }
+}
+
 export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated: () => void }) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingSlowMedia, setIsCreatingSlowMedia] = useState(false);
   const creatingRef = useRef(false);
 
   // Bulk Add States
@@ -25,6 +42,7 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
   const [bulkUrls, setBulkUrls] = useState("");
   const [isBulkAdding, setIsBulkAdding] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
+  const [bulkCurrentUrl, setBulkCurrentUrl] = useState<string | null>(null);
   const [bulkErrors, setBulkErrors] = useState<{ url: string; error: string }[]>([]);
   const [bulkSuccessCount, setBulkSuccessCount] = useState(0);
 
@@ -34,6 +52,7 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
     }
     creatingRef.current = true;
     setIsCreating(true);
+    setIsCreatingSlowMedia(looksLikeSlowMedia(payload.url));
     try {
       await apiPost(`/api/buckets/${bucketId}/images`, payload);
       setUrl("");
@@ -120,6 +139,7 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
     for (let i = 0; i < urls.length; i++) {
       const currentUrl = urls[i];
       setBulkProgress({ current: i + 1, total: urls.length });
+      setBulkCurrentUrl(currentUrl);
       try {
         await apiPost(`/api/buckets/${bucketId}/images`, { url: currentUrl });
         successCount++;
@@ -135,6 +155,7 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
 
     setIsBulkAdding(false);
     setBulkProgress(null);
+    setBulkCurrentUrl(null);
     onCreated();
 
     if (failed.length === 0) {
@@ -236,12 +257,20 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
             {isBulkAdding && bulkProgress && (
               <div className="flex flex-col items-center justify-center p-8 space-y-4 border rounded-lg bg-muted/20">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                <div className="text-center">
+                <div className="text-center w-full min-w-0">
                   <p className="text-sm font-medium">
                     Adding links... ({bulkProgress.current} / {bulkProgress.total})
                   </p>
+                  {bulkCurrentUrl ? (
+                    <p className="text-xs text-muted-foreground mt-1 truncate" title={bulkCurrentUrl}>
+                      {bulkCurrentUrl}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-muted-foreground mt-1">
                     Successfully added: {bulkSuccessCount}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/80 mt-2">
+                    Videos and X/Twitter links can take longer per item to convert — this is still working even if the counter pauses.
                   </p>
                 </div>
                 <div className="w-full bg-border rounded-full h-1.5 overflow-hidden">
@@ -305,6 +334,25 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Adding-image progress modal (single URL / GIF search select) */}
+      <Dialog open={isCreating} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-sm" showCloseButton={false}>
+          <div className="flex flex-col items-center justify-center gap-3 py-4 text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <div>
+              <p className="text-sm font-medium">
+                {isCreatingSlowMedia ? "Adding video…" : "Adding image…"}
+              </p>
+              {isCreatingSlowMedia ? (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Videos and X/Twitter links can take up to a minute to convert.
+                </p>
+              ) : null}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

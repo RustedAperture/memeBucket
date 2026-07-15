@@ -614,9 +614,11 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
           </button>
         </div>
         <div className="space-y-3 p-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">{image.title || image.url}</h2>
-          </div>
+          {image.title ? (
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-semibold">{image.title}</h2>
+            </div>
+          ) : null}
 
           {image.tags.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">

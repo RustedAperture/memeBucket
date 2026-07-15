@@ -21,6 +21,7 @@
 - Metadata edits, favorites, deletes, moves, and bulk actions work from system/aggregate views using each image’s real source bucket.
 - Simplified Library image cards by removing weight and send counts, adding corner favorite controls, and using icon-only Copy and Open actions.
 - Aligned Library image details with bucket details, including link editing and link actions.
+- Library cards no longer display media URLs as fallback titles.
 
 ## v0.2.7 - Jul 13, 2026
 

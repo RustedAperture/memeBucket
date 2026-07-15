@@ -117,7 +117,7 @@ export function PickerAddLinks({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex h-full flex-col gap-3 p-2.5">
+    <form onSubmit={handleSubmit} className="flex h-full min-h-0 min-w-0 w-full flex-col gap-3 overflow-hidden p-2.5">
       <div className="flex items-center justify-between gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onBack} disabled={isSubmitting}>
           <ArrowLeft className="h-4 w-4" />
@@ -173,36 +173,38 @@ export function PickerAddLinks({
         ) : null}
       </div>
 
-      <div className="flex-1 space-y-2">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
         <label htmlFor="picker-add-links" className="text-xs font-medium text-muted-foreground">
           Links
         </label>
-        <Textarea
-          id="picker-add-links"
-          ref={textareaRef}
-          value={value}
-          onChange={(event) => {
-            setValue(event.target.value);
-            setValidationMessage(null);
-          }}
-          disabled={isSubmitting || summary !== null}
-          placeholder={"https://example.com/one.gif\nhttps://example.com/two.mp4"}
-          className="h-full min-h-36 resize-none rounded-md bg-background/60 font-mono text-xs"
-        />
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Link2 className="h-3.5 w-3.5 shrink-0" />
-          Paste one link per line. They&apos;ll be added in order.
-        </p>
+        {summary ? (
+          <div className="flex min-h-36 min-w-0 flex-1 flex-col justify-center rounded-md border bg-card/60 px-3 py-4 text-sm">
+            <p className="font-medium text-foreground">Finished adding links</p>
+            <p className="mt-1 text-muted-foreground">
+              Total: {summary.total} · Added: {summary.added} · Failed: {summary.failed}
+            </p>
+          </div>
+        ) : (
+          <>
+            <Textarea
+              id="picker-add-links"
+              ref={textareaRef}
+              value={value}
+              onChange={(event) => {
+                setValue(event.target.value);
+                setValidationMessage(null);
+              }}
+              disabled={isSubmitting}
+              placeholder={"https://example.com/one.gif\nhttps://example.com/two.mp4"}
+              className="min-h-36 min-w-0 flex-1 resize-none overflow-x-hidden rounded-md bg-background/60 font-mono text-xs"
+            />
+            <p className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+              <Link2 className="h-3.5 w-3.5 shrink-0" />
+              Paste one link per line. They&apos;ll be added in order.
+            </p>
+          </>
+        )}
       </div>
-
-      {summary ? (
-        <div className="rounded-md border bg-card/60 px-3 py-2 text-xs">
-          <p className="font-medium text-foreground">Finished adding links</p>
-          <p className="mt-1 text-muted-foreground">
-            Total: {summary.total} · Added: {summary.added} · Failed: {summary.failed}
-          </p>
-        </div>
-      ) : null}
 
       {validationMessage ? (
         <p id="picker-add-links-validation" role="alert" className="text-xs text-destructive">
@@ -214,7 +216,7 @@ export function PickerAddLinks({
         type="submit"
         disabled={submitDisabled}
         aria-describedby={validationMessage ? "picker-add-links-validation" : undefined}
-        className="w-full rounded-md"
+        className="w-full shrink-0 rounded-md"
       >
         {submitLabel}
       </Button>

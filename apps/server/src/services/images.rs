@@ -240,12 +240,18 @@ fn push_hashtag(hashtags: &mut Vec<String>, value: &str) {
             .all(|character| character.is_alphanumeric() || character == '_')
         || hashtags
             .iter()
-            .any(|existing| existing.eq_ignore_ascii_case(hashtag))
+            .any(|existing| hashtags_equal_case_insensitively(existing, hashtag))
     {
         return;
     }
 
     hashtags.push(hashtag.to_string());
+}
+
+fn hashtags_equal_case_insensitively(left: &str, right: &str) -> bool {
+    left.chars()
+        .flat_map(char::to_uppercase)
+        .eq(right.chars().flat_map(char::to_uppercase))
 }
 
 #[derive(serde::Deserialize)]
@@ -873,7 +879,24 @@ mod tests {
         response::{IntoResponse, Response},
         routing::get,
     };
-    use tokio::net::TcpListener;
+    use tokio::{net::TcpListener, sync::Mutex};
+
+    // Some sandboxed test environments limit concurrent loopback binds. Serialize only the bind
+    // operation so mock servers can continue handling requests concurrently.
+    static MOCK_SERVER_LOCK: Mutex<()> = Mutex::const_new(());
+
+    async fn bind_mock_server() -> (TcpListener, std::net::SocketAddr) {
+        let _lock = MOCK_SERVER_LOCK.lock().await;
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        (listener, address)
+    }
+
+    fn serve_mock_server(listener: TcpListener, app: Router) {
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+    }
 
     async fn spawn_content_type_server(content_type: &'static str) -> String {
         async fn handler(content_type: &'static str) -> Response {
@@ -881,12 +904,8 @@ mod tests {
         }
 
         let app = Router::new().route("/", get(move || handler(content_type)));
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        let (listener, address) = bind_mock_server().await;
+        serve_mock_server(listener, app);
 
         format!("http://{address}/")
     }
@@ -903,8 +922,8 @@ mod tests {
                 .into_response()
         }
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap().to_string();
+        let (listener, address) = bind_mock_server().await;
+        let address = address.to_string();
         let post_body = post_body.replace("{address}", &address);
         let app = Router::new()
             .route("/xrpc/com.atproto.identity.resolveHandle", get(handle))
@@ -926,9 +945,7 @@ mod tests {
                 get(move || async move { ([(header::CONTENT_TYPE, media_content_type)], "video") }),
             );
 
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        serve_mock_server(listener, app);
 
         format!("http://{address}")
     }
@@ -1017,8 +1034,8 @@ mod tests {
             ([(header::CONTENT_TYPE, "image/gif")], "gif").into_response()
         }
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap().to_string();
+        let (listener, address) = bind_mock_server().await;
+        let address = address.to_string();
         let app = Router::new()
             .route(
                 "/",
@@ -1036,9 +1053,7 @@ mod tests {
             )
             .route("/image.gif", get(image));
 
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        serve_mock_server(listener, app);
 
         let resolved = resolve_image_url(&format!("http://{address}/"))
             .await
@@ -1063,8 +1078,8 @@ mod tests {
             ([(header::CONTENT_TYPE, "image/gif")], "gif").into_response()
         }
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap().to_string();
+        let (listener, address) = bind_mock_server().await;
+        let address = address.to_string();
         let app = Router::new()
             .route(
                 "/",
@@ -1075,9 +1090,7 @@ mod tests {
             )
             .route("/image.gif", get(image));
 
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        serve_mock_server(listener, app);
 
         let resolved = resolve_image_url(&format!("http://{address}/"))
             .await
@@ -1366,11 +1379,8 @@ mod tests {
         }
 
         let app = Router::new().route("/xrpc/com.atproto.identity.resolveHandle", get(unavailable));
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        let (listener, address) = bind_mock_server().await;
+        serve_mock_server(listener, app);
         let base_url = format!("http://{address}");
         let (handle_url, post_url) = bluesky_api_urls(&base_url);
 
@@ -1401,6 +1411,14 @@ mod tests {
         assert_eq!(
             extract_hashtags_from_text(&format!("#First #first #FIRST #_ok #! {} #", overlong)),
             vec!["First".to_string(), "_ok".to_string()]
+        );
+    }
+
+    #[test]
+    fn extract_hashtags_deduplicates_unicode_case_insensitively() {
+        assert_eq!(
+            extract_hashtags_from_text("#Éclair #éclair"),
+            vec!["Éclair".to_string()]
         );
     }
 
@@ -1538,11 +1556,8 @@ mod tests {
                 .into_response()
         }
         let app = Router::new().route("/tweet-result", get(ok_photo));
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        let (listener, address) = bind_mock_server().await;
+        serve_mock_server(listener, app);
 
         let result = resolve_twitter_status_from_api_url(&format!("http://{address}/tweet-result"))
             .await
@@ -1558,11 +1573,8 @@ mod tests {
             axum::http::StatusCode::NOT_FOUND
         }
         let app = Router::new().route("/tweet-result", get(not_found));
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        let (listener, address) = bind_mock_server().await;
+        serve_mock_server(listener, app);
 
         let result =
             resolve_twitter_status_from_api_url(&format!("http://{address}/tweet-result")).await;

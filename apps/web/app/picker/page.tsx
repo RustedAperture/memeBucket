@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Folder, X, Minus, Move } from "lucide-react";
+import { Search, Folder, X, Minus, Move, Plus } from "lucide-react";
+import { PickerAddLinks } from "@/components/picker-add-links";
 import { apiGet } from "@/lib/api";
 import type { ImageSearchResult, Bucket } from "@/lib/types";
+import { isWritablePickerBucket } from "@/lib/picker-add-links";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,9 +22,15 @@ import {
 const isTauri = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
+const PICKER_BUCKET_STORAGE_KEY = "picker.selectedBucketId";
+const PICKER_ALL_BUCKET_ID = "all";
+const PICKER_INBOX_NAME = "inbox";
+
 export default function PickerPage() {
   const [query, setQuery] = useState("");
-  const [bucketId, setBucketId] = useState("all");
+  const [bucketId, setBucketId] = useState(PICKER_ALL_BUCKET_ID);
+  const [pickerMode, setPickerMode] = useState<"search" | "add-links">("search");
+  const [isAddLinksSubmitting, setIsAddLinksSubmitting] = useState(false);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [results, setResults] = useState<ImageSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +43,8 @@ export default function PickerPage() {
   const queryRef = useRef(query);
   const bucketIdRef = useRef(bucketId);
   const searchRequestId = useRef(0);
+  const storedBucketIdRef = useRef<string | null>(null);
+  const hasRestoredStoredBucketRef = useRef(false);
 
   useEffect(() => {
     queryRef.current = query;
@@ -43,6 +53,10 @@ export default function PickerPage() {
 
   useEffect(() => {
     setIsTauriApp(isTauri());
+  }, []);
+
+  useEffect(() => {
+    storedBucketIdRef.current = window.localStorage.getItem(PICKER_BUCKET_STORAGE_KEY);
   }, []);
 
   useEffect(() => {
@@ -71,16 +85,49 @@ export default function PickerPage() {
 
   const bucketItems = useMemo(
     () => [
-      { label: "All buckets", value: "all" },
+      { label: "All buckets", value: PICKER_ALL_BUCKET_ID },
       ...buckets.map((b) => ({ label: b.name, value: b.id })),
     ],
     [buckets]
   );
 
+  const ownedInboxBucket = useMemo(
+    () =>
+      buckets.find(
+        (bucket) =>
+          bucket.name.trim().toLowerCase() === PICKER_INBOX_NAME &&
+          !bucket.is_subscribed
+      ) ?? null,
+    [buckets]
+  );
+
+  function setBucketSelection(nextBucketId: string, nextBuckets: Bucket[] = buckets) {
+    const nextValue =
+      nextBucketId === PICKER_ALL_BUCKET_ID || nextBuckets.some((bucket) => bucket.id === nextBucketId)
+        ? nextBucketId
+        : PICKER_ALL_BUCKET_ID;
+
+    setBucketId(nextValue);
+
+    if (typeof window === "undefined") return;
+
+    if (isWritablePickerBucket(nextValue, nextBuckets)) {
+      window.localStorage.setItem(PICKER_BUCKET_STORAGE_KEY, nextValue);
+      storedBucketIdRef.current = nextValue;
+    }
+  }
+
   async function fetchBuckets() {
     try {
       const loaded = await apiGet<Bucket[]>("/api/buckets");
       setBuckets(loaded);
+      if (!hasRestoredStoredBucketRef.current) {
+        hasRestoredStoredBucketRef.current = true;
+        const storedBucketId = storedBucketIdRef.current;
+        if (storedBucketId && isWritablePickerBucket(storedBucketId, loaded)) {
+          setBucketId(storedBucketId);
+        }
+      }
     } catch {
       toast.error("Could not load buckets");
     }
@@ -184,7 +231,17 @@ export default function PickerPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (results.length === 0) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (isTauri()) {
+          import("@tauri-apps/api/core").then(({ invoke }) => {
+            invoke("hide_window");
+          });
+        }
+        return;
+      }
+
+      if (pickerMode !== "search" || results.length === 0) return;
 
       let nextIndex = selectedIndex;
 
@@ -225,14 +282,6 @@ export default function PickerPage() {
             handleSelectImage(results[selectedIndex].image.url);
           }
           return;
-        case "Escape":
-          e.preventDefault();
-          if (isTauri()) {
-            import("@tauri-apps/api/core").then(({ invoke }) => {
-              invoke("hide_window");
-            });
-          }
-          return;
         default:
           if (
             document.activeElement !== searchInputRef.current &&
@@ -257,11 +306,13 @@ export default function PickerPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedIndex, results]);
+  }, [pickerMode, selectedIndex, results]);
 
   useEffect(() => {
-    searchInputRef.current?.focus();
-  }, []);
+    if (pickerMode === "search") {
+      searchInputRef.current?.focus();
+    }
+  }, [pickerMode]);
 
   useEffect(() => {
     if (!isTauriApp) return;
@@ -323,6 +374,7 @@ export default function PickerPage() {
             ref={searchInputRef}
             type="text"
             value={query}
+            disabled={pickerMode === "add-links" && isAddLinksSubmitting}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Type to search your buckets..."
             className="h-8 pl-8 text-base md:text-sm rounded-md"
@@ -330,124 +382,164 @@ export default function PickerPage() {
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <Select
-            items={bucketItems}
-            value={bucketId}
-            onValueChange={(value) => {
-              if (typeof value === "string") setBucketId(value);
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Select
+              items={bucketItems}
+              value={bucketId}
+              disabled={pickerMode === "add-links" && isAddLinksSubmitting}
+              onValueChange={(value) => {
+                if (typeof value === "string") setBucketSelection(value);
+              }}
+            >
+              <SelectTrigger className="h-7 text-xs gap-1.5 px-2 rounded-md min-w-0 flex-1">
+                <Folder className="h-3 w-3 text-muted-foreground shrink-0" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="min-w-[200px]">
+                <SelectGroup>
+                  <SelectItem value={PICKER_ALL_BUCKET_ID}>All buckets</SelectItem>
+                  {buckets.map((bucket) => (
+                    <SelectItem key={bucket.id} value={bucket.id}>
+                      {bucket.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-7 w-7 shrink-0 rounded-md"
+              aria-label="Add media"
+              title="Add media"
+              disabled={isAddLinksSubmitting}
+              onClick={() => setPickerMode("add-links")}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {pickerMode === "add-links" ? (
+        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/10">
+          <PickerAddLinks
+            buckets={buckets}
+            bucketId={bucketId}
+            onBucketChange={(nextBucketId) => setBucketSelection(nextBucketId)}
+            onUseInbox={() => {
+              if (ownedInboxBucket) {
+                setBucketSelection(ownedInboxBucket.id);
+              }
             }}
-          >
-            <SelectTrigger className="h-7 text-xs gap-1.5 px-2 rounded-md min-w-0 flex-1">
-              <Folder className="h-3 w-3 text-muted-foreground shrink-0" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="min-w-[200px]">
-              <SelectGroup>
-                <SelectItem value="all">All buckets</SelectItem>
-                {buckets.map((bucket) => (
-                  <SelectItem key={bucket.id} value={bucket.id}>
-                    {bucket.name}
-                  </SelectItem>
+            onBack={() => {
+              if (!isAddLinksSubmitting) setPickerMode("search");
+            }}
+            onSubmissionStateChange={setIsAddLinksSubmitting}
+          />
+        </div>
+      ) : (
+        <>
+          {changelogBanner && (
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-primary/10 border-b text-xs shrink-0">
+              <button
+                onClick={handleOpenChangelog}
+                className="text-left flex-1 min-w-0 truncate hover:underline"
+                aria-label={`View changelog for version ${changelogBanner.version}`}
+              >
+                New update available (v{changelogBanner.version}, {changelogBanner.date}) — see what&apos;s new
+              </button>
+              <button
+                onClick={() => setChangelogBanner(null)}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+                aria-label="Dismiss"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Masonry image grid */}
+          <div className="flex-grow min-h-0 overflow-y-auto p-2 scrollbar-none bg-muted/10">
+            {loading && results.length === 0 ? (
+              <div className="columns-2 gap-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton
+                    key={i}
+                    className="break-inside-avoid mb-2 rounded-md"
+                    style={{ height: `${100 + (i % 3) * 40}px` }}
+                  />
                 ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+              </div>
+            ) : results.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center p-4 text-muted-foreground">
+                <Search className="h-8 w-8 mb-2 opacity-40" />
+                <p className="text-xs font-medium">No results found</p>
+              </div>
+            ) : (
+              <div className="columns-2 gap-2 pb-2">
+                {results.map((result, index) => {
+                  const isSelected = index === selectedIndex;
+                  const isVideo = result.image.url
+                    .split("?")[0]
+                    .toLowerCase()
+                    .match(/\.(mp4|webm)$/);
 
-      {changelogBanner && (
-        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-primary/10 border-b text-xs shrink-0">
-          <button
-            onClick={handleOpenChangelog}
-            className="text-left flex-1 min-w-0 truncate hover:underline"
-            aria-label={`View changelog for version ${changelogBanner.version}`}
-          >
-            New update available (v{changelogBanner.version}, {changelogBanner.date}) — see what&apos;s new
-          </button>
-          <button
-            onClick={() => setChangelogBanner(null)}
-            className="shrink-0 text-muted-foreground hover:text-foreground"
-            aria-label="Dismiss"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
+                  return (
+                    <div
+                      key={result.image.id}
+                      ref={(el) => {
+                        itemRefs.current[index] = el;
+                      }}
+                      onClick={() => {
+                        setSelectedIndex(index);
+                        handleSelectImage(result.image.url);
+                      }}
+                      className={`break-inside-avoid mb-2 relative rounded-md overflow-hidden bg-muted cursor-pointer transition-all border-2 ${
+                        isSelected
+                          ? "border-primary ring-2 ring-primary ring-offset-1 ring-offset-background scale-[0.98]"
+                          : "border-transparent hover:scale-[0.99] hover:border-muted-foreground/30"
+                      }`}
+                    >
+                      {result.image.cdn_status === "broken" ? (
+                        <div
+                          className="flex items-center justify-center w-full h-full bg-muted rounded text-muted-foreground text-xs p-2 text-center"
+                          style={{ minHeight: "80px" }}
+                        >
+                          <span>⚠ Link unavailable</span>
+                        </div>
+                      ) : isVideo ? (
+                        <video
+                          src={result.image.url}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          className="w-full h-auto pointer-events-none"
+                        />
+                      ) : (
+                        <img
+                          src={result.image.url}
+                          alt={result.image.title || ""}
+                          loading="lazy"
+                          className="w-full h-auto pointer-events-none"
+                        />
+                      )}
+                      {result.image.title && (
+                        <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-black/80 to-transparent text-[10px] text-white truncate font-medium">
+                          {result.image.title}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
       )}
-
-      {/* Masonry image grid */}
-      <div className="flex-grow min-h-0 overflow-y-auto p-2 scrollbar-none bg-muted/10">
-        {loading && results.length === 0 ? (
-          <div className="columns-2 gap-2">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton
-                key={i}
-                className="break-inside-avoid mb-2 rounded-md"
-                style={{ height: `${100 + (i % 3) * 40}px` }}
-              />
-            ))}
-          </div>
-        ) : results.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center p-4 text-muted-foreground">
-            <Search className="h-8 w-8 mb-2 opacity-40" />
-            <p className="text-xs font-medium">No results found</p>
-          </div>
-        ) : (
-          <div className="columns-2 gap-2 pb-2">
-            {results.map((result, index) => {
-              const isSelected = index === selectedIndex;
-              const isVideo = result.image.url
-                .split("?")[0]
-                .toLowerCase()
-                .match(/\.(mp4|webm)$/);
-
-              return (
-                <div
-                  key={result.image.id}
-                  ref={(el) => {
-                    itemRefs.current[index] = el;
-                  }}
-                  onClick={() => {
-                    setSelectedIndex(index);
-                    handleSelectImage(result.image.url);
-                  }}
-                  className={`break-inside-avoid mb-2 relative rounded-md overflow-hidden bg-muted cursor-pointer transition-all border-2 ${
-                    isSelected
-                      ? "border-primary ring-2 ring-primary ring-offset-1 ring-offset-background scale-[0.98]"
-                      : "border-transparent hover:scale-[0.99] hover:border-muted-foreground/30"
-                  }`}
-                >
-                  {result.image.cdn_status === 'broken' ? (
-                    <div className="flex items-center justify-center w-full h-full bg-muted rounded text-muted-foreground text-xs p-2 text-center" style={{ minHeight: '80px' }}>
-                      <span>⚠ Link unavailable</span>
-                    </div>
-                  ) : isVideo ? (
-                    <video
-                      src={result.image.url}
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="w-full h-auto pointer-events-none"
-                    />
-                  ) : (
-                    <img
-                      src={result.image.url}
-                      alt={result.image.title || ""}
-                      loading="lazy"
-                      className="w-full h-auto pointer-events-none"
-                    />
-                  )}
-                  {result.image.title && (
-                    <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-black/80 to-transparent text-[10px] text-white truncate font-medium">
-                      {result.image.title}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

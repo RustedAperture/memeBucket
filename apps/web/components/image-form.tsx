@@ -12,19 +12,26 @@ import { GifSearchModal } from "./gif-search-modal";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { toast } from "sonner";
 
-// Client-side heuristic mirroring the server's is_video / is_twitter_media
-// checks (apps/server/src/api/images.rs, apps/server/src/services/storage.rs)
-// closely enough to decide whether to warn the user a submission may take a
-// while to convert. Not authoritative — just a hint for the loading UI.
-function looksLikeSlowMedia(url: string): boolean {
+type SubmissionKind = "image" | "video" | "twitter" | "bluesky";
+
+// Client-side heuristic for the loading copy. The server remains authoritative
+// about resolution and conversion; this only identifies the submitted URL's
+// broad category while the request is in flight.
+function classifySubmission(url: string): SubmissionKind {
   try {
     const parsed = new URL(url);
     const path = parsed.pathname.toLowerCase();
-    if (path.endsWith(".mp4") || path.endsWith(".webm")) return true;
     const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
-    return host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com";
+    if (host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com") {
+      return "twitter";
+    }
+    if (host === "bsky.app" || host === "bsky.social") return "bluesky";
+    if (path.endsWith(".mp4") || path.endsWith(".webm") || path.endsWith(".m3u8")) {
+      return "video";
+    }
+    return "image";
   } catch {
-    return false;
+    return "image";
   }
 }
 
@@ -34,7 +41,7 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreating, setIsCreating] = useState(false);
-  const [isCreatingSlowMedia, setIsCreatingSlowMedia] = useState(false);
+  const [creatingKind, setCreatingKind] = useState<SubmissionKind>("image");
   const creatingRef = useRef(false);
 
   // Bulk Add States
@@ -52,7 +59,7 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
     }
     creatingRef.current = true;
     setIsCreating(true);
-    setIsCreatingSlowMedia(looksLikeSlowMedia(payload.url));
+    setCreatingKind(classifySubmission(payload.url));
     try {
       await apiPost(`/api/buckets/${bucketId}/images`, payload);
       setUrl("");
@@ -344,11 +351,21 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
             <div>
               <p className="text-sm font-medium">
-                {isCreatingSlowMedia ? "Adding video…" : "Adding image…"}
+                {creatingKind === "video"
+                  ? "Adding video…"
+                  : creatingKind === "twitter"
+                    ? "Adding X/Twitter post…"
+                    : creatingKind === "bluesky"
+                      ? "Adding Bluesky post…"
+                      : "Adding image…"}
               </p>
-              {isCreatingSlowMedia ? (
+              {creatingKind !== "image" ? (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Videos and X/Twitter links can take up to a minute to convert.
+                  {creatingKind === "video"
+                    ? "Videos can take up to a minute to convert."
+                    : creatingKind === "twitter"
+                      ? "X/Twitter links can take up to a minute to resolve and convert."
+                      : "Bluesky links can take up to a minute to resolve and convert."}
                 </p>
               ) : null}
             </div>

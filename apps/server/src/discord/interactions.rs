@@ -16,6 +16,7 @@ use crate::{
     services::{
         images::resolve_image_url,
         random::{RandomService, RandomVisibility},
+        storage::StorageService,
     },
 };
 
@@ -726,6 +727,23 @@ async fn handle_bucket_add(
                     .update_notes(user_id, bucket.id, image.id, Some(notes))
                     .await;
             }
+            if !resolved.tags.is_empty() {
+                let _ = images
+                    .update_metadata_partial(
+                        user_id,
+                        bucket.id,
+                        image.id,
+                        &crate::repositories::images::UpdateImageMetadataPatch {
+                            title: None,
+                            notes: None,
+                            favorite: None,
+                            random_weight: None,
+                            tags: Some(resolved.tags.clone()),
+                            url: None,
+                        },
+                    )
+                    .await;
+            }
             ephemeral_message(&format!("Added image to \"{}\".", bucket.name))
         }
         Err(sqlx::Error::RowNotFound) => ephemeral_message("I could not find that bucket."),
@@ -902,14 +920,7 @@ async fn handle_add_to_bucket_message_command(
     let mut resolved_url = resolved.url;
     let auto_notes = resolved.notes;
 
-    let is_video = {
-        let base = resolved_url
-            .split('?')
-            .next()
-            .unwrap_or(&resolved_url)
-            .to_lowercase();
-        base.ends_with(".mp4") || base.ends_with(".webm")
-    };
+    let is_video = crate::services::video_converter::is_video_url(&resolved_url);
 
     if is_video && let Some(storage) = state.storage() {
         match crate::services::video_converter::convert_and_upload_video(&resolved_url, storage)
@@ -918,6 +929,15 @@ async fn handle_add_to_bucket_message_command(
             Ok(new_url) => resolved_url = new_url,
             Err(_) => {
                 return ephemeral_message("I hit an error converting that video.");
+            }
+        }
+    } else if StorageService::is_bluesky_media(&resolved_url)
+        && let Some(storage) = state.storage()
+    {
+        match storage.upload_from_url(&resolved_url).await {
+            Ok(new_url) => resolved_url = new_url,
+            Err(_) => {
+                return ephemeral_message("I hit an error saving that Bluesky image.");
             }
         }
     }
@@ -942,6 +962,23 @@ async fn handle_add_to_bucket_message_command(
             if let Some(notes) = &auto_notes {
                 let _ = images
                     .update_notes(user_id, bucket.id, image.id, Some(notes))
+                    .await;
+            }
+            if !resolved.tags.is_empty() {
+                let _ = images
+                    .update_metadata_partial(
+                        user_id,
+                        bucket.id,
+                        image.id,
+                        &crate::repositories::images::UpdateImageMetadataPatch {
+                            title: None,
+                            notes: None,
+                            favorite: None,
+                            random_weight: None,
+                            tags: Some(resolved.tags.clone()),
+                            url: None,
+                        },
+                    )
                     .await;
             }
             ephemeral_message(&format!("Added image to \"{}\".", bucket.name))

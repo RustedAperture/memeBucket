@@ -5,6 +5,9 @@ use tracing::error;
 use url::Url;
 
 const METADATA_READ_LIMIT_BYTES: usize = 512 * 1024;
+const BLUESKY_API_BASE_URL: &str = "https://public.api.bsky.app/xrpc";
+#[cfg_attr(not(test), allow(dead_code))]
+const MAX_HASHTAG_LEN: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageUrlValidationError {
@@ -46,6 +49,14 @@ pub async fn validate_image_url(value: &str) -> Result<(), ImageUrlValidationErr
 pub struct ResolvedImage {
     pub url: String,
     pub notes: Option<String>,
+    pub tags: Vec<String>,
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BlueskyPostRef {
+    handle: String,
+    rkey: String,
 }
 
 pub async fn resolve_image_url(value: &str) -> Result<ResolvedImage, ImageUrlValidationError> {
@@ -58,16 +69,24 @@ pub async fn resolve_image_url(value: &str) -> Result<ResolvedImage, ImageUrlVal
         return Ok(ResolvedImage {
             url: media.url,
             notes: media.notes,
+            tags: media.tags,
         });
     }
 
-    let value_normalized = normalize_tenor_url(value);
-    let value = &value_normalized;
+    if let Some(post_ref) = parse_bluesky_post_ref(value) {
+        let media = resolve_bluesky_post(&post_ref).await?;
+        return Ok(ResolvedImage {
+            url: media.url,
+            notes: media.notes,
+            tags: media.tags,
+        });
+    }
 
     if validate_image_url_internal(value).await.is_ok() {
         return Ok(ResolvedImage {
             url: value.to_string(),
             notes: None,
+            tags: Vec::new(),
         });
     }
 
@@ -88,6 +107,7 @@ pub async fn resolve_image_url(value: &str) -> Result<ResolvedImage, ImageUrlVal
         return Ok(ResolvedImage {
             url: normalize_tenor_url(&media_url),
             notes: None,
+            tags: Vec::new(),
         });
     }
 
@@ -100,6 +120,7 @@ pub async fn resolve_image_url(value: &str) -> Result<ResolvedImage, ImageUrlVal
             return Ok(ResolvedImage {
                 url: candidate_normalized,
                 notes: None,
+                tags: Vec::new(),
             });
         }
     }
@@ -149,6 +170,285 @@ fn extract_twitter_status_id(url_str: &str) -> Option<String> {
     }
 
     Some(id.to_string())
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn parse_bluesky_post_ref(url_str: &str) -> Option<BlueskyPostRef> {
+    let url = Url::parse(url_str).ok()?;
+
+    if !matches!(url.host_str()?, "bsky.app" | "bsky.social") {
+        return None;
+    }
+
+    let mut segments = url.path_segments()?;
+    let [profile, handle, post, rkey] = [
+        segments.next()?,
+        segments.next()?,
+        segments.next()?,
+        segments.next()?,
+    ];
+
+    if profile != "profile"
+        || post != "post"
+        || handle.is_empty()
+        || rkey.is_empty()
+        || segments.next().is_some()
+    {
+        return None;
+    }
+
+    Some(BlueskyPostRef {
+        handle: handle.to_string(),
+        rkey: rkey.to_string(),
+    })
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn extract_hashtags_from_text(text: &str) -> Vec<String> {
+    let mut hashtags = Vec::new();
+    let chars: Vec<char> = text.chars().collect();
+    let mut index = 0;
+
+    while index < chars.len() {
+        if chars[index] != '#' {
+            index += 1;
+            continue;
+        }
+
+        let mut end = index + 1;
+        while end < chars.len() && (chars[end].is_alphanumeric() || chars[end] == '_') {
+            end += 1;
+        }
+
+        if end > index + 1 {
+            let hashtag: String = chars[index + 1..end].iter().collect();
+            push_hashtag(&mut hashtags, &hashtag);
+        }
+
+        index = end;
+    }
+
+    hashtags
+}
+
+fn push_hashtag(hashtags: &mut Vec<String>, value: &str) {
+    let hashtag = value.trim().strip_prefix('#').unwrap_or(value.trim());
+    if hashtag.is_empty()
+        || hashtag.len() > MAX_HASHTAG_LEN
+        || !hashtag
+            .chars()
+            .all(|character| character.is_alphanumeric() || character == '_')
+        || hashtags
+            .iter()
+            .any(|existing| hashtags_equal_case_insensitively(existing, hashtag))
+    {
+        return;
+    }
+
+    hashtags.push(hashtag.to_string());
+}
+
+fn hashtags_equal_case_insensitively(left: &str, right: &str) -> bool {
+    left.chars()
+        .flat_map(char::to_uppercase)
+        .eq(right.chars().flat_map(char::to_uppercase))
+}
+
+#[derive(serde::Deserialize)]
+struct BlueskyHandleResponse {
+    did: String,
+}
+
+#[derive(serde::Deserialize)]
+struct BlueskyPostsResponse {
+    posts: Vec<BlueskyPost>,
+}
+
+#[derive(serde::Deserialize)]
+struct BlueskyPost {
+    author: BlueskyAuthor,
+    record: BlueskyRecord,
+    embed: Option<BlueskyEmbed>,
+}
+
+#[derive(serde::Deserialize)]
+struct BlueskyAuthor {
+    handle: String,
+}
+
+#[derive(serde::Deserialize)]
+struct BlueskyRecord {
+    #[serde(default)]
+    text: String,
+    #[serde(default)]
+    facets: Vec<BlueskyFacet>,
+}
+
+#[derive(serde::Deserialize)]
+struct BlueskyFacet {
+    #[serde(default)]
+    features: Vec<BlueskyFacetFeature>,
+}
+
+#[derive(serde::Deserialize)]
+struct BlueskyFacetFeature {
+    #[serde(rename = "$type")]
+    kind: Option<String>,
+    tag: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct BlueskyEmbed {
+    #[serde(rename = "$type")]
+    kind: String,
+    #[serde(default)]
+    images: Vec<BlueskyImage>,
+    playlist: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct BlueskyImage {
+    fullsize: Option<String>,
+}
+
+struct BlueskyMedia {
+    url: String,
+    notes: Option<String>,
+    tags: Vec<String>,
+}
+
+fn bluesky_handle_api_url(handle: &str) -> String {
+    let mut url = Url::parse(&format!(
+        "{BLUESKY_API_BASE_URL}/com.atproto.identity.resolveHandle"
+    ))
+    .expect("Bluesky handle endpoint must be a valid URL");
+    url.query_pairs_mut().append_pair("handle", handle);
+    url.to_string()
+}
+
+fn bluesky_post_api_url_from_endpoint(
+    endpoint: &str,
+    did: &str,
+    rkey: &str,
+) -> Result<String, ImageUrlValidationError> {
+    let mut url = Url::parse(endpoint).map_err(|_| ImageUrlValidationError::FetchFailed)?;
+    let uri = format!("at://{did}/app.bsky.feed.post/{rkey}");
+    {
+        let mut query = url.query_pairs_mut();
+        query.clear();
+        query.append_pair("uris", &uri);
+    }
+    Ok(url.to_string())
+}
+
+async fn resolve_bluesky_post(
+    post_ref: &BlueskyPostRef,
+) -> Result<BlueskyMedia, ImageUrlValidationError> {
+    let handle_url = bluesky_handle_api_url(&post_ref.handle);
+    let post_endpoint = format!("{BLUESKY_API_BASE_URL}/app.bsky.feed.getPosts");
+    resolve_bluesky_post_from_api_urls(
+        &post_ref.handle,
+        &post_ref.rkey,
+        &handle_url,
+        &post_endpoint,
+    )
+    .await
+}
+
+async fn resolve_bluesky_post_from_api_urls(
+    _handle: &str,
+    _rkey: &str,
+    handle_url: &str,
+    post_url: &str,
+) -> Result<BlueskyMedia, ImageUrlValidationError> {
+    let handle_response = fetch_success(handle_url).await?;
+    let handle_body = read_limited_text(handle_response).await?;
+    let handle: BlueskyHandleResponse =
+        serde_json::from_str(&handle_body).map_err(|_| ImageUrlValidationError::FetchFailed)?;
+
+    if handle.did.trim().is_empty() {
+        return Err(ImageUrlValidationError::FetchFailed);
+    }
+
+    let post_url = bluesky_post_api_url_from_endpoint(post_url, &handle.did, _rkey)?;
+    let response = fetch_success(&post_url).await?;
+    let body = read_limited_text(response).await?;
+    let response: BlueskyPostsResponse =
+        serde_json::from_str(&body).map_err(|_| ImageUrlValidationError::FetchFailed)?;
+    let post = response
+        .posts
+        .into_iter()
+        .next()
+        .ok_or(ImageUrlValidationError::UnsupportedContentType)?;
+    if post.author.handle.trim().is_empty() {
+        return Err(ImageUrlValidationError::FetchFailed);
+    }
+    let embed = post
+        .embed
+        .ok_or(ImageUrlValidationError::UnsupportedContentType)?;
+
+    let url = match embed.kind.as_str() {
+        "app.bsky.embed.images#view" => embed
+            .images
+            .into_iter()
+            .find_map(|image| image.fullsize.filter(|url| !url.trim().is_empty()))
+            .ok_or(ImageUrlValidationError::UnsupportedContentType)?,
+        "app.bsky.embed.video#view" => embed
+            .playlist
+            .filter(|url| !url.trim().is_empty())
+            .ok_or(ImageUrlValidationError::UnsupportedContentType)?,
+        _ => return Err(ImageUrlValidationError::UnsupportedContentType),
+    };
+
+    validate_bluesky_media_url(&url).await?;
+
+    let mut tags = Vec::new();
+    for feature in post
+        .record
+        .facets
+        .into_iter()
+        .flat_map(|facet| facet.features)
+    {
+        if feature
+            .kind
+            .as_deref()
+            .is_some_and(|kind| kind == "app.bsky.richtext.facet#tag")
+            && let Some(tag) = feature.tag
+        {
+            push_hashtag(&mut tags, &tag);
+        }
+    }
+    if tags.is_empty() {
+        tags = extract_hashtags_from_text(&post.record.text);
+    }
+
+    Ok(BlueskyMedia {
+        url,
+        notes: Some(format_twitter_notes(&post.author.handle, &post.record.text)),
+        tags,
+    })
+}
+
+async fn validate_bluesky_media_url(value: &str) -> Result<(), ImageUrlValidationError> {
+    if !validate_http_url(value) {
+        return Err(ImageUrlValidationError::InvalidHttpUrl);
+    }
+
+    let response = fetch_success(value).await?;
+    let Some(content_type) = response_content_type(&response) else {
+        return Err(ImageUrlValidationError::UnsupportedContentType);
+    };
+
+    if content_type.get(..6).is_some_and(|prefix| {
+        prefix.eq_ignore_ascii_case("image/") || prefix.eq_ignore_ascii_case("video/")
+    }) || matches!(
+        content_type.to_ascii_lowercase().as_str(),
+        "application/vnd.apple.mpegurl" | "application/x-mpegurl"
+    ) {
+        return Ok(());
+    }
+
+    Err(ImageUrlValidationError::UnsupportedContentType)
 }
 
 fn is_safe_ip(ip: &IpAddr) -> bool {
@@ -386,6 +686,7 @@ struct SyndicationResponse {
 struct TwitterMedia {
     url: String,
     notes: Option<String>,
+    tags: Vec<String>,
 }
 
 fn format_twitter_notes(screen_name: &str, text: &str) -> String {
@@ -417,8 +718,13 @@ fn parse_syndication_response(body: &str) -> Result<TwitterMedia, ImageUrlValida
     let notes = response.user.map(|user| {
         format_twitter_notes(&user.screen_name, response.text.as_deref().unwrap_or(""))
     });
+    let tags = response
+        .text
+        .as_deref()
+        .map(extract_hashtags_from_text)
+        .unwrap_or_default();
 
-    Ok(TwitterMedia { url, notes })
+    Ok(TwitterMedia { url, notes, tags })
 }
 
 async fn resolve_twitter_status(id: &str) -> Result<TwitterMedia, ImageUrlValidationError> {
@@ -573,7 +879,24 @@ mod tests {
         response::{IntoResponse, Response},
         routing::get,
     };
-    use tokio::net::TcpListener;
+    use tokio::{net::TcpListener, sync::Mutex};
+
+    // Some sandboxed test environments limit concurrent loopback binds. Serialize only the bind
+    // operation so mock servers can continue handling requests concurrently.
+    static MOCK_SERVER_LOCK: Mutex<()> = Mutex::const_new(());
+
+    async fn bind_mock_server() -> (TcpListener, std::net::SocketAddr) {
+        let _lock = MOCK_SERVER_LOCK.lock().await;
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        (listener, address)
+    }
+
+    fn serve_mock_server(listener: TcpListener, app: Router) {
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+    }
 
     async fn spawn_content_type_server(content_type: &'static str) -> String {
         async fn handler(content_type: &'static str) -> Response {
@@ -581,14 +904,59 @@ mod tests {
         }
 
         let app = Router::new().route("/", get(move || handler(content_type)));
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        let (listener, address) = bind_mock_server().await;
+        serve_mock_server(listener, app);
 
         format!("http://{address}/")
+    }
+
+    async fn spawn_bluesky_api_server(
+        post_body: String,
+        media_content_type: &'static str,
+    ) -> String {
+        async fn handle() -> Response {
+            (
+                [(header::CONTENT_TYPE, "application/json")],
+                r#"{"did":"did:plc:alice"}"#,
+            )
+                .into_response()
+        }
+
+        let (listener, address) = bind_mock_server().await;
+        let address = address.to_string();
+        let post_body = post_body.replace("{address}", &address);
+        let app = Router::new()
+            .route("/xrpc/com.atproto.identity.resolveHandle", get(handle))
+            .route(
+                "/xrpc/app.bsky.feed.getPosts",
+                get(move || {
+                    let post_body = post_body.clone();
+                    async move {
+                        ([(header::CONTENT_TYPE, "application/json")], post_body).into_response()
+                    }
+                }),
+            )
+            .route(
+                "/image.gif",
+                get(|| async { ([(header::CONTENT_TYPE, "image/gif")], "gif") }),
+            )
+            .route(
+                "/playlist.m3u8",
+                get(move || async move { ([(header::CONTENT_TYPE, media_content_type)], "video") }),
+            );
+
+        serve_mock_server(listener, app);
+
+        format!("http://{address}")
+    }
+
+    fn bluesky_api_urls(base_url: &str) -> (String, String) {
+        (
+            format!("{base_url}/xrpc/com.atproto.identity.resolveHandle?handle=alice.bsky.social"),
+            format!(
+                "{base_url}/xrpc/app.bsky.feed.getPosts?uris=at%3A%2F%2Fdid%3Aplc%3Aalice%2Fapp.bsky.feed.post%2Frkey"
+            ),
+        )
     }
 
     #[tokio::test]
@@ -666,8 +1034,8 @@ mod tests {
             ([(header::CONTENT_TYPE, "image/gif")], "gif").into_response()
         }
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap().to_string();
+        let (listener, address) = bind_mock_server().await;
+        let address = address.to_string();
         let app = Router::new()
             .route(
                 "/",
@@ -685,9 +1053,7 @@ mod tests {
             )
             .route("/image.gif", get(image));
 
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        serve_mock_server(listener, app);
 
         let resolved = resolve_image_url(&format!("http://{address}/"))
             .await
@@ -712,8 +1078,8 @@ mod tests {
             ([(header::CONTENT_TYPE, "image/gif")], "gif").into_response()
         }
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap().to_string();
+        let (listener, address) = bind_mock_server().await;
+        let address = address.to_string();
         let app = Router::new()
             .route(
                 "/",
@@ -724,9 +1090,7 @@ mod tests {
             )
             .route("/image.gif", get(image));
 
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        serve_mock_server(listener, app);
 
         let resolved = resolve_image_url(&format!("http://{address}/"))
             .await
@@ -789,6 +1153,356 @@ mod tests {
         assert_eq!(
             extract_twitter_status_id("https://x.com/someuser/status/not-a-number"),
             None
+        );
+    }
+
+    #[test]
+    fn parse_bluesky_post_ref_matches_bsky_profile_post_url() {
+        assert_eq!(
+            parse_bluesky_post_ref(
+                "https://bsky.app/profile/kuroisuu.bsky.social/post/3mqnaxhwiks2c"
+            ),
+            Some(BlueskyPostRef {
+                handle: "kuroisuu.bsky.social".to_string(),
+                rkey: "3mqnaxhwiks2c".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn parse_bluesky_post_ref_matches_bsky_social_with_query_string() {
+        assert_eq!(
+            parse_bluesky_post_ref(
+                "https://bsky.social/profile/alice.bsky.social/post/3mqnaxhwiks2c?ref=profile"
+            ),
+            Some(BlueskyPostRef {
+                handle: "alice.bsky.social".to_string(),
+                rkey: "3mqnaxhwiks2c".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn parse_bluesky_post_ref_rejects_non_bluesky_hosts() {
+        assert_eq!(
+            parse_bluesky_post_ref(
+                "https://example.com/profile/kuroisuu.bsky.social/post/3mqnaxhwiks2c"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn parse_bluesky_post_ref_rejects_malformed_paths() {
+        assert_eq!(
+            parse_bluesky_post_ref("https://bsky.app/profile/kuroisuu.bsky.social"),
+            None
+        );
+        assert_eq!(
+            parse_bluesky_post_ref("https://bsky.app/profile//post/3mqnaxhwiks2c"),
+            None
+        );
+        assert_eq!(
+            parse_bluesky_post_ref("https://bsky.app/profile/kuroisuu.bsky.social/post/"),
+            None
+        );
+        assert_eq!(
+            parse_bluesky_post_ref("https://bsky.app/post/3mqnaxhwiks2c"),
+            None
+        );
+        assert_eq!(
+            parse_bluesky_post_ref(
+                "https://bsky.app/profile/kuroisuu.bsky.social/post/3mqnaxhwiks2c/extra"
+            ),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_bluesky_post_selects_first_image_and_formats_notes() {
+        let base_url = spawn_bluesky_api_server(
+            r##"{
+                "posts": [{
+                    "author": {"handle": "alice.bsky.social"},
+                    "record": {"text": "Look at this"},
+                    "embed": {
+                        "$type": "app.bsky.embed.images#view",
+                        "images": [{"fullsize": "http://{address}/image.gif"}]
+                    }
+                }]
+            }"##
+            .to_string(),
+            "video/mp4",
+        )
+        .await;
+        let (handle_url, post_url) = bluesky_api_urls(&base_url);
+
+        let resolved =
+            resolve_bluesky_post_from_api_urls("alice.bsky.social", "rkey", &handle_url, &post_url)
+                .await
+                .unwrap();
+
+        assert_eq!(resolved.url, format!("{base_url}/image.gif"));
+        assert_eq!(
+            resolved.notes.as_deref(),
+            Some("@alice.bsky.social: Look at this")
+        );
+        assert!(resolved.tags.is_empty());
+    }
+
+    #[tokio::test]
+    async fn resolve_bluesky_post_selects_video_playlist() {
+        let base_url = spawn_bluesky_api_server(
+            r##"{
+                "posts": [{
+                    "author": {"handle": "alice.bsky.social"},
+                    "record": {"text": ""},
+                    "embed": {
+                        "$type": "app.bsky.embed.video#view",
+                        "playlist": "http://{address}/playlist.m3u8"
+                    }
+                }]
+            }"##
+            .to_string(),
+            "video/mp4",
+        )
+        .await;
+        let (handle_url, post_url) = bluesky_api_urls(&base_url);
+
+        let resolved =
+            resolve_bluesky_post_from_api_urls("alice.bsky.social", "rkey", &handle_url, &post_url)
+                .await
+                .unwrap();
+
+        assert_eq!(resolved.url, format!("{base_url}/playlist.m3u8"));
+        assert_eq!(resolved.notes.as_deref(), Some("@alice.bsky.social"));
+    }
+
+    #[tokio::test]
+    async fn resolve_bluesky_post_prefers_facet_tags_over_text_hashtags() {
+        let base_url = spawn_bluesky_api_server(
+            r##"{
+                "posts": [{
+                    "author": {"handle": "alice.bsky.social"},
+                    "record": {
+                        "text": "#ignored",
+                        "facets": [{
+                            "features": [
+                                {"$type": "app.bsky.richtext.facet#tag", "tag": "First"},
+                                {"$type": "app.bsky.richtext.facet#tag", "tag": "second"}
+                            ]
+                        }]
+                    },
+                    "embed": {
+                        "$type": "app.bsky.embed.images#view",
+                        "images": [{"fullsize": "http://{address}/image.gif"}]
+                    }
+                }]
+            }"##
+            .to_string(),
+            "video/mp4",
+        )
+        .await;
+        let (handle_url, post_url) = bluesky_api_urls(&base_url);
+
+        let resolved =
+            resolve_bluesky_post_from_api_urls("alice.bsky.social", "rkey", &handle_url, &post_url)
+                .await
+                .unwrap();
+
+        assert_eq!(resolved.tags, vec!["First", "second"]);
+    }
+
+    #[tokio::test]
+    async fn resolve_bluesky_post_falls_back_to_text_hashtags_without_facets() {
+        let base_url = spawn_bluesky_api_server(
+            r##"{
+                "posts": [{
+                    "author": {"handle": "alice.bsky.social"},
+                    "record": {"text": "#First #second #FIRST"},
+                    "embed": {
+                        "$type": "app.bsky.embed.images#view",
+                        "images": [{"fullsize": "http://{address}/image.gif"}]
+                    }
+                }]
+            }"##
+            .to_string(),
+            "video/mp4",
+        )
+        .await;
+        let (handle_url, post_url) = bluesky_api_urls(&base_url);
+
+        let resolved =
+            resolve_bluesky_post_from_api_urls("alice.bsky.social", "rkey", &handle_url, &post_url)
+                .await
+                .unwrap();
+
+        assert_eq!(resolved.tags, vec!["First", "second"]);
+    }
+
+    #[tokio::test]
+    async fn resolve_bluesky_post_rejects_missing_media() {
+        let base_url = spawn_bluesky_api_server(
+            r#"{"posts":[{"author":{"handle":"alice.bsky.social"},"record":{"text":"hello"}}]}"#
+                .to_string(),
+            "video/mp4",
+        )
+        .await;
+        let (handle_url, post_url) = bluesky_api_urls(&base_url);
+
+        let result =
+            resolve_bluesky_post_from_api_urls("alice.bsky.social", "rkey", &handle_url, &post_url)
+                .await;
+
+        assert!(matches!(
+            result,
+            Err(ImageUrlValidationError::UnsupportedContentType)
+        ));
+    }
+
+    #[tokio::test]
+    async fn resolve_bluesky_post_rejects_malformed_upstream_payload() {
+        let base_url = spawn_bluesky_api_server("not json".to_string(), "video/mp4").await;
+        let (handle_url, post_url) = bluesky_api_urls(&base_url);
+
+        let result =
+            resolve_bluesky_post_from_api_urls("alice.bsky.social", "rkey", &handle_url, &post_url)
+                .await;
+
+        assert!(matches!(result, Err(ImageUrlValidationError::FetchFailed)));
+    }
+
+    #[tokio::test]
+    async fn resolve_bluesky_post_rejects_upstream_errors() {
+        async fn unavailable() -> axum::http::StatusCode {
+            axum::http::StatusCode::BAD_GATEWAY
+        }
+
+        let app = Router::new().route("/xrpc/com.atproto.identity.resolveHandle", get(unavailable));
+        let (listener, address) = bind_mock_server().await;
+        serve_mock_server(listener, app);
+        let base_url = format!("http://{address}");
+        let (handle_url, post_url) = bluesky_api_urls(&base_url);
+
+        let result =
+            resolve_bluesky_post_from_api_urls("alice.bsky.social", "rkey", &handle_url, &post_url)
+                .await;
+
+        assert!(matches!(result, Err(ImageUrlValidationError::FetchFailed)));
+    }
+
+    #[test]
+    fn extract_hashtags_matches_x_text() {
+        assert_eq!(
+            extract_hashtags_from_text("Look #One #two_three #日本語 #déjàvu and plain text"),
+            vec![
+                "One".to_string(),
+                "two_three".to_string(),
+                "日本語".to_string(),
+                "déjàvu".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn extract_hashtags_deduplicates_case_insensitively_and_skips_invalid_tags() {
+        let overlong = format!("#{}", "x".repeat(65));
+
+        assert_eq!(
+            extract_hashtags_from_text(&format!("#First #first #FIRST #_ok #! {} #", overlong)),
+            vec!["First".to_string(), "_ok".to_string()]
+        );
+    }
+
+    #[test]
+    fn extract_hashtags_deduplicates_unicode_case_insensitively() {
+        assert_eq!(
+            extract_hashtags_from_text("#Éclair #éclair"),
+            vec!["Éclair".to_string()]
+        );
+    }
+
+    #[test]
+    fn parse_syndication_response_includes_text_hashtags() {
+        let body = r##"{"photos":[{"url":"https://pbs.twimg.com/media/abc.jpg:large"}],"video":null,"text":"#First #second #FIRST"}"##;
+
+        let result = parse_syndication_response(body).unwrap();
+
+        assert_eq!(result.tags, vec!["First", "second"]);
+    }
+
+    #[test]
+    fn normalize_tenor_url_normalizes_media_host_variants() {
+        assert_eq!(
+            normalize_tenor_url("https://media1.tenor.com/m/AbCd/AAAAC/example.gif?foo=bar"),
+            "https://media.tenor.com/AbCd/AAAAC/example.gif?foo=bar"
+        );
+        assert_eq!(
+            normalize_tenor_url("https://media2.tenor.com/m/AbCd/AAAPo/example.mp4"),
+            "https://media.tenor.com/AbCd/AAAAC/example.gif"
+        );
+    }
+
+    #[test]
+    fn tenor_page_metadata_candidate_is_selected_and_normalized() {
+        let submitted_page_url = "https://tenor.com/view/dancing-cat-123";
+        let html = r#"<meta property="og:image" content="https://media1.tenor.com/m/AbCd/AAAAC/example.gif">"#;
+
+        let candidates = find_page_image_candidates(submitted_page_url, html);
+
+        assert_eq!(
+            candidates,
+            vec!["https://media1.tenor.com/m/AbCd/AAAAC/example.gif"]
+        );
+        assert_eq!(
+            normalize_tenor_url(&candidates[0]),
+            "https://media.tenor.com/AbCd/AAAAC/example.gif"
+        );
+    }
+
+    #[test]
+    fn extract_bsky_post_ref_accepts_profile_post_url() {
+        assert_eq!(
+            parse_bluesky_post_ref(
+                "https://bsky.app/profile/kuroisuu.bsky.social/post/3mqnaxhwiks2c"
+            ),
+            Some(BlueskyPostRef {
+                handle: "kuroisuu.bsky.social".to_string(),
+                rkey: "3mqnaxhwiks2c".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn extract_bsky_post_ref_rejects_other_hosts_and_malformed_paths() {
+        assert_eq!(
+            parse_bluesky_post_ref("https://example.com/profile/user/post/abc"),
+            None
+        );
+        assert_eq!(
+            parse_bluesky_post_ref("https://bsky.app/profile/user"),
+            None
+        );
+        assert_eq!(
+            parse_bluesky_post_ref("https://bsky.app/profile/user/post/abc/extra"),
+            None
+        );
+    }
+
+    #[test]
+    fn extract_hashtags_preserves_first_spelling_and_deduplicates_case_insensitively() {
+        assert_eq!(
+            extract_hashtags_from_text("Look #Funny #funny #猫_and_猫 #ignored #"),
+            vec!["Funny", "猫_and_猫", "ignored"]
+        );
+    }
+
+    #[test]
+    fn extract_hashtags_ignores_empty_and_overlong_tags() {
+        let overlong = "a".repeat(65);
+        assert_eq!(
+            extract_hashtags_from_text(&format!("# #{} #ok", overlong)),
+            vec!["ok"]
         );
     }
 
@@ -888,11 +1602,8 @@ mod tests {
                 .into_response()
         }
         let app = Router::new().route("/tweet-result", get(ok_photo));
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        let (listener, address) = bind_mock_server().await;
+        serve_mock_server(listener, app);
 
         let result = resolve_twitter_status_from_api_url(&format!("http://{address}/tweet-result"))
             .await
@@ -908,11 +1619,8 @@ mod tests {
             axum::http::StatusCode::NOT_FOUND
         }
         let app = Router::new().route("/tweet-result", get(not_found));
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
+        let (listener, address) = bind_mock_server().await;
+        serve_mock_server(listener, app);
 
         let result =
             resolve_twitter_status_from_api_url(&format!("http://{address}/tweet-result")).await;

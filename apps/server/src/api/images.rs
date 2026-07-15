@@ -198,22 +198,18 @@ pub async fn search_images(
 async fn resolve_and_upload_url(
     state: &AppState,
     submitted_url: &str,
-) -> Result<(String, Option<String>), AppError> {
+) -> Result<(String, Option<String>, Vec<String>), AppError> {
     let resolved = resolve_image_url(submitted_url)
         .await
         .map_err(|err| AppError::BadRequest(err.user_message().to_string()))?;
     let mut resolved_url = resolved.url;
     let notes = resolved.notes;
+    let tags = resolved.tags;
 
-    let is_video = {
-        let base = resolved_url
-            .split('?')
-            .next()
-            .unwrap_or(&resolved_url)
-            .to_lowercase();
-        base.ends_with(".mp4") || base.ends_with(".webm")
-    };
-    let is_twitter_photo = !is_video && StorageService::is_twitter_media(&resolved_url);
+    let is_video = crate::services::video_converter::is_video_url(&resolved_url);
+    let should_rehost_image = !is_video
+        && (StorageService::is_twitter_media(&resolved_url)
+            || StorageService::is_bluesky_media(&resolved_url));
 
     if is_video && let Some(storage) = state.storage() {
         resolved_url =
@@ -222,7 +218,7 @@ async fn resolve_and_upload_url(
                 .map_err(|err| {
                     AppError::InternalServerError(format!("Failed to convert video: {}", err))
                 })?;
-    } else if is_twitter_photo && let Some(storage) = state.storage() {
+    } else if should_rehost_image && let Some(storage) = state.storage() {
         resolved_url = storage
             .upload_from_url(&resolved_url)
             .await
@@ -231,7 +227,7 @@ async fn resolve_and_upload_url(
             })?;
     }
 
-    Ok((resolved_url, notes))
+    Ok((resolved_url, notes, tags))
 }
 
 async fn finalize_cdn_status(
@@ -295,7 +291,9 @@ pub async fn create_image(
     ValidatedJson(request): ValidatedJson<CreateImageRequest>,
 ) -> Result<Json<ImageResponse>, AppError> {
     let title = validate_title(request.title)?;
-    let (resolved_url, auto_notes) = resolve_and_upload_url(&state, &request.url).await?;
+    let (resolved_url, auto_notes, social_tags) =
+        resolve_and_upload_url(&state, &request.url).await?;
+    let tags = merge_social_tags(request.tags.as_deref().unwrap_or_default(), &social_tags);
 
     let repo = state.image_repo.clone();
     let mut image = repo
@@ -306,7 +304,7 @@ pub async fn create_image(
             title.as_deref(),
             false,
             1,
-            &request.tags.unwrap_or_default(),
+            &tags,
         )
         .await?;
 
@@ -333,6 +331,9 @@ pub async fn delete_image(
     let deleted = repo
         .delete_for_user(user.user_id, bucket_id, image_id)
         .await?;
+    if deleted && let Some(storage) = state.storage() {
+        let _ = storage.garbage_collect_orphaned_objects().await;
+    }
     Ok(Json(serde_json::json!({ "deleted": deleted })))
 }
 
@@ -359,12 +360,12 @@ pub async fn update_image(
         .transpose()?;
 
     // Now do expensive I/O
-    let (resolved_url, auto_notes) = match &request.url {
+    let (resolved_url, auto_notes, auto_tags) = match &request.url {
         Some(new_url) => {
-            let (url, notes) = resolve_and_upload_url(&state, new_url).await?;
-            (Some(url), notes)
+            let (url, notes, tags) = resolve_and_upload_url(&state, new_url).await?;
+            (Some(url), notes, Some(tags))
         }
-        None => (None, None),
+        None => (None, None, None),
     };
 
     let notes_patch = compute_notes_patch(request.notes, auto_notes, existing.notes.as_deref());
@@ -374,7 +375,11 @@ pub async fn update_image(
         notes: notes_patch,
         favorite: request.favorite,
         random_weight,
-        tags: request.tags,
+        tags: auto_tags
+            .map(|social_tags| {
+                merge_social_tags(request.tags.as_deref().unwrap_or_default(), &social_tags)
+            })
+            .or(request.tags),
         url: resolved_url.clone(),
     };
 
@@ -466,6 +471,11 @@ pub async fn bulk_delete_images(
     let deleted = repo
         .delete_bulk(user.user_id, bucket_id, &request.image_ids)
         .await?;
+    if deleted > 0
+        && let Some(storage) = state.storage()
+    {
+        let _ = storage.garbage_collect_orphaned_objects().await;
+    }
 
     Ok(Json(serde_json::json!({ "deleted": deleted })))
 }
@@ -626,6 +636,19 @@ fn parse_tag_filter(tags: Option<String>) -> Vec<String> {
         .collect()
 }
 
+fn merge_social_tags(manual_tags: &[String], social_tags: &[String]) -> Vec<String> {
+    let mut merged = Vec::new();
+    for tag in manual_tags.iter().chain(social_tags) {
+        if !merged
+            .iter()
+            .any(|existing: &String| existing.eq_ignore_ascii_case(tag))
+        {
+            merged.push(tag.clone());
+        }
+    }
+    merged
+}
+
 fn normalized_tag_inputs(tags: &[String]) -> Vec<String> {
     let mut normalized = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -718,6 +741,17 @@ mod tests {
         let image = make_stored_image(original, None, None);
         let response = image_response_from_stored(image, 0);
         assert_eq!(response.url, original);
+    }
+
+    #[test]
+    fn merge_social_tags_preserves_manual_tags_and_first_seen_spelling() {
+        let manual = vec!["Manual".to_string(), "funny".to_string()];
+        let social = vec!["FUNNY".to_string(), "Bluesky".to_string()];
+
+        assert_eq!(
+            merge_social_tags(&manual, &social),
+            vec!["Manual", "funny", "Bluesky"]
+        );
     }
 
     #[test]

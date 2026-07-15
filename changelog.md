@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.2.8 - Jul 14, 2026
+
+### Added
+
+- Added **Bluesky link support**: pasting a Bluesky post now extracts its image or HLS video, converts videos to WebP, and saves the author's text as notes.
+- Added **social hashtag import**: hashtags from X/Twitter and Bluesky posts are imported as image tags while preserving manually supplied tags.
+- Added virtual **All** bucket.
+- Added the thumbnail size slider to the Library so search results can be resized like bucket images.
+- Added the ability to add multiple media links at once from the Picker using one link per line, with remembered bucket selection and a completion summary.
+
+### Fixed
+
+- Fixed **Tenor page-link resolution** so `/view/...` links correctly resolve their media image.
+
+### Changed
+
+- Adjusted the dashboard layout to use a centered 66% content column at the 2xl breakpoint and wider, while keeping smaller screens responsive.
+- Creating a bucket immediately switches to it.
+- Pinned **All**, **Favorites**, and **Inbox** at the top.
+- Metadata edits, favorites, deletes, moves, and bulk actions work from system/aggregate views using each image’s real source bucket.
+- Simplified Library image cards by removing weight and send counts, adding corner favorite controls, and using icon-only Copy and Open actions.
+- Aligned Library image details with bucket details, including link editing and link actions.
+- Library cards no longer display media URLs as fallback titles.
+
 ## v0.2.7 - Jul 13, 2026
 
 ### Added

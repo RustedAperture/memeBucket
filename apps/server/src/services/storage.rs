@@ -71,6 +71,10 @@ impl StorageService {
         url.contains("pbs.twimg.com") || url.contains("video.twimg.com")
     }
 
+    pub fn is_bluesky_media(url: &str) -> bool {
+        url.contains("cdn.bsky.app")
+    }
+
     pub async fn upload_from_url(&self, url: &str) -> Result<String, StorageError> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
@@ -172,6 +176,52 @@ impl StorageService {
         ext: &str,
     ) -> Result<String, StorageError> {
         self.store_bytes(bytes, ext).await
+    }
+
+    /// Deletes deduplicated B2 objects that no image record references anymore.
+    /// Database and object-store failures are returned so callers can retry later.
+    pub async fn garbage_collect_orphaned_objects(&self) -> Result<usize, StorageError> {
+        let orphaned = sqlx::query_as::<_, (String, String)>(
+            "SELECT content_hash, cdn_url
+             FROM cdn_objects
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM images WHERE images.cdn_url = cdn_objects.cdn_url
+             )",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| {
+            StorageError::UploadFailed(format!("B2 garbage-collection query failed: {e}"))
+        })?;
+
+        let prefix = format!("{}/", self.cdn_base_url);
+        let mut deleted = 0;
+        for (content_hash, cdn_url) in orphaned {
+            let Some(key) = cdn_url.strip_prefix(&prefix) else {
+                tracing::warn!(cdn_url, "Skipping orphaned CDN object with unexpected URL");
+                continue;
+            };
+
+            self.store.delete(&ObjPath::from(key)).await.map_err(|e| {
+                StorageError::UploadFailed(format!("B2 object deletion failed: {e}"))
+            })?;
+            sqlx::query("DELETE FROM cdn_objects WHERE content_hash = ?")
+                .bind(&content_hash)
+                .execute(&self.pool)
+                .await
+                .map_err(|e| {
+                    StorageError::UploadFailed(format!("B2 garbage-collection cleanup failed: {e}"))
+                })?;
+            tracing::info!(
+                content_hash = %content_hash,
+                object_key = %key,
+                cdn_url = %cdn_url,
+                "Deleted orphaned B2 media object"
+            );
+            deleted += 1;
+        }
+
+        Ok(deleted)
     }
 
     /// Core upload path: hash bytes, check cdn_objects, upload on miss.
@@ -367,6 +417,19 @@ mod tests {
     }
 
     #[test]
+    fn is_bluesky_media_detects_bluesky_cdn_images_only() {
+        assert!(StorageService::is_bluesky_media(
+            "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:abc/bafkreiabc"
+        ));
+        assert!(!StorageService::is_bluesky_media(
+            "https://video.bsky.app/hls/playlist.m3u8"
+        ));
+        assert!(!StorageService::is_bluesky_media(
+            "https://media.memebucket.app/abc123.webp"
+        ));
+    }
+
+    #[test]
     fn ext_from_content_type_maps_known_types() {
         assert_eq!(ext_from_content_type("image/gif"), "gif");
         assert_eq!(ext_from_content_type("image/png"), "png");
@@ -400,6 +463,15 @@ mod dedup_tests {
                 content_hash TEXT PRIMARY KEY NOT NULL,
                 cdn_url TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "CREATE TABLE images (
+                id TEXT PRIMARY KEY NOT NULL,
+                cdn_url TEXT
             )",
         )
         .execute(&pool)
@@ -499,6 +571,62 @@ mod dedup_tests {
         assert!(
             store.get(&key).await.is_err(),
             "B2 should not have been called on a dedup hit"
+        );
+    }
+
+    #[tokio::test]
+    async fn garbage_collect_removes_unreferenced_object_and_mapping() {
+        use object_store::memory::InMemory;
+        let pool = setup_test_db().await;
+        let store = Arc::new(InMemory::new());
+        let svc =
+            StorageService::new_with_store(store.clone(), "https://cdn.example.com", pool.clone());
+
+        let bytes = b"orphan me".to_vec();
+        let hash = blake3_hash_bytes(&bytes);
+        let cdn_url = svc.store_bytes(bytes, "webp").await.unwrap();
+
+        assert_eq!(svc.garbage_collect_orphaned_objects().await.unwrap(), 1);
+        assert!(
+            store
+                .get(&object_store::path::Path::from(format!("{hash}.webp")))
+                .await
+                .is_err()
+        );
+        assert!(lookup_cdn_object(&pool, &hash).await.unwrap().is_none());
+        assert!(!cdn_url.is_empty());
+    }
+
+    #[tokio::test]
+    async fn garbage_collect_keeps_shared_object_and_mapping() {
+        use object_store::memory::InMemory;
+        let pool = setup_test_db().await;
+        let store = Arc::new(InMemory::new());
+        let svc =
+            StorageService::new_with_store(store.clone(), "https://cdn.example.com", pool.clone());
+
+        let bytes = b"keep me".to_vec();
+        let hash = blake3_hash_bytes(&bytes);
+        let cdn_url = svc.store_bytes(bytes, "webp").await.unwrap();
+        for id in ["first", "second"] {
+            sqlx::query("INSERT INTO images (id, cdn_url) VALUES (?, ?)")
+                .bind(id)
+                .bind(&cdn_url)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(svc.garbage_collect_orphaned_objects().await.unwrap(), 0);
+        assert!(
+            store
+                .get(&object_store::path::Path::from(format!("{hash}.webp")))
+                .await
+                .is_ok()
+        );
+        assert_eq!(
+            lookup_cdn_object(&pool, &hash).await.unwrap().as_deref(),
+            Some(cdn_url.as_str())
         );
     }
 }

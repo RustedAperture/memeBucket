@@ -90,6 +90,17 @@ function SearchContent() {
   const [loading, setLoading] = useState(true);
   const [bucketError, setBucketError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [sizeIndex, setSizeIndex] = useState(3);
+
+  const COLUMN_CLASSES = [
+    "columns-3 sm:columns-4 md:columns-5 lg:columns-6",
+    "columns-2 sm:columns-3 md:columns-4 lg:columns-5",
+    "columns-2 sm:columns-2 md:columns-3 lg:columns-4",
+    "columns-1 sm:columns-2 md:columns-2 lg:columns-3",
+    "columns-1 sm:columns-1 md:columns-2 lg:columns-2",
+  ];
+  const SIZE_LABELS = ["-2", "-1", "0", "+1", "+2"];
+  const columnClass = COLUMN_CLASSES[sizeIndex] || COLUMN_CLASSES[2];
 
   const bucketItems = useMemo(
     () => [
@@ -319,6 +330,37 @@ function SearchContent() {
           </div>
         </header>
 
+        <div className="flex items-center gap-3 px-4 lg:px-6 py-2 sm:py-0 h-auto sm:h-12 shrink-0 border-b bg-muted/30 w-full">
+          <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+            Size
+          </span>
+          <div className="relative flex items-center w-24 h-6">
+            <div className="absolute left-0 right-0 h-0.5 rounded-full bg-border" />
+            <div
+              className="absolute left-0 h-0.5 rounded-full bg-primary transition-all duration-150"
+              style={{ width: `${(sizeIndex / (COLUMN_CLASSES.length - 1)) * 100}%` }}
+            />
+            {COLUMN_CLASSES.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setSizeIndex(i)}
+                className="absolute flex items-center justify-center"
+                style={{ left: `${(i / (COLUMN_CLASSES.length - 1)) * 100}%`, transform: "translateX(-50%)" }}
+                aria-label={`Thumbnail size ${SIZE_LABELS[i]}`}
+              >
+                <span
+                  className={`block rounded-full border-2 transition-all duration-150 ${
+                    i === sizeIndex
+                      ? "h-3.5 w-3.5 border-primary bg-primary shadow-sm"
+                      : "h-2.5 w-2.5 border-muted-foreground/40 bg-background hover:border-primary/60"
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-muted/10">
           {bucketError ? (
             <p className="text-sm font-medium text-destructive mb-4">{bucketError}</p>
@@ -328,7 +370,7 @@ function SearchContent() {
           ) : null}
 
           {loading ? (
-            <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
+            <div className={`${columnClass} gap-4`}>
               {Array.from({ length: 6 }).map((_, index) => (
                 <div key={index} className="h-64 animate-pulse rounded-lg border bg-muted/40 break-inside-avoid mb-4" />
               ))}
@@ -340,7 +382,7 @@ function SearchContent() {
               <p className="text-sm text-muted-foreground mt-1 max-w-sm">Try adjusting your filters or search terms.</p>
             </div>
           ) : (
-            <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
+            <div className={`${columnClass} gap-4`}>
               {results.map((result) => {
                 const bucket = buckets.find((b) => b.id === result.bucketId);
                 const readonly = bucket ? (bucket.is_subscribed || bucket.is_read_only) : true;
@@ -389,6 +431,8 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
   const [randomWeightValue, setRandomWeightValue] = useState(1);
   const [tagsValue, setTagsValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
+  const [urlValue, setUrlValue] = useState("");
+  const [urlError, setUrlError] = useState<string | null>(null);
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
 
   const openImageDetails = () => {
@@ -397,6 +441,8 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
     setRandomWeightValue(image.randomWeight);
     setTagsValue(image.tags.join(", "));
     setNotesValue(image.notes || "");
+    setUrlValue(image.url);
+    setUrlError(null);
     setEditingMetadata(false);
     setDetailsOpen(true);
   };
@@ -412,16 +458,41 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
     }
   };
 
+  const handleToggleFavorite = async () => {
+    if (readonly) return;
+    const newFavorite = !image.favorite;
+    setImage((current) => ({ ...current, favorite: newFavorite }));
+    try {
+      await apiPatch(`/api/buckets/${currentBucketId}/images/${image.id}`, { favorite: newFavorite });
+    } catch (err) {
+      setImage((current) => ({ ...current, favorite: !newFavorite }));
+      toast.error(err instanceof Error ? err.message : "Failed to update favorite");
+    }
+  };
+
   const touchHandlers = useTouchHold({
     onTap: handleCopy,
     onLongPress: openImageDetails,
   });
 
   const handleSaveMetadata = async () => {
+    const trimmedUrl = urlValue.trim();
+    if (!trimmedUrl) {
+      setUrlError("URL is required");
+      return;
+    }
+    try {
+      new URL(trimmedUrl);
+    } catch {
+      setUrlError("Enter a valid URL");
+      return;
+    }
+    setUrlError(null);
     const normalizedTags = parseTagInput(tagsValue);
     const normalizedTitle = titleValue.trim() || null;
     const normalizedNotes = notesValue.trim() || null;
     const normalizedWeight = clampRandomWeight(randomWeightValue);
+    const urlChanged = trimmedUrl !== image.url;
     try {
       await apiPatch(`/api/buckets/${currentBucketId}/images/${image.id}`, {
         title: normalizedTitle,
@@ -429,6 +500,7 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
         favorite: favoriteValue,
         randomWeight: normalizedWeight,
         tags: normalizedTags,
+        ...(urlChanged ? { url: trimmedUrl } : {}),
       });
       const updatedImage = {
         ...image,
@@ -437,12 +509,17 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
         favorite: favoriteValue,
         randomWeight: normalizedWeight,
         tags: normalizedTags,
+        url: urlChanged ? trimmedUrl : image.url,
       };
       setImage(updatedImage);
+      setUrlValue(updatedImage.url);
       setEditingMetadata(false);
       toast.success("Image details saved");
-    } catch {
-      toast.error("Failed to save image details");
+    } catch (err) {
+      if (urlChanged) {
+        setUrlError(err instanceof Error ? err.message : "Failed to update image link");
+      }
+      toast.error(err instanceof Error ? err.message : "Failed to save image details");
     }
   };
 
@@ -519,22 +596,29 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
               {...(isMobile ? touchHandlers : {})}
             />
           )}
+          <button
+            type="button"
+            aria-label={image.favorite ? "Remove from favorites" : "Add to favorites"}
+            disabled={readonly}
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleToggleFavorite();
+            }}
+            className={`absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
+              image.favorite
+                ? "text-yellow-400 bg-black/40 hover:scale-110 opacity-100"
+                : "text-white/70 bg-black/40 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:scale-110 hover:text-white"
+            } ${readonly ? "cursor-default" : ""}`}
+          >
+            <Star className="h-4 w-4" fill={image.favorite ? "currentColor" : "none"} />
+          </button>
         </div>
         <div className="space-y-3 p-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">{image.title || image.url}</h2>
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
-            {image.favorite ? (
-              <Badge variant="secondary" className="rounded-md">
-                <Star className="h-3 w-3 fill-current" />
-                Favorite
-              </Badge>
-            ) : null}
-            <Badge variant="outline" className="rounded-md">Weight {image.randomWeight}</Badge>
-            <Badge variant="outline" className="rounded-md">{image.sendCount} send{image.sendCount === 1 ? "" : "s"}</Badge>
-          </div>
+          {image.title ? (
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-semibold">{image.title}</h2>
+            </div>
+          ) : null}
 
           {image.tags.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
@@ -564,23 +648,25 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="icon-sm"
               onClick={handleCopy}
               className="shrink-0"
+              aria-label={copied ? "Link copied" : "Copy link"}
+              title={copied ? "Link copied" : "Copy link"}
             >
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              Copy
             </Button>
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="icon-sm"
               nativeButton={false}
               render={<a href={image.url} target="_blank" rel="noreferrer" />}
               className="shrink-0"
+              aria-label="Open image link"
+              title="Open image link"
             >
               <ExternalLink className="h-4 w-4" />
-              Open
             </Button>
           </div>
         </div>
@@ -617,7 +703,7 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
 
             <div className="space-y-3 rounded-lg border border-border/70 p-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Metadata</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Details</p>
                 {!readonly && !editingMetadata ? (
                   <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEditingMetadata(true)}>
                     <Edit2 className="h-3 w-3 mr-1" /> Edit
@@ -627,6 +713,19 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
 
               {editingMetadata ? (
                 <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="image-url">Link</Label>
+                    <Input
+                      id="image-url"
+                      value={urlValue}
+                      onChange={(event) => setUrlValue(event.target.value)}
+                      placeholder="https://example.com/image.gif"
+                    />
+                    {urlError ? (
+                      <p className="text-xs font-medium text-destructive">{urlError}</p>
+                    ) : null}
+                  </div>
+
                   <div className="space-y-1.5">
                     <Label htmlFor="image-title">Title</Label>
                     <Input
@@ -727,6 +826,8 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
                         setRandomWeightValue(image.randomWeight);
                         setTagsValue(image.tags.join(", "));
                         setNotesValue(image.notes || "");
+                        setUrlValue(image.url);
+                        setUrlError(null);
                       }}
                     >
                       Cancel
@@ -736,6 +837,26 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
                 </div>
               ) : (
                 <div className="space-y-3">
+                  <div className="flex min-w-0 gap-2">
+                    <Input readOnly value={image.url} title={image.url} />
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      aria-label={copied ? "Link copied" : "Copy image link"}
+                      title={copied ? "Link copied" : "Copy image link"}
+                      onClick={handleCopy}
+                    >
+                      {copied ? <Check /> : <Copy />}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      aria-label="Open image link"
+                      render={<a href={image.url} target="_blank" rel="noreferrer" />}
+                    >
+                      <ExternalLink />
+                    </Button>
+                  </div>
                   <div className="grid gap-2 text-sm sm:grid-cols-3">
                     <div>
                       <p className="text-xs text-muted-foreground">Favorite</p>
@@ -775,21 +896,6 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
                   </div>
                 </div>
               )}
-            </div>
-
-            <div className="space-y-2 min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Link</p>
-              <div className="flex min-w-0 gap-2">
-                <Input readOnly value={image.url} title={image.url} />
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  aria-label="Open image link"
-                  render={<a href={image.url} target="_blank" rel="noreferrer" />}
-                >
-                  <ExternalLink />
-                </Button>
-              </div>
             </div>
 
             {buckets.length > 1 && !readonly && (

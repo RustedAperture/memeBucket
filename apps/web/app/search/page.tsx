@@ -431,6 +431,8 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
   const [randomWeightValue, setRandomWeightValue] = useState(1);
   const [tagsValue, setTagsValue] = useState("");
   const [notesValue, setNotesValue] = useState("");
+  const [urlValue, setUrlValue] = useState("");
+  const [urlError, setUrlError] = useState<string | null>(null);
   const [imageToDelete, setImageToDelete] = useState<string | null>(null);
 
   const openImageDetails = () => {
@@ -439,6 +441,8 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
     setRandomWeightValue(image.randomWeight);
     setTagsValue(image.tags.join(", "));
     setNotesValue(image.notes || "");
+    setUrlValue(image.url);
+    setUrlError(null);
     setEditingMetadata(false);
     setDetailsOpen(true);
   };
@@ -472,10 +476,23 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
   });
 
   const handleSaveMetadata = async () => {
+    const trimmedUrl = urlValue.trim();
+    if (!trimmedUrl) {
+      setUrlError("URL is required");
+      return;
+    }
+    try {
+      new URL(trimmedUrl);
+    } catch {
+      setUrlError("Enter a valid URL");
+      return;
+    }
+    setUrlError(null);
     const normalizedTags = parseTagInput(tagsValue);
     const normalizedTitle = titleValue.trim() || null;
     const normalizedNotes = notesValue.trim() || null;
     const normalizedWeight = clampRandomWeight(randomWeightValue);
+    const urlChanged = trimmedUrl !== image.url;
     try {
       await apiPatch(`/api/buckets/${currentBucketId}/images/${image.id}`, {
         title: normalizedTitle,
@@ -483,6 +500,7 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
         favorite: favoriteValue,
         randomWeight: normalizedWeight,
         tags: normalizedTags,
+        ...(urlChanged ? { url: trimmedUrl } : {}),
       });
       const updatedImage = {
         ...image,
@@ -491,12 +509,17 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
         favorite: favoriteValue,
         randomWeight: normalizedWeight,
         tags: normalizedTags,
+        url: urlChanged ? trimmedUrl : image.url,
       };
       setImage(updatedImage);
+      setUrlValue(updatedImage.url);
       setEditingMetadata(false);
       toast.success("Image details saved");
-    } catch {
-      toast.error("Failed to save image details");
+    } catch (err) {
+      if (urlChanged) {
+        setUrlError(err instanceof Error ? err.message : "Failed to update image link");
+      }
+      toast.error(err instanceof Error ? err.message : "Failed to save image details");
     }
   };
 
@@ -678,7 +701,7 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
 
             <div className="space-y-3 rounded-lg border border-border/70 p-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Metadata</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Details</p>
                 {!readonly && !editingMetadata ? (
                   <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEditingMetadata(true)}>
                     <Edit2 className="h-3 w-3 mr-1" /> Edit
@@ -688,6 +711,19 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
 
               {editingMetadata ? (
                 <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="image-url">Link</Label>
+                    <Input
+                      id="image-url"
+                      value={urlValue}
+                      onChange={(event) => setUrlValue(event.target.value)}
+                      placeholder="https://example.com/image.gif"
+                    />
+                    {urlError ? (
+                      <p className="text-xs font-medium text-destructive">{urlError}</p>
+                    ) : null}
+                  </div>
+
                   <div className="space-y-1.5">
                     <Label htmlFor="image-title">Title</Label>
                     <Input
@@ -788,6 +824,8 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
                         setRandomWeightValue(image.randomWeight);
                         setTagsValue(image.tags.join(", "));
                         setNotesValue(image.notes || "");
+                        setUrlValue(image.url);
+                        setUrlError(null);
                       }}
                     >
                       Cancel
@@ -797,6 +835,26 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
                 </div>
               ) : (
                 <div className="space-y-3">
+                  <div className="flex min-w-0 gap-2">
+                    <Input readOnly value={image.url} title={image.url} />
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      aria-label={copied ? "Link copied" : "Copy image link"}
+                      title={copied ? "Link copied" : "Copy image link"}
+                      onClick={handleCopy}
+                    >
+                      {copied ? <Check /> : <Copy />}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      aria-label="Open image link"
+                      render={<a href={image.url} target="_blank" rel="noreferrer" />}
+                    >
+                      <ExternalLink />
+                    </Button>
+                  </div>
                   <div className="grid gap-2 text-sm sm:grid-cols-3">
                     <div>
                       <p className="text-xs text-muted-foreground">Favorite</p>
@@ -836,30 +894,6 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
                   </div>
                 </div>
               )}
-            </div>
-
-            <div className="space-y-2 min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Link</p>
-              <div className="flex min-w-0 gap-2">
-                <Input readOnly value={image.url} title={image.url} />
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  aria-label={copied ? "Link copied" : "Copy image link"}
-                  title={copied ? "Link copied" : "Copy image link"}
-                  onClick={handleCopy}
-                >
-                  {copied ? <Check /> : <Copy />}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  aria-label="Open image link"
-                  render={<a href={image.url} target="_blank" rel="noreferrer" />}
-                >
-                  <ExternalLink />
-                </Button>
-              </div>
             </div>
 
             {buckets.length > 1 && !readonly && (

@@ -852,6 +852,15 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                       <Button
                         variant="secondary"
                         size="icon"
+                        aria-label="Copy image link"
+                        title="Copy image link"
+                        onClick={() => void handleCopyLink(selectedImage.url)}
+                      >
+                        <Copy />
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="icon"
                         aria-label="Open image link"
                         render={<a href={selectedImage.url} target="_blank" rel="noreferrer" />}
                       >

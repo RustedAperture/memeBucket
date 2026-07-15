@@ -30,6 +30,9 @@
             sqlite
             sqlx-cli
 
+            # GitHub CLI
+            gh
+
             # Runtime dependencies
             ffmpeg
 

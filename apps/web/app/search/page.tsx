@@ -90,6 +90,17 @@ function SearchContent() {
   const [loading, setLoading] = useState(true);
   const [bucketError, setBucketError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [sizeIndex, setSizeIndex] = useState(2);
+
+  const COLUMN_CLASSES = [
+    "columns-3 sm:columns-4 md:columns-5 lg:columns-6",
+    "columns-2 sm:columns-3 md:columns-4 lg:columns-5",
+    "columns-2 sm:columns-2 md:columns-3 lg:columns-4",
+    "columns-1 sm:columns-2 md:columns-2 lg:columns-3",
+    "columns-1 sm:columns-1 md:columns-2 lg:columns-2",
+  ];
+  const SIZE_LABELS = ["-2", "-1", "0", "+1", "+2"];
+  const columnClass = COLUMN_CLASSES[sizeIndex] || COLUMN_CLASSES[2];
 
   const bucketItems = useMemo(
     () => [
@@ -319,6 +330,37 @@ function SearchContent() {
           </div>
         </header>
 
+        <div className="flex items-center gap-3 px-4 lg:px-6 py-2 sm:py-0 h-auto sm:h-12 shrink-0 border-b bg-muted/30 w-full">
+          <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+            Size
+          </span>
+          <div className="relative flex items-center w-24 h-6">
+            <div className="absolute left-0 right-0 h-0.5 rounded-full bg-border" />
+            <div
+              className="absolute left-0 h-0.5 rounded-full bg-primary transition-all duration-150"
+              style={{ width: `${(sizeIndex / (COLUMN_CLASSES.length - 1)) * 100}%` }}
+            />
+            {COLUMN_CLASSES.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setSizeIndex(i)}
+                className="absolute flex items-center justify-center"
+                style={{ left: `${(i / (COLUMN_CLASSES.length - 1)) * 100}%`, transform: "translateX(-50%)" }}
+                aria-label={`Thumbnail size ${SIZE_LABELS[i]}`}
+              >
+                <span
+                  className={`block rounded-full border-2 transition-all duration-150 ${
+                    i === sizeIndex
+                      ? "h-3.5 w-3.5 border-primary bg-primary shadow-sm"
+                      : "h-2.5 w-2.5 border-muted-foreground/40 bg-background hover:border-primary/60"
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-muted/10">
           {bucketError ? (
             <p className="text-sm font-medium text-destructive mb-4">{bucketError}</p>
@@ -328,7 +370,7 @@ function SearchContent() {
           ) : null}
 
           {loading ? (
-            <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
+            <div className={`${columnClass} gap-4`}>
               {Array.from({ length: 6 }).map((_, index) => (
                 <div key={index} className="h-64 animate-pulse rounded-lg border bg-muted/40 break-inside-avoid mb-4" />
               ))}
@@ -340,7 +382,7 @@ function SearchContent() {
               <p className="text-sm text-muted-foreground mt-1 max-w-sm">Try adjusting your filters or search terms.</p>
             </div>
           ) : (
-            <div className="columns-1 sm:columns-2 lg:columns-3 gap-4">
+            <div className={`${columnClass} gap-4`}>
               {results.map((result) => {
                 const bucket = buckets.find((b) => b.id === result.bucketId);
                 const readonly = bucket ? (bucket.is_subscribed || bucket.is_read_only) : true;

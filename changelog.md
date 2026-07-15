@@ -18,6 +18,7 @@
 ### Changed
 
 - Adjusted the dashboard layout to use a centered 66% content column at the 2xl breakpoint and wider, while keeping smaller screens responsive.
+- Added the thumbnail size slider to the Library so search results can be resized like bucket images.
 
 ## v0.2.7 - Jul 13, 2026
 

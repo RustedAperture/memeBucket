@@ -498,7 +498,9 @@ async fn validate_image_url_internal(value: &str) -> Result<(), ImageUrlValidati
     Err(ImageUrlValidationError::UnsupportedContentType)
 }
 
-async fn fetch_success(value: &str) -> Result<reqwest::Response, ImageUrlValidationError> {
+pub(crate) async fn fetch_success(
+    value: &str,
+) -> Result<reqwest::Response, ImageUrlValidationError> {
     let mut current_url_str = value.to_string();
     let mut redirects = 0;
 
@@ -603,22 +605,30 @@ fn response_content_type(response: &reqwest::Response) -> Option<String> {
         .into()
 }
 
-async fn read_limited_text(
+async fn read_limited_text(response: reqwest::Response) -> Result<String, ImageUrlValidationError> {
+    let body = read_limited_bytes(response, METADATA_READ_LIMIT_BYTES).await?;
+    String::from_utf8(body).map_err(|_| ImageUrlValidationError::UnsupportedContentType)
+}
+
+/// Reads a response body up to `limit_bytes`, rejecting anything larger.
+/// Used for both HTML/JSON metadata scraping and safe-fetched HLS assets.
+pub(crate) async fn read_limited_bytes(
     mut response: reqwest::Response,
-) -> Result<String, ImageUrlValidationError> {
+    limit_bytes: usize,
+) -> Result<Vec<u8>, ImageUrlValidationError> {
     let mut body = Vec::new();
     while let Some(chunk) = response
         .chunk()
         .await
         .map_err(|_| ImageUrlValidationError::FetchFailed)?
     {
-        if body.len() + chunk.len() > METADATA_READ_LIMIT_BYTES {
+        if body.len() + chunk.len() > limit_bytes {
             return Err(ImageUrlValidationError::FetchFailed);
         }
         body.extend_from_slice(&chunk);
     }
 
-    String::from_utf8(body).map_err(|_| ImageUrlValidationError::UnsupportedContentType)
+    Ok(body)
 }
 
 async fn resolve_oembed_photo_url(

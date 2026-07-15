@@ -64,35 +64,26 @@ impl StorageService {
     }
 
     pub fn is_discord_cdn(url: &str) -> bool {
-        url.contains("cdn.discordapp.com") || url.contains("media.discordapp.net")
+        url_host_matches(url, &["cdn.discordapp.com", "media.discordapp.net"])
     }
 
     pub fn is_twitter_media(url: &str) -> bool {
-        url.contains("pbs.twimg.com") || url.contains("video.twimg.com")
+        url_host_matches(url, &["pbs.twimg.com", "video.twimg.com"])
     }
 
     pub fn is_bluesky_media(url: &str) -> bool {
-        url.contains("cdn.bsky.app")
+        url_host_matches(url, &["cdn.bsky.app"])
     }
 
+    /// Fetches `url` and re-hosts it on B2. Goes through the same SSRF-safe
+    /// resolver used for user-submitted image URLs (DNS-pinned to a validated
+    /// non-internal IP, redirects re-validated) since this is also reached
+    /// from the CDN migration job for URLs that were never fetched at submit
+    /// time (e.g. imported account data).
     pub async fn upload_from_url(&self, url: &str) -> Result<String, StorageError> {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .map_err(|e| StorageError::FetchFailed(e.to_string()))?;
-
-        let response = client
-            .get(url)
-            .send()
+        let response = super::images::fetch_success(url)
             .await
-            .map_err(|e| StorageError::FetchFailed(e.to_string()))?;
-
-        if !response.status().is_success() {
-            return Err(StorageError::FetchFailed(format!(
-                "HTTP {}",
-                response.status()
-            )));
-        }
+            .map_err(|e| StorageError::FetchFailed(e.user_message().to_string()))?;
 
         let content_type = response
             .headers()
@@ -280,6 +271,16 @@ impl StorageService {
     }
 }
 
+/// Compares the URL's actual host against an allowlist — never substring-match
+/// the whole URL, since query strings/paths are attacker-controlled and would
+/// let e.g. `https://attacker.example/?x=cdn.discordapp.com` pass as trusted.
+fn url_host_matches(url: &str, allowed_hosts: &[&str]) -> bool {
+    url::Url::parse(url)
+        .ok()
+        .and_then(|parsed| parsed.host_str().map(str::to_ascii_lowercase))
+        .is_some_and(|host| allowed_hosts.iter().any(|allowed| host == *allowed))
+}
+
 pub(crate) fn blake3_hash_bytes(bytes: &[u8]) -> String {
     hex::encode(blake3::hash(bytes).as_bytes())
 }
@@ -401,6 +402,19 @@ mod tests {
     }
 
     #[test]
+    fn is_discord_cdn_rejects_substring_spoofing_via_query_string() {
+        // Regression test: an attacker-controlled host must not be treated as
+        // Discord's CDN just because the string "cdn.discordapp.com" appears
+        // somewhere in the URL (e.g. a query parameter).
+        assert!(!StorageService::is_discord_cdn(
+            "https://attacker.example/x?ref=cdn.discordapp.com"
+        ));
+        assert!(!StorageService::is_discord_cdn(
+            "https://cdn.discordapp.com.attacker.example/x"
+        ));
+    }
+
+    #[test]
     fn is_twitter_media_detects_both_hosts() {
         assert!(StorageService::is_twitter_media(
             "https://pbs.twimg.com/media/abc123.jpg:large"
@@ -413,6 +427,13 @@ mod tests {
         ));
         assert!(!StorageService::is_twitter_media(
             "https://media.memebucket.app/abc123.webp"
+        ));
+    }
+
+    #[test]
+    fn is_twitter_media_rejects_substring_spoofing_via_query_string() {
+        assert!(!StorageService::is_twitter_media(
+            "https://attacker.example/x?ref=pbs.twimg.com"
         ));
     }
 

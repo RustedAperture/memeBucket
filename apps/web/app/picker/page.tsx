@@ -458,9 +458,9 @@ export default function PickerPage() {
                   <button
                     onClick={handleOpenChangelog}
                     className="text-left hover:underline hover:text-foreground"
-                    aria-label={`View changelog for version ${changelogBanner.version}`}
+                    aria-label={`View changelog for version ${changelogBanner.version}, released ${changelogBanner.date}`}
                   >
-                    New update available (v{changelogBanner.version}, {changelogBanner.date}) — see what&apos;s new
+                    Update available (v{changelogBanner.version}) — see what&apos;s new
                   </button>
                 </AlertDescription>
                 <button

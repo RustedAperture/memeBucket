@@ -27,13 +27,5 @@
     "allow-navigate-to",
     "allow-hide-window",
     "allow-copy-and-paste-link"
-  ],
-  "remote": {
-    "urls": [
-      "http://localhost:3000/*",
-      "http://127.0.0.1:3000/*",
-      "https://*.trycloudflare.com/*",
-      "https://*/*"
-    ]
-  }
+  ]
 }

@@ -5,11 +5,84 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use tauri::ipc::CapabilityBuilder;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutEvent, ShortcutState};
+
+/// Permissions the bundled local UI already has (see
+/// `capabilities/default.json`) — mirrored here so a self-hosted remote
+/// server the user points the app at gets the same functionality, but ONLY
+/// for that exact origin (see `grant_remote_capability_for_server_url`).
+const REMOTE_SERVER_PERMISSIONS: &[&str] = &[
+    "core:default",
+    "core:window:default",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-close",
+    "core:window:allow-maximize",
+    "core:window:allow-minimize",
+    "core:window:allow-start-dragging",
+    "core:window:allow-center",
+    "core:window:allow-is-visible",
+    "global-shortcut:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-is-registered",
+    "shell:default",
+    "shell:allow-open",
+    "allow-get-server-url",
+    "allow-set-server-url",
+    "allow-navigate-to",
+    "allow-hide-window",
+    "allow-copy-and-paste-link",
+];
+
+/// Reduces a URL to its origin glob (`scheme://host[:port]/*`) for use as a
+/// Tauri capability's `remote.urls` entry. Rejects anything that isn't a
+/// plain http/https URL with a host.
+fn remote_origin_pattern(url_str: &str) -> Option<String> {
+    let parsed: tauri::Url = url_str.parse().ok()?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return None;
+    }
+    let host = parsed.host_str()?;
+    let origin = match parsed.port() {
+        Some(port) => format!("{}://{}:{}", parsed.scheme(), host, port),
+        None => format!("{}://{}", parsed.scheme(), host),
+    };
+    Some(format!("{origin}/*"))
+}
+
+/// Grants the main window's native IPC bridge to exactly the origin of
+/// `url` — never a wildcard. This is how the app stays "point it at any
+/// self-hosted server" without handing every HTTPS site on the internet the
+/// same native command access a static `remote.urls: ["https://*/*"]` entry
+/// would (the previous approach, and a genuine SSRF/IPC-bridge vulnerability).
+///
+/// Tauri's dynamic-ACL grants are additive with no revoke API, so callers
+/// that change the configured server URL at runtime (see `save_settings`)
+/// must restart the app afterward — otherwise the previous origin would keep
+/// its grant until the process exits.
+fn grant_remote_capability_for_server_url(app: &AppHandle, url: &str) {
+    let Some(pattern) = remote_origin_pattern(url) else {
+        eprintln!("Not granting remote capability: invalid server URL {url}");
+        return;
+    };
+
+    let mut capability = CapabilityBuilder::new("dynamic-server-remote")
+        .window("main")
+        .remote(pattern);
+    for permission in REMOTE_SERVER_PERMISSIONS {
+        capability = capability.permission(*permission);
+    }
+
+    if let Err(e) = app.add_capability(capability) {
+        eprintln!("Failed to grant remote capability for {url}: {e}");
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
@@ -83,6 +156,7 @@ fn set_server_url(app: AppHandle, url: String) -> Result<String, String> {
     config.server_url = Some(normalized_url.clone());
     let content = serde_json::to_string(&config).map_err(|e| e.to_string())?;
     fs::write(path, content).map_err(|e| e.to_string())?;
+    grant_remote_capability_for_server_url(&app, &normalized_url);
     Ok(normalized_url)
 }
 
@@ -450,6 +524,7 @@ fn save_settings(app: AppHandle, server_url: String, hotkey: String, autostart: 
     }
 
     // Persist config
+    let previous_server_url = config.server_url.clone();
     let normalized_url = if server_url.trim().is_empty() {
         None
     } else {
@@ -460,13 +535,26 @@ fn save_settings(app: AppHandle, server_url: String, hotkey: String, autostart: 
     let content = serde_json::to_string(&config).map_err(|e| e.to_string())?;
     fs::write(&path, content).map_err(|e| e.to_string())?;
 
-    // Navigate the main window to the new picker URL if a server URL is set
-    if let Some(url) = normalized_url {
-        if let Some(main_window) = app.get_webview_window("main") {
-            if let Ok(parsed) = format!("{}/picker", url).parse() {
-                let _ = main_window.navigate(parsed);
+    match &normalized_url {
+        Some(url) if normalized_url != previous_server_url => {
+            // The server URL changed: grant the new origin's capability, then
+            // restart. Dynamic-ACL grants can't be revoked, so simply
+            // navigating would leave the previous origin's IPC access active
+            // for the rest of this run — restarting rebuilds the runtime
+            // authority from scratch so only the new URL is ever granted.
+            grant_remote_capability_for_server_url(&app, url);
+            app.restart();
+        }
+        Some(url) => {
+            // Unchanged URL: nothing to (re-)grant, just make sure the window
+            // reflects the current picker route.
+            if let Some(main_window) = app.get_webview_window("main") {
+                if let Ok(parsed) = format!("{}/picker", url).parse() {
+                    let _ = main_window.navigate(parsed);
+                }
             }
         }
+        None => {}
     }
 
     Ok(())
@@ -608,12 +696,22 @@ fn main() {
                 }
             });
 
-            // Load saved hotkey or fall back to default
-            let initial_hotkey = get_config_path(app.handle())
+            let initial_config: Config = get_config_path(app.handle())
                 .ok()
                 .and_then(|p| fs::read_to_string(p).ok())
-                .and_then(|s| serde_json::from_str::<Config>(&s).ok())
-                .and_then(|c| c.hotkey)
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default();
+
+            // Re-grant the previously configured server's origin before any
+            // window content loads and tries to `navigate_to` it — the grant
+            // doesn't persist across restarts, only the config does.
+            if let Some(url) = &initial_config.server_url {
+                grant_remote_capability_for_server_url(app.handle(), url);
+            }
+
+            // Load saved hotkey or fall back to default
+            let initial_hotkey = initial_config
+                .hotkey
                 .unwrap_or_else(|| "CmdOrCtrl+Shift+M".to_string());
             let shortcut: Shortcut = initial_hotkey
                 .parse()

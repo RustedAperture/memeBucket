@@ -845,6 +845,15 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
                 <Button
                   variant="secondary"
                   size="icon"
+                  aria-label={copied ? "Link copied" : "Copy image link"}
+                  title={copied ? "Link copied" : "Copy image link"}
+                  onClick={handleCopy}
+                >
+                  {copied ? <Check /> : <Copy />}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="icon"
                   aria-label="Open image link"
                   render={<a href={image.url} target="_blank" rel="noreferrer" />}
                 >

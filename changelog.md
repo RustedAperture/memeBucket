@@ -6,6 +6,12 @@
 
 - Added **Bluesky link support**: pasting a Bluesky post now extracts its image or HLS video, converts videos to WebP, and saves the author's text as notes.
 - Added **social hashtag import**: hashtags from X/Twitter and Bluesky posts are imported as image tags while preserving manually supplied tags.
+- New buckets appear immediately after creation.
+- Added virtual **All** bucket.
+- Pinned **All**, **Favorites**, and **Inbox** at the top.
+- Metadata edits, favorites, deletes, moves, and bulk actions work from system/aggregate views using each image’s real source bucket.
+- System buckets cannot be used as move destinations.
+- Production web build passes.
 
 ### Fixed
 

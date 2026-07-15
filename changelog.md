@@ -10,8 +10,6 @@
 - Added virtual **All** bucket.
 - Pinned **All**, **Favorites**, and **Inbox** at the top.
 - Metadata edits, favorites, deletes, moves, and bulk actions work from system/aggregate views using each image’s real source bucket.
-- System buckets cannot be used as move destinations.
-- Production web build passes.
 
 ### Fixed
 

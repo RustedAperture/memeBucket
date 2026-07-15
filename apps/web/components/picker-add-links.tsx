@@ -61,7 +61,6 @@ export function PickerAddLinks({
 
     if (summary) {
       setSummary(null);
-      onBack();
       return;
     }
 

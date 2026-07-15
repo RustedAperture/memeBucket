@@ -7,7 +7,12 @@
         "heading": "Added",
         "items": [
           "Added <strong>Bluesky link support</strong>: pasting a Bluesky post now extracts its image or HLS video, converts videos to WebP, and saves the author's text as notes.",
-          "Added <strong>social hashtag import</strong>: hashtags from X/Twitter and Bluesky posts are imported as image tags while preserving manually supplied tags.",
+          "Added <strong>social hashtag import</strong>: hashtags from X/Twitter and Bluesky posts are imported as image tags while preserving manually supplied tags."
+        ]
+      },
+      {
+        "heading": "Fixed",
+        "items": [
           "Fixed <strong>Tenor page-link resolution</strong> so <code>/view/...</code> links correctly resolve their media image."
         ]
       }

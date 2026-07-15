@@ -6,6 +6,9 @@
 
 - Added **Bluesky link support**: pasting a Bluesky post now extracts its image or HLS video, converts videos to WebP, and saves the author's text as notes.
 - Added **social hashtag import**: hashtags from X/Twitter and Bluesky posts are imported as image tags while preserving manually supplied tags.
+
+### Fixed
+
 - Fixed **Tenor page-link resolution** so `/view/...` links correctly resolve their media image.
 
 ## v0.2.7 - Jul 13, 2026

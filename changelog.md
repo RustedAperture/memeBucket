@@ -22,7 +22,6 @@
 - Simplified Library image cards by removing weight and send counts, adding corner favorite controls, and using icon-only Copy and Open actions.
 - Aligned Library image details with bucket details, including link editing and link actions.
 - Library cards no longer display media URLs as fallback titles.
-- Matched the heights of Library card bucket and icon actions.
 
 ## v0.2.7 - Jul 13, 2026
 

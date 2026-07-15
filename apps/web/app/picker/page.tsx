@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, Folder, Settings, X, Minus, Move } from "lucide-react";
+import { Search, Folder, X, Minus, Move } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import type { ImageSearchResult, Bucket } from "@/lib/types";
 import { toast } from "sonner";
@@ -27,17 +27,21 @@ export default function PickerPage() {
   const [results, setResults] = useState<ImageSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [showSettings, setShowSettings] = useState(false);
-  const [serverUrl, setServerUrl] = useState("");
   const [isTauriApp, setIsTauriApp] = useState(false);
   const [changelogBanner, setChangelogBanner] = useState<{ version: string; date: string } | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const urlInputRef = useRef<HTMLInputElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const queryRef = useRef(query);
+  const bucketIdRef = useRef(bucketId);
+  const searchRequestId = useRef(0);
 
   useEffect(() => {
-    setServerUrl(window.location.origin);
+    queryRef.current = query;
+    bucketIdRef.current = bucketId;
+  }, [query, bucketId]);
+
+  useEffect(() => {
     setIsTauriApp(isTauri());
   }, []);
 
@@ -51,10 +55,6 @@ export default function PickerPage() {
         if (!latest) return;
 
         const lastSeen = localStorage.getItem("lastSeenChangelogVersion");
-        if (lastSeen === null) {
-          localStorage.setItem("lastSeenChangelogVersion", latest.version);
-          return;
-        }
         if (lastSeen !== latest.version) {
           localStorage.setItem("lastSeenChangelogVersion", latest.version);
           setChangelogBanner({ version: latest.version, date: latest.date });
@@ -69,11 +69,6 @@ export default function PickerPage() {
     return () => window.removeEventListener("focus", checkChangelog);
   }, []);
 
-  useEffect(() => {
-    if (showSettings) urlInputRef.current?.focus();
-    else searchInputRef.current?.focus();
-  }, [showSettings]);
-
   const bucketItems = useMemo(
     () => [
       { label: "All buckets", value: "all" },
@@ -82,44 +77,63 @@ export default function PickerPage() {
     [buckets]
   );
 
+  async function fetchBuckets() {
+    try {
+      const loaded = await apiGet<Bucket[]>("/api/buckets");
+      setBuckets(loaded);
+    } catch {
+      toast.error("Could not load buckets");
+    }
+  }
+
+  // Guarded by a monotonic request id (not a per-effect `cancelled` flag) since
+  // this is called from two independent triggers — debounced typing and window
+  // focus — and only the response to the most recently issued request should
+  // ever be allowed to update state.
+  async function fetchResults() {
+    const requestId = ++searchRequestId.current;
+    setLoading(true);
+    const params = new URLSearchParams();
+    params.set("limit", "40");
+    if (queryRef.current.trim()) params.set("q", queryRef.current.trim());
+    if (bucketIdRef.current !== "all") params.set("bucketId", bucketIdRef.current);
+
+    try {
+      const loaded = await apiGet<ImageSearchResult[]>(`/api/images/search?${params.toString()}`);
+      if (requestId === searchRequestId.current) {
+        setResults(loaded);
+        setSelectedIndex(0);
+      }
+    } catch {
+      if (requestId === searchRequestId.current) setResults([]);
+    } finally {
+      if (requestId === searchRequestId.current) setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    let cancelled = false;
-    apiGet<Bucket[]>("/api/buckets")
-      .then((loaded) => {
-        if (!cancelled) setBuckets(loaded);
-      })
-      .catch(() => toast.error("Could not load buckets"));
-    return () => {
-      cancelled = true;
-    };
+    fetchBuckets();
+  }, []);
+
+  // The desktop Picker's hotkey only toggles native window visibility
+  // (hide()/show()) — it never reloads the page, so without this, data
+  // fetched once at mount would go stale for the lifetime of the app
+  // session if images/buckets changed from another surface while hidden.
+  useEffect(() => {
+    function refreshOnFocus() {
+      fetchBuckets();
+      fetchResults();
+    }
+    window.addEventListener("focus", refreshOnFocus);
+    return () => window.removeEventListener("focus", refreshOnFocus);
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
     const timeout = setTimeout(() => {
-      setLoading(true);
-      const params = new URLSearchParams();
-      params.set("limit", "40");
-      if (query.trim()) params.set("q", query.trim());
-      if (bucketId !== "all") params.set("bucketId", bucketId);
-
-      apiGet<ImageSearchResult[]>(`/api/images/search?${params.toString()}`)
-        .then((loaded) => {
-          if (!cancelled) {
-            setResults(loaded);
-            setSelectedIndex(0);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) setResults([]);
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
+      fetchResults();
     }, 150);
 
     return () => {
-      cancelled = true;
       clearTimeout(timeout);
     };
   }, [query, bucketId]);
@@ -168,30 +182,8 @@ export default function PickerPage() {
     }
   };
 
-  const handleSaveUrl = async () => {
-    if (!isTauri()) return;
-    try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const normalized = await invoke<string>("set_server_url", { url: serverUrl });
-      // Fire-and-forget: navigation tears down the page before the response
-      // arrives, so awaiting causes a spurious rejection.
-      invoke("navigate_to", { url: `${normalized}/picker` }).catch(() => {});
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast.error(`Failed to save: ${msg}`);
-    }
-  };
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (showSettings) {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          setShowSettings(false);
-        }
-        return;
-      }
-
       if (results.length === 0) return;
 
       let nextIndex = selectedIndex;
@@ -265,7 +257,7 @@ export default function PickerPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedIndex, results, showSettings]);
+  }, [selectedIndex, results]);
 
   useEffect(() => {
     searchInputRef.current?.focus();
@@ -360,42 +352,7 @@ export default function PickerPage() {
               </SelectGroup>
             </SelectContent>
           </Select>
-
-          <div className="flex items-center gap-1 shrink-0">
-            <Button
-              size="icon"
-              onClick={() => setShowSettings((s) => !s)}
-              className={`text-muted-foreground hover:text-foreground ${showSettings ? "text-foreground bg-muted" : ""}`}
-              title="Change server URL"
-            >
-              {showSettings ? <X className="h-3 w-3" /> : <Settings className="h-3 w-3" />}
-            </Button>
-          </div>
         </div>
-
-        {showSettings && (
-          <div className="flex items-center gap-1.5">
-            <Input
-              ref={urlInputRef}
-              type="text"
-              value={serverUrl}
-              onChange={(e) => setServerUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSaveUrl();
-                if (e.key === "Escape") setShowSettings(false);
-              }}
-              placeholder="https://your-server.com"
-              className="h-7 text-xs rounded-md"
-            />
-            <Button
-              size="sm"
-              className="h-7 px-2.5 text-xs rounded-md shrink-0"
-              onClick={handleSaveUrl}
-            >
-              Save
-            </Button>
-          </div>
-        )}
       </div>
 
       {changelogBanner && (

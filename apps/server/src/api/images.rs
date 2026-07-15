@@ -331,6 +331,9 @@ pub async fn delete_image(
     let deleted = repo
         .delete_for_user(user.user_id, bucket_id, image_id)
         .await?;
+    if deleted && let Some(storage) = state.storage() {
+        let _ = storage.garbage_collect_orphaned_objects().await;
+    }
     Ok(Json(serde_json::json!({ "deleted": deleted })))
 }
 
@@ -468,6 +471,11 @@ pub async fn bulk_delete_images(
     let deleted = repo
         .delete_bulk(user.user_id, bucket_id, &request.image_ids)
         .await?;
+    if deleted > 0
+        && let Some(storage) = state.storage()
+    {
+        let _ = storage.garbage_collect_orphaned_objects().await;
+    }
 
     Ok(Json(serde_json::json!({ "deleted": deleted })))
 }

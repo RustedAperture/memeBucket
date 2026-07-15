@@ -8,6 +8,7 @@
 - Added **social hashtag import**: hashtags from X/Twitter and Bluesky posts are imported as image tags while preserving manually supplied tags.
 - Added virtual **All** bucket.
 - Added the thumbnail size slider to the Library so search results can be resized like bucket images.
+- Added the ability to add multiple media links at once from the Picker using one link per line, with remembered bucket selection and a completion summary.
 
 ### Fixed
 

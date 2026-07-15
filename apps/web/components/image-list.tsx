@@ -44,6 +44,24 @@ import { useTouchHold } from "@/hooks/use-touch-hold";
 
 type BulkFavoriteValue = "unchanged" | "true" | "false";
 
+function sourceBucketIdFor(image: ImageItem, currentBucketId: string): string | null {
+  if (currentBucketId === "all" || currentBucketId === "favorites") {
+    return image.bucketId ?? null;
+  }
+  return currentBucketId;
+}
+
+function groupImageIdsBySourceBucket(images: ImageItem[], imageIds: string[], currentBucketId: string) {
+  const groups = new Map<string, string[]>();
+  for (const imageId of imageIds) {
+    const image = images.find((item) => item.id === imageId);
+    const sourceBucketId = image ? sourceBucketIdFor(image, currentBucketId) : null;
+    if (!sourceBucketId) continue;
+    groups.set(sourceBucketId, [...(groups.get(sourceBucketId) ?? []), imageId]);
+  }
+  return groups;
+}
+
 export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:columns-3 lg:columns-4", readonly = false, buckets = [], onMoveImage, onImageUpdated }: { bucketId: string; columnClass?: string; readonly?: boolean; buckets?: Bucket[]; onMoveImage?: () => void; onImageUpdated?: () => void }) {
   const [images, setImages] = useState<ImageItem[]>([]);
   const isMobile = useIsMobile();
@@ -80,16 +98,20 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
   const [bulkAddTags, setBulkAddTags] = useState("");
   const [bulkRemoveTags, setBulkRemoveTags] = useState("");
   const [bulkSaving, setBulkSaving] = useState(false);
+  const selectedSourceBucketId = selectedImage
+    ? sourceBucketIdFor(selectedImage, bucketId)
+    : bucketId;
   const moveBucketItems = buckets.map((p) => ({
-    label: `${p.name}${p.id === bucketId ? " (Current)" : ""}`,
+    label: `${p.name}${p.id === selectedSourceBucketId ? " (Current)" : ""}`,
     value: p.id,
   }));
 
   async function load() {
     try {
       let loadedImages: ImageItem[] = [];
-      if (bucketId === "favorites") {
-        const results = await apiGet<any[]>(`/api/images/search?favorite=true&limit=1000`);
+      if (bucketId === "favorites" || bucketId === "all") {
+        const query = bucketId === "favorites" ? "favorite=true&" : "";
+        const results = await apiGet<any[]>(`/api/images/search?${query}limit=1000`);
         loadedImages = results.map(r => ({ ...r.image, bucketId: r.bucketId }));
       } else {
         loadedImages = await apiGet<ImageItem[]>(`/api/buckets/${bucketId}/images`);
@@ -115,9 +137,10 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
       setEditingDetails(false);
       resetBulkForm();
     });
-    let request: Promise<any>;
-    if (bucketId === "favorites") {
-      request = apiGet<any[]>(`/api/images/search?favorite=true&limit=1000`)
+    let request: Promise<ImageItem[]>;
+    if (bucketId === "favorites" || bucketId === "all") {
+      const query = bucketId === "favorites" ? "favorite=true&" : "";
+      request = apiGet<any[]>(`/api/images/search?${query}limit=1000`)
         .then(results => results.map(r => ({ ...r.image, bucketId: r.bucketId })));
     } else {
       request = apiGet<ImageItem[]>(`/api/buckets/${bucketId}/images`);
@@ -170,7 +193,10 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
     if (!imageToDelete) return;
     setError(null);
     try {
-      await apiDelete(`/api/buckets/${bucketId}/images/${imageToDelete}`);
+      const image = images.find((item) => item.id === imageToDelete);
+      const sourceBucketId = image ? sourceBucketIdFor(image, bucketId) : null;
+      if (!sourceBucketId) throw new Error("Could not determine the image's source bucket");
+      await apiDelete(`/api/buckets/${sourceBucketId}/images/${imageToDelete}`);
       if (selectedImage?.id === imageToDelete) {
         setSelectedImage(null);
       }
@@ -207,7 +233,9 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
 
     setSavingDetails(true);
     try {
-      await apiPatch(`/api/buckets/${bucketId}/images/${selectedImage.id}`, {
+      const sourceBucketId = sourceBucketIdFor(selectedImage, bucketId);
+      if (!sourceBucketId) throw new Error("Could not determine the image's source bucket");
+      await apiPatch(`/api/buckets/${sourceBucketId}/images/${selectedImage.id}`, {
         title: normalizedTitle,
         notes: normalizedNotes,
         favorite: favoriteValue,
@@ -291,16 +319,22 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
 
     setBulkSaving(true);
     try {
-      const response = await apiPatch<typeof payload, { updated: number }>(
-        `/api/buckets/${bucketId}/images/bulk`,
-        payload
+      const groups = groupImageIdsBySourceBucket(images, imageIds, bucketId);
+      const responses = await Promise.all(
+        Array.from(groups, ([sourceBucketId, groupedIds]) =>
+          apiPatch<typeof payload, { updated: number }>(
+            `/api/buckets/${sourceBucketId}/images/bulk`,
+            { ...payload, imageIds: groupedIds }
+          )
+        )
       );
       setImages((currentImages) => applyBulkMetadataToImages(currentImages, imageIds, payload));
       setBulkDialogOpen(false);
       setSelectedImageIds(new Set());
       resetBulkForm();
       await load();
-      toast.success(`Updated ${response.updated} image${response.updated === 1 ? "" : "s"}`);
+      const updated = responses.reduce((total, response) => total + response.updated, 0);
+      toast.success(`Updated ${updated} image${updated === 1 ? "" : "s"}`);
       if (onImageUpdated) onImageUpdated();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update images");
@@ -309,9 +343,11 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
   }
 
   async function handleMoveToBucket(newBucketId: string) {
-    if (!selectedImage || newBucketId === bucketId) return;
+    if (!selectedImage) return;
+    const sourceBucketId = sourceBucketIdFor(selectedImage, bucketId);
+    if (!sourceBucketId || newBucketId === sourceBucketId) return;
     try {
-      await apiPost(`/api/buckets/${bucketId}/images/${selectedImage.id}/move`, { new_bucket_id: newBucketId });
+      await apiPost(`/api/buckets/${sourceBucketId}/images/${selectedImage.id}/move`, { new_bucket_id: newBucketId });
       setSelectedImage(null);
       if (onMoveImage) {
         onMoveImage();
@@ -346,7 +382,12 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
     setIsBulkDeleting(true);
     const imageIds = Array.from(selectedImageIds);
     try {
-      await apiDelete(`/api/buckets/${bucketId}/images/bulk`, { imageIds });
+      const groups = groupImageIdsBySourceBucket(images, imageIds, bucketId);
+      await Promise.all(
+        Array.from(groups, ([sourceBucketId, groupedIds]) =>
+          apiDelete(`/api/buckets/${sourceBucketId}/images/bulk`, { imageIds: groupedIds })
+        )
+      );
       setImages((prev) => prev.filter((img) => !selectedImageIds.has(img.id)));
       setSelectedImageIds(new Set());
       setBulkDeleteConfirmOpen(false);
@@ -364,10 +405,15 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
     setIsBulkMoving(true);
     const imageIds = Array.from(selectedImageIds);
     try {
-      await apiPost(`/api/buckets/${bucketId}/images/bulk/move`, {
-        imageIds,
-        newBucketId: bulkMoveBucketId,
-      });
+      const groups = groupImageIdsBySourceBucket(images, imageIds, bucketId);
+      await Promise.all(
+        Array.from(groups, ([sourceBucketId, groupedIds]) =>
+          apiPost(`/api/buckets/${sourceBucketId}/images/bulk/move`, {
+            imageIds: groupedIds,
+            newBucketId: bulkMoveBucketId,
+          })
+        )
+      );
       setImages((prev) => prev.filter((img) => !selectedImageIds.has(img.id)));
       setSelectedImageIds(new Set());
       setBulkMoveDialogOpen(false);
@@ -486,7 +532,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                 readonly={readonly}
                 isSelected={isSelected}
                 dragCount={dragCount}
-                bucketId={bucketId}
+                bucketId={image.bucketId ?? bucketId}
                 dragImageIdsFor={dragImageIdsFor}
                 toggleImageSelection={toggleImageSelection}
                 openImageDetails={openImageDetails}
@@ -858,7 +904,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Move to Bucket</p>
                   <Select
                     items={moveBucketItems}
-                    value={bucketId}
+                    value={selectedSourceBucketId ?? undefined}
                     onValueChange={(newBucketId) => {
                       if (typeof newBucketId === "string") {
                         void handleMoveToBucket(newBucketId);
@@ -875,9 +921,9 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                           <SelectItem
                             key={p.id}
                             value={p.id}
-                            disabled={p.is_subscribed || p.id === bucketId}
+                            disabled={p.is_subscribed || p.is_read_only || p.id === selectedSourceBucketId}
                           >
-                            {p.name}{p.id === bucketId ? " (Current)" : ""}
+                            {p.name}{p.id === selectedSourceBucketId ? " (Current)" : ""}
                           </SelectItem>
                         ))}
                       </SelectGroup>
@@ -1157,7 +1203,7 @@ function ImageCard({
       draggable={!readonly}
       onDragStart={(event) => {
         const imageIds = dragImageIdsFor(image.id);
-        event.dataTransfer.setData("application/json", JSON.stringify({ imageId: image.id, imageIds, sourceBucketId: bucketId }));
+        event.dataTransfer.setData("application/json", JSON.stringify({ imageId: image.id, imageIds, sourceBucketId: image.bucketId ?? bucketId }));
         event.dataTransfer.effectAllowed = "move";
       }}
       className={`group relative overflow-hidden rounded-xl border transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none break-inside-avoid mb-4 ${
@@ -1231,7 +1277,11 @@ function ImageCard({
           const newFav = !image.favorite;
           setImages(prev => prev.map(img => img.id === image.id ? { ...img, favorite: newFav } : img));
           try {
-            const patchBucketId = bucketId === "favorites" ? (image as any).bucketId : bucketId;
+            const patchBucketId = sourceBucketIdFor(image, bucketId);
+            if (!patchBucketId) {
+              toast.error("Could not determine the image's source bucket");
+              return;
+            }
             await apiPatch(`/api/buckets/${patchBucketId}/images/${image.id}`, { favorite: newFav });
             if (onImageUpdated) onImageUpdated();
           } catch (err) {

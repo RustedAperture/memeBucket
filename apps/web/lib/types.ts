@@ -21,6 +21,7 @@ export type MediaLink = {
 
 export type ImageItem = {
   id: string;
+  bucketId?: string;
   url: string;
   cdn_status?: string;
   title: string | null;

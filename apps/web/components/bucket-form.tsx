@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { apiPost } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
+import type { Bucket } from "@/lib/types";
 
-export function BucketForm({ onCreated }: { onCreated: () => void }) {
+export function BucketForm({ onCreated }: { onCreated: (bucket?: Bucket) => void }) {
   const [mode, setMode] = useState<"create" | "join">("create");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -19,9 +20,9 @@ export function BucketForm({ onCreated }: { onCreated: () => void }) {
     if (!name.trim()) return;
     setError(null);
     try {
-      await apiPost("/api/buckets", { name });
+      const bucket = await apiPost<{ name: string }, Bucket>("/api/buckets", { name });
       setName("");
-      onCreated();
+      onCreated(bucket);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create bucket");
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder, Plus, Users, Globe } from "lucide-react";
+import { Folder, Plus, Users, Globe, Star, Images, Inbox } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -45,7 +45,7 @@ export function BucketList({ onBucketsChange, onImageMoved, refreshKey }: { onBu
   async function handleDrop(e: React.DragEvent, targetBucket: Bucket) {
     e.preventDefault();
     setDragOverId(null);
-    if (targetBucket.is_subscribed) return;
+    if (targetBucket.is_subscribed || targetBucket.is_read_only) return;
 
     try {
       const dataStr = e.dataTransfer.getData("application/json");
@@ -82,7 +82,17 @@ export function BucketList({ onBucketsChange, onImageMoved, refreshKey }: { onBu
         apiGet<any[]>("/api/images/search?favorite=true&limit=1").catch(() => []),
       ]);
 
-      let finalBuckets = [...loaded];
+      const finalBuckets: Bucket[] = [{
+        id: "all",
+        name: "All",
+        share_token: null,
+        subscriber_count: 0,
+        is_subscribed: false,
+        owner_username: null,
+        whitelist_enabled: false,
+        image_count: loaded.reduce((total, bucket) => total + bucket.image_count, 0),
+        is_read_only: true,
+      }, ...loaded];
 
       // Inject virtual Favorites bucket at the top if there are favorites
       if (favoritesResult.length > 0) {
@@ -98,6 +108,16 @@ export function BucketList({ onBucketsChange, onImageMoved, refreshKey }: { onBu
           is_read_only: true,
         });
       }
+
+      finalBuckets.sort((left, right) => {
+        const rank = (bucket: Bucket) => {
+          if (bucket.id === "all") return 0;
+          if (bucket.id === "favorites") return 1;
+          if (bucket.name.toLowerCase() === "inbox") return 2;
+          return 3;
+        };
+        return rank(left) - rank(right) || left.name.localeCompare(right.name);
+      });
 
       setBuckets(finalBuckets);
       if (onBucketsChange) onBucketsChange(finalBuckets);
@@ -127,7 +147,17 @@ export function BucketList({ onBucketsChange, onImageMoved, refreshKey }: { onBu
             <DialogHeader>
               <DialogTitle>Add New Bucket</DialogTitle>
             </DialogHeader>
-            <BucketForm onCreated={() => { setDialogOpen(false); void load(); }} />
+            <BucketForm onCreated={(bucket) => {
+              setDialogOpen(false);
+              if (bucket) {
+                setBuckets((current) => {
+                  const next = [...current, bucket];
+                  next.sort((left, right) => left.name.localeCompare(right.name));
+                  return next;
+                });
+              }
+              void load();
+            }} />
           </DialogContent>
         </Dialog>
       </SidebarHeader>
@@ -167,7 +197,7 @@ export function BucketList({ onBucketsChange, onImageMoved, refreshKey }: { onBu
                       hasBadge && "pr-12" // leave room for badge
                     )}
                   >
-                    {bucket.is_subscribed ? <Globe /> : <Folder />}
+                    {bucket.id === "all" ? <Images /> : bucket.id === "favorites" ? <Star /> : bucket.name.toLowerCase() === "inbox" ? <Inbox /> : bucket.is_subscribed ? <Globe /> : <Folder />}
                     <span>{bucket.name}</span>
                   </SidebarMenuButton>
 

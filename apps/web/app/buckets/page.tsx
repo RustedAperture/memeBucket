@@ -45,7 +45,8 @@ function BucketsContent() {
 
   const activeBucket = buckets.find(p => p.id === bucketId);
   const isSubscribed = activeBucket?.is_subscribed;
-  const isReadOnly = isSubscribed || activeBucket?.is_read_only;
+  const isSystemBucket = bucketId === "all" || bucketId === "favorites" || activeBucket?.is_read_only;
+  const isReadOnly = Boolean(isSubscribed);
 
   const handleDeleteBucket = async (bucket: Bucket) => {
     try {
@@ -156,7 +157,7 @@ function BucketsContent() {
                 )}
               </h1>
             </div>
-            {bucketId && !isReadOnly && activeBucket && (
+            {bucketId && !isReadOnly && activeBucket && !isSystemBucket && (
               <div className="flex items-center gap-2">
                 <Dialog>
                   <DialogTrigger render={<Button variant="default" size="sm" className="h-8 gap-1.5" />}>
@@ -210,7 +211,7 @@ function BucketsContent() {
                 ))}
               </div>
             </div>
-            {!isReadOnly && activeBucket && (
+            {!isReadOnly && activeBucket && !isSystemBucket && (
               <div className="w-full sm:w-auto flex-grow sm:flex-grow-0 sm:ml-auto">
                 <ImageForm 
                   bucketId={bucketId} 

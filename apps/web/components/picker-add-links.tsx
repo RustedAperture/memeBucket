@@ -48,6 +48,16 @@ export function PickerAddLinks({
   const links = useMemo(() => parsePickerLinks(value), [value]);
   const isWritable = isWritablePickerBucket(bucketId, buckets);
   const isAllBuckets = bucketId === "all";
+  const hasOwnedInbox = useMemo(
+    () =>
+      buckets.some(
+        (bucket) =>
+          bucket.name.trim().toLowerCase() === "inbox" &&
+          !bucket.is_subscribed &&
+          !bucket.is_read_only
+      ),
+    [buckets]
+  );
   const submitDisabled = isSubmitting || (!summary && (links.length === 0 || !isWritable));
 
   const submitLabel = summary
@@ -96,10 +106,12 @@ export function PickerAddLinks({
           <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={onUseInbox}>
-          <Inbox className="h-4 w-4" />
-          Use Inbox
-        </Button>
+        {hasOwnedInbox ? (
+          <Button type="button" variant="outline" size="sm" onClick={onUseInbox}>
+            <Inbox className="h-4 w-4" />
+            Use Inbox
+          </Button>
+        ) : null}
       </div>
 
       <div className="space-y-2">

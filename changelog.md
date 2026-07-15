@@ -15,6 +15,10 @@
 
 - Fixed **Tenor page-link resolution** so `/view/...` links correctly resolve their media image.
 
+### Changed
+
+- Adjusted the desktop dashboard layout to use a centered 50% content column on wide screens, reducing unused space while keeping smaller screens responsive.
+
 ## v0.2.7 - Jul 13, 2026
 
 ### Added

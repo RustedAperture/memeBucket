@@ -19,6 +19,12 @@
         "items": [
           "Fixed <strong>Tenor page-link resolution</strong> so <code>/view/...</code> links correctly resolve their media image."
         ]
+      },
+      {
+        "heading": "Changed",
+        "items": [
+          "Adjusted the desktop dashboard layout to use a centered 50% content column on wide screens, reducing unused space while keeping smaller screens responsive."
+        ]
       }
     ]
   },

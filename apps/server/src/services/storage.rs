@@ -71,6 +71,10 @@ impl StorageService {
         url.contains("pbs.twimg.com") || url.contains("video.twimg.com")
     }
 
+    pub fn is_bluesky_media(url: &str) -> bool {
+        url.contains("cdn.bsky.app")
+    }
+
     pub async fn upload_from_url(&self, url: &str) -> Result<String, StorageError> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
@@ -362,6 +366,19 @@ mod tests {
             "https://example.com/image.png"
         ));
         assert!(!StorageService::is_twitter_media(
+            "https://media.memebucket.app/abc123.webp"
+        ));
+    }
+
+    #[test]
+    fn is_bluesky_media_detects_bluesky_cdn_images_only() {
+        assert!(StorageService::is_bluesky_media(
+            "https://cdn.bsky.app/img/feed_fullsize/plain/did:plc:abc/bafkreiabc"
+        ));
+        assert!(!StorageService::is_bluesky_media(
+            "https://video.bsky.app/hls/playlist.m3u8"
+        ));
+        assert!(!StorageService::is_bluesky_media(
             "https://media.memebucket.app/abc123.webp"
         ));
     }

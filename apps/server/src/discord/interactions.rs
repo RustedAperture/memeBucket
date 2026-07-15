@@ -16,6 +16,7 @@ use crate::{
     services::{
         images::resolve_image_url,
         random::{RandomService, RandomVisibility},
+        storage::StorageService,
     },
 };
 
@@ -928,6 +929,15 @@ async fn handle_add_to_bucket_message_command(
             Ok(new_url) => resolved_url = new_url,
             Err(_) => {
                 return ephemeral_message("I hit an error converting that video.");
+            }
+        }
+    } else if StorageService::is_bluesky_media(&resolved_url)
+        && let Some(storage) = state.storage()
+    {
+        match storage.upload_from_url(&resolved_url).await {
+            Ok(new_url) => resolved_url = new_url,
+            Err(_) => {
+                return ephemeral_message("I hit an error saving that Bluesky image.");
             }
         }
     }

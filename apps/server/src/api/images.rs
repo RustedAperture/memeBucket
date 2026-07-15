@@ -207,7 +207,9 @@ async fn resolve_and_upload_url(
     let tags = resolved.tags;
 
     let is_video = crate::services::video_converter::is_video_url(&resolved_url);
-    let is_twitter_photo = !is_video && StorageService::is_twitter_media(&resolved_url);
+    let should_rehost_image = !is_video
+        && (StorageService::is_twitter_media(&resolved_url)
+            || StorageService::is_bluesky_media(&resolved_url));
 
     if is_video && let Some(storage) = state.storage() {
         resolved_url =
@@ -216,7 +218,7 @@ async fn resolve_and_upload_url(
                 .map_err(|err| {
                     AppError::InternalServerError(format!("Failed to convert video: {}", err))
                 })?;
-    } else if is_twitter_photo && let Some(storage) = state.storage() {
+    } else if should_rehost_image && let Some(storage) = state.storage() {
         resolved_url = storage
             .upload_from_url(&resolved_url)
             .await

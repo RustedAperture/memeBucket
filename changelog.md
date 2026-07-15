@@ -8,8 +8,6 @@
 - Added **social hashtag import**: hashtags from X/Twitter and Bluesky posts are imported as image tags while preserving manually supplied tags.
 - New buckets appear immediately after creation.
 - Added virtual **All** bucket.
-- Pinned **All**, **Favorites**, and **Inbox** at the top.
-- Metadata edits, favorites, deletes, moves, and bulk actions work from system/aggregate views using each image’s real source bucket.
 - Added the thumbnail size slider to the Library so search results can be resized like bucket images.
 
 ### Fixed
@@ -19,6 +17,8 @@
 ### Changed
 
 - Adjusted the dashboard layout to use a centered 66% content column at the 2xl breakpoint and wider, while keeping smaller screens responsive.
+- Pinned **All**, **Favorites**, and **Inbox** at the top.
+- Metadata edits, favorites, deletes, moves, and bulk actions work from system/aggregate views using each image’s real source bucket.
 
 ## v0.2.7 - Jul 13, 2026
 

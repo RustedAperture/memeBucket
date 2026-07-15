@@ -648,7 +648,7 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
             <Button
               type="button"
               variant="outline"
-              size="icon"
+              size="icon-sm"
               onClick={handleCopy}
               className="shrink-0"
               aria-label={copied ? "Link copied" : "Copy link"}
@@ -659,7 +659,7 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
             <Button
               type="button"
               variant="outline"
-              size="icon"
+              size="icon-sm"
               nativeButton={false}
               render={<a href={image.url} target="_blank" rel="noreferrer" />}
               className="shrink-0"

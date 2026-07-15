@@ -212,6 +212,12 @@ impl StorageService {
                 .map_err(|e| {
                     StorageError::UploadFailed(format!("B2 garbage-collection cleanup failed: {e}"))
                 })?;
+            tracing::info!(
+                content_hash = %content_hash,
+                object_key = %key,
+                cdn_url = %cdn_url,
+                "Deleted orphaned B2 media object"
+            );
             deleted += 1;
         }
 

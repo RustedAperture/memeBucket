@@ -17,7 +17,7 @@
 
 ### Changed
 
-- Adjusted the dashboard layout to use a centered 50% content column on 1920px-wide and larger screens, while keeping smaller screens responsive.
+- Adjusted the dashboard layout to use a centered 50% content column at the 2xl breakpoint and wider, while keeping smaller screens responsive.
 
 ## v0.2.7 - Jul 13, 2026
 

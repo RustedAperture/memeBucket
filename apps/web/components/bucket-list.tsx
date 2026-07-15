@@ -2,7 +2,7 @@
 
 import { Folder, Plus, Users, Globe, Star, Images, Inbox } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
@@ -34,6 +34,7 @@ type DraggedImagesPayload = {
 export function BucketList({ onBucketsChange, onImageMoved, refreshKey }: { onBucketsChange?: (buckets: Bucket[]) => void, onImageMoved?: () => void, refreshKey?: number }) {
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const activeId = searchParams.get("id");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -155,6 +156,7 @@ export function BucketList({ onBucketsChange, onImageMoved, refreshKey }: { onBu
                   next.sort((left, right) => left.name.localeCompare(right.name));
                   return next;
                 });
+                router.push(`/buckets?id=${bucket.id}`);
               }
               void load();
             }} />

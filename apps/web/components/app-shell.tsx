@@ -12,7 +12,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-[100dvh] flex flex-col bg-background text-foreground overflow-hidden">
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4 xl:w-1/2 xl:max-w-none">
+        <div className="container mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-4 min-[1920px]:w-1/2 min-[1920px]:max-w-none">
           <Link href="/" className="font-semibold text-lg hover:opacity-80 transition-opacity">
             memeBucket
           </Link>
@@ -37,11 +37,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-5xl px-4 pt-8 pb-4 overflow-y-auto overflow-x-hidden xl:w-1/2 xl:max-w-none">
+      <main className="flex-1 flex flex-col min-h-0 mx-auto w-full max-w-5xl px-4 pt-8 pb-4 overflow-y-auto overflow-x-hidden min-[1920px]:w-1/2 min-[1920px]:max-w-none">
         {children}
       </main>
       <footer className="border-t">
-        <div className="container mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between xl:w-1/2 xl:max-w-none">
+        <div className="container mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-5 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between min-[1920px]:w-1/2 min-[1920px]:max-w-none">
           <p>memeBucket</p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
             <nav className="flex flex-wrap gap-x-4 gap-y-2">

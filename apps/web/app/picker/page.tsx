@@ -30,6 +30,7 @@ export default function PickerPage() {
   const [query, setQuery] = useState("");
   const [bucketId, setBucketId] = useState(PICKER_ALL_BUCKET_ID);
   const [pickerMode, setPickerMode] = useState<"search" | "add-links">("search");
+  const [isAddLinksSubmitting, setIsAddLinksSubmitting] = useState(false);
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [results, setResults] = useState<ImageSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,8 +96,7 @@ export default function PickerPage() {
       buckets.find(
         (bucket) =>
           bucket.name.trim().toLowerCase() === PICKER_INBOX_NAME &&
-          !bucket.is_subscribed &&
-          !bucket.is_read_only
+          !bucket.is_subscribed
       ) ?? null,
     [buckets]
   );
@@ -231,8 +231,17 @@ export default function PickerPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (pickerMode !== "search") return;
-      if (results.length === 0) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (isTauri()) {
+          import("@tauri-apps/api/core").then(({ invoke }) => {
+            invoke("hide_window");
+          });
+        }
+        return;
+      }
+
+      if (pickerMode !== "search" || results.length === 0) return;
 
       let nextIndex = selectedIndex;
 
@@ -271,14 +280,6 @@ export default function PickerPage() {
           e.preventDefault();
           if (results[selectedIndex]) {
             handleSelectImage(results[selectedIndex].image.url);
-          }
-          return;
-        case "Escape":
-          e.preventDefault();
-          if (isTauri()) {
-            import("@tauri-apps/api/core").then(({ invoke }) => {
-              invoke("hide_window");
-            });
           }
           return;
         default:
@@ -373,6 +374,7 @@ export default function PickerPage() {
             ref={searchInputRef}
             type="text"
             value={query}
+            disabled={pickerMode === "add-links" && isAddLinksSubmitting}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Type to search your buckets..."
             className="h-8 pl-8 text-base md:text-sm rounded-md"
@@ -384,6 +386,7 @@ export default function PickerPage() {
             <Select
               items={bucketItems}
               value={bucketId}
+              disabled={pickerMode === "add-links" && isAddLinksSubmitting}
               onValueChange={(value) => {
                 if (typeof value === "string") setBucketSelection(value);
               }}
@@ -411,6 +414,7 @@ export default function PickerPage() {
               className="h-7 w-7 shrink-0 rounded-md"
               aria-label="Add media"
               title="Add media"
+              disabled={isAddLinksSubmitting}
               onClick={() => setPickerMode("add-links")}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -430,7 +434,10 @@ export default function PickerPage() {
                 setBucketSelection(ownedInboxBucket.id);
               }
             }}
-            onBack={() => setPickerMode("search")}
+            onBack={() => {
+              if (!isAddLinksSubmitting) setPickerMode("search");
+            }}
+            onSubmissionStateChange={setIsAddLinksSubmitting}
           />
         </div>
       ) : (

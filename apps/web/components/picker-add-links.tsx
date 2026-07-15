@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Folder, Inbox, Link2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +23,7 @@ export type PickerAddLinksProps = {
   onBucketChange: (bucketId: string) => void;
   onUseInbox: () => void;
   onBack: () => void;
+  onSubmissionStateChange: (isSubmitting: boolean) => void;
 };
 
 export function PickerAddLinks({
@@ -31,11 +32,18 @@ export function PickerAddLinks({
   onBucketChange,
   onUseInbox,
   onBack,
+  onSubmissionStateChange,
 }: PickerAddLinksProps) {
   const [value, setValue] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [summary, setSummary] = useState<PickerAddLinksSummary | null>(null);
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
 
   const bucketItems = useMemo(
     () => [
@@ -53,12 +61,11 @@ export function PickerAddLinks({
       buckets.some(
         (bucket) =>
           bucket.name.trim().toLowerCase() === "inbox" &&
-          !bucket.is_subscribed &&
-          !bucket.is_read_only
+          !bucket.is_subscribed
       ),
     [buckets]
   );
-  const submitDisabled = isSubmitting || (!summary && (links.length === 0 || !isWritable));
+  const submitDisabled = isSubmitting;
 
   const submitLabel = summary
     ? "Done"
@@ -71,14 +78,23 @@ export function PickerAddLinks({
 
     if (summary) {
       setSummary(null);
+      setValidationMessage(null);
       return;
     }
 
-    if (links.length === 0 || !isWritable) {
+    if (links.length === 0) {
+      setValidationMessage("Enter at least one link.");
+      return;
+    }
+
+    if (!isWritable) {
+      setValidationMessage("Choose a destination bucket first.");
       return;
     }
 
     setIsSubmitting(true);
+    onSubmissionStateChange(true);
+    setValidationMessage(null);
     setProgress({ current: 1, total: links.length });
 
     let added = 0;
@@ -97,17 +113,18 @@ export function PickerAddLinks({
     setValue("");
     setProgress(null);
     setIsSubmitting(false);
+    onSubmissionStateChange(false);
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex h-full flex-col gap-3 p-2.5">
       <div className="flex items-center justify-between gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onBack}>
+        <Button type="button" variant="ghost" size="sm" onClick={onBack} disabled={isSubmitting}>
           <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
         {hasOwnedInbox ? (
-          <Button type="button" variant="outline" size="sm" onClick={onUseInbox}>
+          <Button type="button" variant="outline" size="sm" onClick={onUseInbox} disabled={isSubmitting}>
             <Inbox className="h-4 w-4" />
             Use Inbox
           </Button>
@@ -119,8 +136,12 @@ export function PickerAddLinks({
         <Select
           items={bucketItems}
           value={bucketId}
+          disabled={isSubmitting}
           onValueChange={(value) => {
-            if (typeof value === "string") onBucketChange(value);
+            if (typeof value === "string") {
+              setValidationMessage(null);
+              onBucketChange(value);
+            }
           }}
         >
           <SelectTrigger className="h-8 w-full justify-start rounded-md text-xs">
@@ -158,8 +179,12 @@ export function PickerAddLinks({
         </label>
         <Textarea
           id="picker-add-links"
+          ref={textareaRef}
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => {
+            setValue(event.target.value);
+            setValidationMessage(null);
+          }}
           disabled={isSubmitting || summary !== null}
           placeholder={"https://example.com/one.gif\nhttps://example.com/two.mp4"}
           className="h-full min-h-36 resize-none rounded-md bg-background/60 font-mono text-xs"
@@ -179,7 +204,18 @@ export function PickerAddLinks({
         </div>
       ) : null}
 
-      <Button type="submit" disabled={submitDisabled} className="w-full rounded-md">
+      {validationMessage ? (
+        <p id="picker-add-links-validation" role="alert" className="text-xs text-destructive">
+          {validationMessage}
+        </p>
+      ) : null}
+
+      <Button
+        type="submit"
+        disabled={submitDisabled}
+        aria-describedby={validationMessage ? "picker-add-links-validation" : undefined}
+        className="w-full rounded-md"
+      >
         {submitLabel}
       </Button>
     </form>

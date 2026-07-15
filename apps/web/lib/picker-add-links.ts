@@ -16,5 +16,8 @@ export function parsePickerLinks(value: string): string[] {
 export function isWritablePickerBucket(bucketId: string, buckets: Bucket[]): boolean {
   if (bucketId === "all") return false;
   const bucket = buckets.find((candidate) => candidate.id === bucketId);
-  return Boolean(bucket && !bucket.is_subscribed && !bucket.is_read_only);
+  if (!bucket || bucket.is_subscribed) return false;
+
+  const isOwnedInbox = bucket.name.trim().toLowerCase() === "inbox";
+  return isOwnedInbox || !bucket.is_read_only;
 }

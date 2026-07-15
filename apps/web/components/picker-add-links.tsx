@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Inbox, Link2, TriangleAlert } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { apiPost } from "@/lib/api";
@@ -114,15 +115,17 @@ export function PickerAddLinks({
 
       <div className="space-y-2">
         {isAllBuckets ? (
-          <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-900 dark:text-amber-200">
-            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Choose a specific bucket before adding links. All buckets is search-only here.
-          </p>
+          <Alert variant="destructive" className="py-2">
+            <TriangleAlert />
+            <AlertDescription>
+              Choose a specific bucket before adding links. All buckets is search-only here.
+            </AlertDescription>
+          </Alert>
         ) : !isWritable ? (
-          <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-900 dark:text-amber-200">
-            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            This bucket can&apos;t accept new links from the picker.
-          </p>
+          <Alert variant="destructive" className="py-2">
+            <TriangleAlert />
+            <AlertDescription>This bucket can&apos;t accept new links from the picker.</AlertDescription>
+          </Alert>
         ) : null}
       </div>
 

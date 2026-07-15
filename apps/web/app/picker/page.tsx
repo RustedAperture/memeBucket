@@ -7,6 +7,7 @@ import { apiGet } from "@/lib/api";
 import type { ImageSearchResult, Bucket } from "@/lib/types";
 import { isWritablePickerBucket } from "@/lib/picker-add-links";
 import { toast } from "sonner";
+import { Alert, AlertAction, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -445,22 +446,26 @@ export default function PickerPage() {
       ) : (
         <>
           {changelogBanner && (
-            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-primary/10 border-b text-xs shrink-0">
-              <button
-                onClick={handleOpenChangelog}
-                className="text-left flex-1 min-w-0 truncate hover:underline"
-                aria-label={`View changelog for version ${changelogBanner.version}`}
-              >
-                New update available (v{changelogBanner.version}, {changelogBanner.date}) — see what&apos;s new
-              </button>
-              <button
-                onClick={() => setChangelogBanner(null)}
-                className="shrink-0 text-muted-foreground hover:text-foreground"
-                aria-label="Dismiss"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
+            <Alert className="mx-2.5 mt-2 py-2 shrink-0">
+              <AlertDescription>
+                <button
+                  onClick={handleOpenChangelog}
+                  className="w-full min-w-0 truncate text-left hover:underline hover:text-foreground"
+                  aria-label={`View changelog for version ${changelogBanner.version}`}
+                >
+                  New update available (v{changelogBanner.version}, {changelogBanner.date}) — see what&apos;s new
+                </button>
+              </AlertDescription>
+              <AlertAction>
+                <button
+                  onClick={() => setChangelogBanner(null)}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Dismiss"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </AlertAction>
+            </Alert>
           )}
 
           {/* Masonry image grid */}

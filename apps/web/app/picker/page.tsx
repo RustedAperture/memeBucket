@@ -35,6 +35,7 @@ export default function PickerPage() {
   const [results, setResults] = useState<ImageSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [keyboardNavActive, setKeyboardNavActive] = useState(false);
   const [isTauriApp, setIsTauriApp] = useState(false);
   const [changelogBanner, setChangelogBanner] = useState<{ version: string; date: string } | null>(null);
 
@@ -295,6 +296,8 @@ export default function PickerPage() {
           return;
       }
 
+      setKeyboardNavActive(true);
+
       if (nextIndex !== selectedIndex) {
         setSelectedIndex(nextIndex);
         itemRefs.current[nextIndex]?.scrollIntoView({
@@ -480,7 +483,7 @@ export default function PickerPage() {
             ) : (
               <div className="columns-2 gap-2 pb-2">
                 {results.map((result, index) => {
-                  const isSelected = index === selectedIndex;
+                  const showSelectionRing = index === selectedIndex && keyboardNavActive;
                   const isVideo = result.image.url
                     .split("?")[0]
                     .toLowerCase()
@@ -494,10 +497,11 @@ export default function PickerPage() {
                       }}
                       onClick={() => {
                         setSelectedIndex(index);
+                        setKeyboardNavActive(false);
                         handleSelectImage(result.image.url);
                       }}
                       className={`group break-inside-avoid mb-2 relative rounded-xl overflow-hidden cursor-pointer transition-all border ${
-                        isSelected
+                        showSelectionRing
                           ? "border-primary ring-2 ring-primary"
                           : "border-border/70 hover:ring-2 hover:ring-ring"
                       }`}

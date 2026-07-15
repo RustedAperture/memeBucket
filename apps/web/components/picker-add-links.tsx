@@ -1,17 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Folder, Inbox, Link2, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Inbox, Link2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { apiPost } from "@/lib/api";
 import { isWritablePickerBucket, parsePickerLinks, type PickerAddLinksSummary } from "@/lib/picker-add-links";
@@ -20,7 +11,6 @@ import type { Bucket } from "@/lib/types";
 export type PickerAddLinksProps = {
   buckets: Bucket[];
   bucketId: string;
-  onBucketChange: (bucketId: string) => void;
   onUseInbox: () => void;
   onBack: () => void;
   onSubmissionStateChange: (isSubmitting: boolean) => void;
@@ -29,7 +19,6 @@ export type PickerAddLinksProps = {
 export function PickerAddLinks({
   buckets,
   bucketId,
-  onBucketChange,
   onUseInbox,
   onBack,
   onSubmissionStateChange,
@@ -44,14 +33,6 @@ export function PickerAddLinks({
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
-
-  const bucketItems = useMemo(
-    () => [
-      { label: "All buckets", value: "all" },
-      ...buckets.map((bucket) => ({ label: bucket.name, value: bucket.id })),
-    ],
-    [buckets]
-  );
 
   const links = useMemo(() => parsePickerLinks(value), [value]);
   const isWritable = isWritablePickerBucket(bucketId, buckets);
@@ -132,34 +113,6 @@ export function PickerAddLinks({
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs font-medium text-muted-foreground">Destination</label>
-        <Select
-          items={bucketItems}
-          value={bucketId}
-          disabled={isSubmitting}
-          onValueChange={(value) => {
-            if (typeof value === "string") {
-              setValidationMessage(null);
-              onBucketChange(value);
-            }
-          }}
-        >
-          <SelectTrigger className="h-8 w-full justify-start rounded-md text-xs">
-            <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="min-w-[220px]">
-            <SelectGroup>
-              <SelectLabel>Save to</SelectLabel>
-              <SelectItem value="all">All buckets</SelectItem>
-              {buckets.map((bucket) => (
-                <SelectItem key={bucket.id} value={bucket.id}>
-                  {bucket.name}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
         {isAllBuckets ? (
           <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-900 dark:text-amber-200">
             <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -196,7 +149,7 @@ export function PickerAddLinks({
               }}
               disabled={isSubmitting}
               placeholder={"https://example.com/one.gif\nhttps://example.com/two.mp4"}
-              className="min-h-36 min-w-0 flex-1 resize-none overflow-x-hidden rounded-md bg-background/60 font-mono text-xs"
+              className="min-h-36 min-w-0 flex-1 resize-none overflow-x-hidden font-mono"
             />
             <p className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
               <Link2 className="h-3.5 w-3.5 shrink-0" />
@@ -216,7 +169,7 @@ export function PickerAddLinks({
         type="submit"
         disabled={submitDisabled}
         aria-describedby={validationMessage ? "picker-add-links-validation" : undefined}
-        className="w-full shrink-0 rounded-md"
+        className="w-full shrink-0"
       >
         {submitLabel}
       </Button>

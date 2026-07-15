@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.2.9 - Jul 15, 2026
+
+### Fixed
+
+- Fixed the Picker's **Add links** screen showing a duplicate bucket dropdown; it now uses the top selector only.
+- Fixed the Picker's links textarea zooming in on focus on mobile browsers by using the standard input text size.
+
+### Changed
+
+- Aligned Picker form controls (search, bucket selector, links textarea) with the app's default rounding and sizing for a more consistent look.
+- Aligned Picker result cards with Library image cards, matching border, radius, hover, and selection styling.
+
 ## v0.2.8 - Jul 14, 2026
 
 ### Added

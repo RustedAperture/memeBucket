@@ -1,5 +1,25 @@
 [
   {
+    "version": "0.2.9",
+    "date": "Jul 15, 2026",
+    "sections": [
+      {
+        "heading": "Fixed",
+        "items": [
+          "Fixed the Picker's <strong>Add links</strong> screen showing a duplicate bucket dropdown; it now uses the top selector only.",
+          "Fixed the Picker's links textarea zooming in on focus on mobile browsers by using the standard input text size."
+        ]
+      },
+      {
+        "heading": "Changed",
+        "items": [
+          "Aligned Picker form controls (search, bucket selector, links textarea) with the app's default rounding and sizing for a more consistent look.",
+          "Aligned Picker result cards with Library image cards, matching border, radius, hover, and selection styling."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.2.8",
     "date": "Jul 14, 2026",
     "sections": [

@@ -377,7 +377,7 @@ export default function PickerPage() {
             disabled={pickerMode === "add-links" && isAddLinksSubmitting}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Type to search your buckets..."
-            className="h-8 pl-8 text-base md:text-sm rounded-md"
+            className="h-8 pl-8"
           />
         </div>
 
@@ -391,7 +391,7 @@ export default function PickerPage() {
                 if (typeof value === "string") setBucketSelection(value);
               }}
             >
-              <SelectTrigger className="h-7 text-xs gap-1.5 px-2 rounded-md min-w-0 flex-1">
+              <SelectTrigger className="h-7 gap-1.5 px-2 min-w-0 flex-1">
                 <Folder className="h-3 w-3 text-muted-foreground shrink-0" />
                 <SelectValue />
               </SelectTrigger>
@@ -411,7 +411,7 @@ export default function PickerPage() {
               type="button"
               variant="outline"
               size="icon"
-              className="h-7 w-7 shrink-0 rounded-md"
+              className="h-7 w-7 shrink-0"
               aria-label="Add media"
               title="Add media"
               disabled={isAddLinksSubmitting}
@@ -428,7 +428,6 @@ export default function PickerPage() {
           <PickerAddLinks
             buckets={buckets}
             bucketId={bucketId}
-            onBucketChange={(nextBucketId) => setBucketSelection(nextBucketId)}
             onUseInbox={() => {
               if (ownedInboxBucket) {
                 setBucketSelection(ownedInboxBucket.id);
@@ -468,7 +467,7 @@ export default function PickerPage() {
                 {Array.from({ length: 8 }).map((_, i) => (
                   <Skeleton
                     key={i}
-                    className="break-inside-avoid mb-2 rounded-md"
+                    className="break-inside-avoid mb-2 rounded-xl"
                     style={{ height: `${100 + (i % 3) * 40}px` }}
                   />
                 ))}
@@ -497,10 +496,10 @@ export default function PickerPage() {
                         setSelectedIndex(index);
                         handleSelectImage(result.image.url);
                       }}
-                      className={`break-inside-avoid mb-2 relative rounded-md overflow-hidden bg-muted cursor-pointer transition-all border-2 ${
+                      className={`group break-inside-avoid mb-2 relative rounded-xl overflow-hidden cursor-pointer transition-all border ${
                         isSelected
-                          ? "border-primary ring-2 ring-primary ring-offset-1 ring-offset-background scale-[0.98]"
-                          : "border-transparent hover:scale-[0.99] hover:border-muted-foreground/30"
+                          ? "border-primary ring-2 ring-primary"
+                          : "border-border/70 hover:ring-2 hover:ring-ring"
                       }`}
                     >
                       {result.image.cdn_status === "broken" ? (
@@ -517,14 +516,14 @@ export default function PickerPage() {
                           loop
                           muted
                           playsInline
-                          className="w-full h-auto pointer-events-none"
+                          className="w-full h-auto object-cover pointer-events-none transition-transform duration-300 group-hover:scale-[1.02]"
                         />
                       ) : (
                         <img
                           src={result.image.url}
                           alt={result.image.title || ""}
                           loading="lazy"
-                          className="w-full h-auto pointer-events-none"
+                          className="w-full h-auto object-cover pointer-events-none transition-transform duration-300 group-hover:scale-[1.02]"
                         />
                       )}
                       {result.image.title && (

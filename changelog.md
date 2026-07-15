@@ -6,7 +6,6 @@
 
 - Added **Bluesky link support**: pasting a Bluesky post now extracts its image or HLS video, converts videos to WebP, and saves the author's text as notes.
 - Added **social hashtag import**: hashtags from X/Twitter and Bluesky posts are imported as image tags while preserving manually supplied tags.
-- New buckets appear immediately after creation.
 - Added virtual **All** bucket.
 - Added the thumbnail size slider to the Library so search results can be resized like bucket images.
 
@@ -17,6 +16,7 @@
 ### Changed
 
 - Adjusted the dashboard layout to use a centered 66% content column at the 2xl breakpoint and wider, while keeping smaller screens responsive.
+- Creating a bucket immediately switches to it.
 - Pinned **All**, **Favorites**, and **Inbox** at the top.
 - Metadata edits, favorites, deletes, moves, and bulk actions work from system/aggregate views using each image’s real source bucket.
 

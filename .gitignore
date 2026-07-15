@@ -1,6 +1,7 @@
 .superpowers/
 docs/superpowers/
 .worktrees/
+work/
 #docs/ # Track documentation for review reports like architecture reviews
 docs/*
 .DS_Store

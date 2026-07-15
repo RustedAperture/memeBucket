@@ -90,7 +90,7 @@ function SearchContent() {
   const [loading, setLoading] = useState(true);
   const [bucketError, setBucketError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [sizeIndex, setSizeIndex] = useState(2);
+  const [sizeIndex, setSizeIndex] = useState(3);
 
   const COLUMN_CLASSES = [
     "columns-3 sm:columns-4 md:columns-5 lg:columns-6",

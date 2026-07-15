@@ -19,6 +19,7 @@
 - Creating a bucket immediately switches to it.
 - Pinned **All**, **Favorites**, and **Inbox** at the top.
 - Metadata edits, favorites, deletes, moves, and bulk actions work from system/aggregate views using each image’s real source bucket.
+- Library now defaults to a three-column image grid.
 
 ## v0.2.7 - Jul 13, 2026
 

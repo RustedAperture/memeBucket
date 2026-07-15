@@ -8,6 +8,9 @@
 - Added the ability to **edit an image's link**: open any image's details in the dashboard, click Edit, and replace its URL alongside the rest of its details. The new link goes through the same extraction/conversion pipeline as adding a fresh image (including X/Twitter links), while keeping the image's title, tags, notes, and favorite status intact.
 - Added a **changelog update notice** to the Picker: when a new changelog entry is published, the Picker shows a small banner linking to it, so desktop users don't have to check the website manually.
 - Added **automatic post credit**: adding an image from an X/Twitter link now fills in its notes with the author's handle and the post text (e.g. `@handle: post text`), unless the image already has notes.
+- Added **Bluesky link support**: pasting a Bluesky post now extracts its image or HLS video, converts videos to WebP, and saves the author's text as notes.
+- Added **social hashtag import**: hashtags from X/Twitter and Bluesky posts are imported as image tags while preserving manually supplied tags.
+- Fixed **Tenor page-link resolution** so `/view/...` links correctly resolve their media image.
 
 ## v0.2.6 - Jul 7, 2026
 

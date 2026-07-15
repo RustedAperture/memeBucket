@@ -1461,6 +1461,52 @@ mod tests {
     }
 
     #[test]
+    fn extract_bsky_post_ref_accepts_profile_post_url() {
+        assert_eq!(
+            parse_bluesky_post_ref(
+                "https://bsky.app/profile/kuroisuu.bsky.social/post/3mqnaxhwiks2c"
+            ),
+            Some(BlueskyPostRef {
+                handle: "kuroisuu.bsky.social".to_string(),
+                rkey: "3mqnaxhwiks2c".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn extract_bsky_post_ref_rejects_other_hosts_and_malformed_paths() {
+        assert_eq!(
+            parse_bluesky_post_ref("https://example.com/profile/user/post/abc"),
+            None
+        );
+        assert_eq!(
+            parse_bluesky_post_ref("https://bsky.app/profile/user"),
+            None
+        );
+        assert_eq!(
+            parse_bluesky_post_ref("https://bsky.app/profile/user/post/abc/extra"),
+            None
+        );
+    }
+
+    #[test]
+    fn extract_hashtags_preserves_first_spelling_and_deduplicates_case_insensitively() {
+        assert_eq!(
+            extract_hashtags_from_text("Look #Funny #funny #猫_and_猫 #ignored #"),
+            vec!["Funny", "猫_and_猫", "ignored"]
+        );
+    }
+
+    #[test]
+    fn extract_hashtags_ignores_empty_and_overlong_tags() {
+        let overlong = "a".repeat(65);
+        assert_eq!(
+            extract_hashtags_from_text(&format!("# #{} #ok", overlong)),
+            vec!["ok"]
+        );
+    }
+
+    #[test]
     fn parse_syndication_response_prefers_photos() {
         let body =
             r#"{"photos":[{"url":"https://pbs.twimg.com/media/abc.jpg:large"}],"video":null}"#;

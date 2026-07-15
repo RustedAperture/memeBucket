@@ -22,7 +22,7 @@ function looksLikeSlowMedia(url: string): boolean {
     const path = parsed.pathname.toLowerCase();
     if (path.endsWith(".mp4") || path.endsWith(".webm")) return true;
     const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
-    return host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com";
+    return host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com" || host === "bsky.app" || host === "bsky.social";
   } catch {
     return false;
   }

@@ -6,6 +6,7 @@
 
 - Fixed the Picker's **Add links** screen showing a duplicate bucket dropdown; it now uses the top selector only.
 - Fixed the Picker's links textarea zooming in on focus on mobile browsers by using the standard input text size.
+- Fixed the Picker's default-selected result card showing a border that could bleed into the next masonry column; the selection ring now only appears once you navigate with the keyboard.
 
 ### Changed
 

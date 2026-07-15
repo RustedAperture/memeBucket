@@ -114,11 +114,7 @@ export default function PickerPage() {
     if (isWritablePickerBucket(nextValue, nextBuckets)) {
       window.localStorage.setItem(PICKER_BUCKET_STORAGE_KEY, nextValue);
       storedBucketIdRef.current = nextValue;
-      return;
     }
-
-    window.localStorage.removeItem(PICKER_BUCKET_STORAGE_KEY);
-    storedBucketIdRef.current = null;
   }
 
   async function fetchBuckets() {

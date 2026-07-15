@@ -454,6 +454,18 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
     }
   };
 
+  const handleToggleFavorite = async () => {
+    if (readonly) return;
+    const newFavorite = !image.favorite;
+    setImage((current) => ({ ...current, favorite: newFavorite }));
+    try {
+      await apiPatch(`/api/buckets/${currentBucketId}/images/${image.id}`, { favorite: newFavorite });
+    } catch (err) {
+      setImage((current) => ({ ...current, favorite: !newFavorite }));
+      toast.error(err instanceof Error ? err.message : "Failed to update favorite");
+    }
+  };
+
   const touchHandlers = useTouchHold({
     onTap: handleCopy,
     onLongPress: openImageDetails,
@@ -561,21 +573,26 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
               {...(isMobile ? touchHandlers : {})}
             />
           )}
+          <button
+            type="button"
+            aria-label={image.favorite ? "Remove from favorites" : "Add to favorites"}
+            disabled={readonly}
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleToggleFavorite();
+            }}
+            className={`absolute right-2 top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
+              image.favorite
+                ? "text-yellow-400 bg-black/40 hover:scale-110 opacity-100"
+                : "text-white/70 bg-black/40 opacity-0 group-hover:opacity-100 focus:opacity-100 hover:scale-110 hover:text-white"
+            } ${readonly ? "cursor-default" : ""}`}
+          >
+            <Star className="h-4 w-4" fill={image.favorite ? "currentColor" : "none"} />
+          </button>
         </div>
         <div className="space-y-3 p-3">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold">{image.title || image.url}</h2>
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
-            {image.favorite ? (
-              <Badge variant="secondary" className="rounded-md">
-                <Star className="h-3 w-3 fill-current" />
-                Favorite
-              </Badge>
-            ) : null}
-            <Badge variant="outline" className="rounded-md">Weight {image.randomWeight}</Badge>
-            <Badge variant="outline" className="rounded-md">{image.sendCount} send{image.sendCount === 1 ? "" : "s"}</Badge>
           </div>
 
           {image.tags.length > 0 ? (
@@ -606,23 +623,25 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="icon"
               onClick={handleCopy}
               className="shrink-0"
+              aria-label={copied ? "Link copied" : "Copy link"}
+              title={copied ? "Link copied" : "Copy link"}
             >
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              Copy
             </Button>
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="icon"
               nativeButton={false}
               render={<a href={image.url} target="_blank" rel="noreferrer" />}
               className="shrink-0"
+              aria-label="Open image link"
+              title="Open image link"
             >
               <ExternalLink className="h-4 w-4" />
-              Open
             </Button>
           </div>
         </div>

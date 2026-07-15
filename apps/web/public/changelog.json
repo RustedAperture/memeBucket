@@ -23,7 +23,7 @@
       {
         "heading": "Changed",
         "items": [
-          "Adjusted the dashboard layout to use a centered 50% content column at the 2xl breakpoint and wider, while keeping smaller screens responsive."
+          "Adjusted the dashboard layout to use a centered 66% content column at the 2xl breakpoint and wider, while keeping smaller screens responsive."
         ]
       }
     ]

@@ -11,7 +11,8 @@
           "Fixed the Picker's default-selected result card showing a border that could bleed into the next masonry column; the selection ring now only appears once you navigate with the keyboard.",
           "Fixed the Picker's \"New update available\" banner overflowing past the right edge; it now aligns with the search and bucket rows above it.",
           "Improved the security of server-side media URL fetching (link imports and video conversion).",
-          "Improved the security of the desktop app's connection to self-hosted servers."
+          "Improved the security of the desktop app's connection to self-hosted servers.",
+          "Fixed the Picker's changelog banner losing its gap from the image grid once you scroll."
         ]
       },
       {

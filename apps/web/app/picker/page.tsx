@@ -452,7 +452,7 @@ export default function PickerPage() {
       ) : (
         <>
           {changelogBanner && (
-            <Alert className="w-auto mx-2.5 mt-2 px-2.5 py-2 shrink-0">
+            <Alert className="w-auto mx-2.5 mt-2 mb-2 px-2.5 py-2 shrink-0">
               <div className="flex items-start justify-between gap-1.5">
                 <AlertDescription className="min-w-0 text-xs">
                   <button
@@ -475,7 +475,11 @@ export default function PickerPage() {
           )}
 
           {/* Masonry image grid */}
-          <div className="flex-grow min-h-0 overflow-y-auto p-2 scrollbar-none bg-muted/10">
+          <div
+            className={`flex-grow min-h-0 overflow-y-auto px-2 pb-2 scrollbar-none bg-muted/10 ${
+              changelogBanner ? "" : "pt-2"
+            }`}
+          >
             {loading && results.length === 0 ? (
               <div className="columns-2 gap-2">
                 {Array.from({ length: 8 }).map((_, i) => (

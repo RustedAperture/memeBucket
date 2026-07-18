@@ -7,6 +7,7 @@
 - Selecting an image in the Picker (web and desktop) now counts toward that image's send count, matching Discord sends.
 - Pasting a link into the Picker's or bucket page's bulk-add links box now automatically starts a new line, so you can paste the next link right away.
 - The Picker's bulk-add links now shows which specific links failed and why, matching the bucket page's existing failed-imports list.
+- Closing the Bucket Settings dialog while renaming a bucket now warns about unsaved changes instead of silently discarding your edit.
 
 ### Fixed
 

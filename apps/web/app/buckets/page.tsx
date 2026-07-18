@@ -11,6 +11,16 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarProvider, Sidebar, SidebarContent, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Bucket } from "@/lib/types";
@@ -28,6 +38,7 @@ function BucketsContent() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState("");
+  const [showDiscardNameConfirm, setShowDiscardNameConfirm] = useState(false);
 
   const COLUMN_CLASSES = [
     "columns-3 sm:columns-4 md:columns-5 lg:columns-6",
@@ -99,7 +110,22 @@ function BucketsContent() {
               <h1 className="text-base font-medium flex items-center gap-2">
                 {activeBucket ? activeBucket.name : "Images"}
                 {activeBucket && !isReadOnly && !isSystemBucket && (
-                  <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+                  <Dialog
+                    open={infoOpen}
+                    onOpenChange={(open, eventDetails) => {
+                      if (!open && editingName) {
+                        // Escape is already handled locally by the name
+                        // input (cancels just the inline edit) — only warn
+                        // for the other ways to close the whole dialog.
+                        eventDetails.cancel();
+                        if (eventDetails.reason !== "escape-key") {
+                          setShowDiscardNameConfirm(true);
+                        }
+                        return;
+                      }
+                      setInfoOpen(open);
+                    }}
+                  >
                     <DialogTrigger render={<Button variant="ghost" size="icon" className="h-6 w-6 ml-1"><Settings className="h-4 w-4 text-muted-foreground hover:text-foreground"/></Button>} />
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
@@ -161,6 +187,28 @@ function BucketsContent() {
                     </DialogContent>
                   </Dialog>
                 )}
+                <AlertDialog open={showDiscardNameConfirm} onOpenChange={setShowDiscardNameConfirm}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        You have an unsaved bucket name change. Closing now will discard it.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep editing</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => {
+                          setEditingName(false);
+                          setInfoOpen(false);
+                        }}
+                        className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                      >
+                        Discard
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </h1>
             </div>
             {bucketId && !isReadOnly && activeBucket && !isSystemBucket && (

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Folder, X, Minus, Move, Plus } from "lucide-react";
 import { PickerAddLinks } from "@/components/picker-add-links";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import type { ImageSearchResult, Bucket } from "@/lib/types";
 import { isWritablePickerBucket } from "@/lib/picker-add-links";
 import { toast } from "sonner";
@@ -218,7 +218,9 @@ export default function PickerPage() {
     dismissChangelogBanner();
   };
 
-  const handleSelectImage = async (url: string) => {
+  const handleSelectImage = async (result: ImageSearchResult) => {
+    const url = result.image.url;
+
     if (isTauri()) {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
@@ -235,6 +237,8 @@ export default function PickerPage() {
         toast.error("Failed to copy link");
       }
     }
+
+    apiPost(`/api/buckets/${result.bucketId}/images/${result.image.id}/send`, {}).catch(() => {});
   };
 
   useEffect(() => {
@@ -287,7 +291,7 @@ export default function PickerPage() {
         case "Enter":
           e.preventDefault();
           if (results[selectedIndex]) {
-            handleSelectImage(results[selectedIndex].image.url);
+            handleSelectImage(results[selectedIndex]);
           }
           return;
         default:
@@ -513,7 +517,7 @@ export default function PickerPage() {
                       onClick={() => {
                         setSelectedIndex(index);
                         setKeyboardNavActive(false);
-                        handleSelectImage(result.image.url);
+                        handleSelectImage(result);
                       }}
                       className={`group break-inside-avoid mb-2 relative rounded-xl overflow-hidden cursor-pointer transition-all border ${
                         showSelectionRing

@@ -1,9 +1,15 @@
 import type { Bucket } from "@/lib/types";
 
+export type PickerAddLinksFailure = {
+  url: string;
+  error: string;
+};
+
 export type PickerAddLinksSummary = {
   total: number;
   added: number;
   failed: number;
+  failedLinks: PickerAddLinksFailure[];
 };
 
 export function parsePickerLinks(value: string): string[] {

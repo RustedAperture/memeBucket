@@ -6,7 +6,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { apiPost } from "@/lib/api";
-import { isWritablePickerBucket, parsePickerLinks, type PickerAddLinksSummary } from "@/lib/picker-add-links";
+import {
+  isWritablePickerBucket,
+  parsePickerLinks,
+  type PickerAddLinksFailure,
+  type PickerAddLinksSummary,
+} from "@/lib/picker-add-links";
 import { computePasteWithTrailingNewline } from "@/lib/textarea-paste";
 import type { Bucket } from "@/lib/types";
 
@@ -81,18 +86,23 @@ export function PickerAddLinks({
     setProgress({ current: 1, total: links.length });
 
     let added = 0;
+    const failedLinks: PickerAddLinksFailure[] = [];
     for (let index = 0; index < links.length; index += 1) {
       const url = links[index];
       setProgress({ current: index + 1, total: links.length });
       try {
         await apiPost(`/api/buckets/${bucketId}/images`, { url });
         added += 1;
-      } catch {
+      } catch (err) {
         // Keep going so the final summary reflects the whole batch.
+        failedLinks.push({
+          url,
+          error: err instanceof Error ? err.message : "Failed to add link",
+        });
       }
     }
 
-    setSummary({ total: links.length, added, failed: links.length - added });
+    setSummary({ total: links.length, added, failed: failedLinks.length, failedLinks });
     setValue("");
     setProgress(null);
     setIsSubmitting(false);
@@ -135,11 +145,29 @@ export function PickerAddLinks({
           Links
         </label>
         {summary ? (
-          <div className="flex min-h-36 min-w-0 flex-1 flex-col justify-center rounded-md border bg-card/60 px-3 py-4 text-sm">
-            <p className="font-medium text-foreground">Finished adding links</p>
-            <p className="mt-1 text-muted-foreground">
-              Total: {summary.total} · Added: {summary.added} · Failed: {summary.failed}
-            </p>
+          <div
+            className={`flex min-h-36 min-w-0 flex-1 flex-col gap-2 overflow-y-auto rounded-md border bg-card/60 px-3 py-4 text-sm ${
+              summary.failedLinks.length === 0 ? "justify-center" : ""
+            }`}
+          >
+            <div>
+              <p className="font-medium text-foreground">Finished adding links</p>
+              <p className="mt-1 text-muted-foreground">
+                Total: {summary.total} · Added: {summary.added} · Failed: {summary.failed}
+              </p>
+            </div>
+            {summary.failedLinks.length > 0 ? (
+              <div className="space-y-1.5 border-t pt-2">
+                {summary.failedLinks.map((failure, index) => (
+                  <div key={index} className="text-xs">
+                    <p className="truncate font-mono text-muted-foreground" title={failure.url}>
+                      {failure.url}
+                    </p>
+                    <p className="text-destructive">{failure.error}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : (
           <>

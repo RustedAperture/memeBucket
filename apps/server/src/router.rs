@@ -16,7 +16,9 @@ use crate::{
         },
         buckets::{create_bucket, delete_bucket, list_buckets, rename_bucket},
         gifs::search_gifs,
-        images::{create_image, delete_image, list_images, search_images, update_image},
+        images::{
+            create_image, delete_image, list_images, record_image_send, search_images, update_image,
+        },
     },
     app_state::AppState,
     auth::discord_oauth::{handle_discord_oauth_callback, start_discord_oauth},
@@ -76,6 +78,10 @@ fn build_router_internal(state: AppState, is_test: bool) -> Router {
         .route(
             "/api/buckets/{bucket_id}/images/{image_id}/move",
             post(crate::api::images::move_image),
+        )
+        .route(
+            "/api/buckets/{bucket_id}/images/{image_id}/send",
+            post(record_image_send),
         )
         .route(
             "/api/buckets/{bucket_id}",

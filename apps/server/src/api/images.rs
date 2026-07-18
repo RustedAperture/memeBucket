@@ -22,6 +22,10 @@ use crate::{
 };
 use validator::Validate;
 
+const PICKER_DEBOUNCE_WINDOW_SECS: i64 = 3;
+const PICKER_RATE_LIMIT_WINDOW_SECS: i64 = 60;
+const PICKER_RATE_LIMIT_MAX: i64 = 30;
+
 #[derive(Deserialize, Validate)]
 pub struct CreateImageRequest {
     #[validate(url(message = "URL must be a valid HTTP or HTTPS URL"))]
@@ -528,6 +532,37 @@ pub async fn move_image(
     }
 
     Ok(Json(serde_json::json!({ "updated": true })))
+}
+
+pub async fn record_image_send(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Path((bucket_id, image_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let repo = &state.send_history_repo;
+
+    if repo
+        .has_recent_send(user.user_id, image_id, PICKER_DEBOUNCE_WINDOW_SECS)
+        .await?
+    {
+        return Ok(Json(serde_json::json!({ "recorded": false })));
+    }
+
+    let recent_count = repo
+        .count_recent_by_visibility(user.user_id, "picker", PICKER_RATE_LIMIT_WINDOW_SECS)
+        .await?;
+    if recent_count >= PICKER_RATE_LIMIT_MAX {
+        return Err(AppError::TooManyRequests);
+    }
+
+    match repo
+        .record(user.user_id, bucket_id, image_id, "picker")
+        .await
+    {
+        Ok(()) => Ok(Json(serde_json::json!({ "recorded": true }))),
+        Err(sqlx::Error::RowNotFound) => Err(AppError::NotFound),
+        Err(err) => Err(AppError::from(err)),
+    }
 }
 
 pub async fn build_image_responses(

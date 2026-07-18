@@ -10,8 +10,8 @@ use memebucket_server::{
     app_state::AppState,
     auth::sessions::AuthenticatedUser,
     repositories::{
-        BucketRepo, ImageRepo, UserRepo, buckets::BucketRepository, images::ImageRepository,
-        users::UserRepository,
+        BucketRepo, ImageRepo, SendHistoryRepo, UserRepo, buckets::BucketRepository,
+        images::ImageRepository, users::UserRepository,
     },
     router::build_router_for_tests,
 };
@@ -365,4 +365,199 @@ async fn update_image_with_url_resolving_to_video_routes_through_video_path() {
         .unwrap()
         .unwrap();
     assert_eq!(updated.url, video_url);
+}
+
+#[tokio::test]
+async fn record_image_send_inserts_row_and_updates_send_count() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let buckets = BucketRepository::new(pool.clone());
+    let images_repo = ImageRepository::new(pool.clone());
+
+    let user = users
+        .upsert_by_provider("discord", "owner", None, None)
+        .await
+        .unwrap();
+    let bucket = buckets.create(user.id, "Bucket").await.unwrap();
+    let image = images_repo
+        .create(user.id, bucket.id, "https://example.com/1.png")
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool.clone());
+    let app = build_router_for_tests(state);
+
+    let mut request = Request::builder()
+        .method("POST")
+        .uri(format!(
+            "/api/buckets/{}/images/{}/send",
+            bucket.id, image.id
+        ))
+        .body(Body::empty())
+        .unwrap();
+    request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["recorded"], true);
+
+    let send_history =
+        memebucket_server::repositories::send_history::SendHistoryRepository::new(pool);
+    let counts = send_history
+        .count_for_images(user.id, &[image.id])
+        .await
+        .unwrap();
+    assert_eq!(counts.get(&image.id).copied(), Some(1));
+}
+
+#[tokio::test]
+async fn record_image_send_for_inaccessible_image_returns_not_found() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let buckets = BucketRepository::new(pool.clone());
+    let images_repo = ImageRepository::new(pool.clone());
+
+    let owner = users
+        .upsert_by_provider("discord", "owner", None, None)
+        .await
+        .unwrap();
+    let stranger = users
+        .upsert_by_provider("discord", "stranger", None, None)
+        .await
+        .unwrap();
+    let bucket = buckets.create(owner.id, "Bucket").await.unwrap();
+    let image = images_repo
+        .create(owner.id, bucket.id, "https://example.com/1.png")
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool);
+    let app = build_router_for_tests(state);
+
+    let mut request = Request::builder()
+        .method("POST")
+        .uri(format!(
+            "/api/buckets/{}/images/{}/send",
+            bucket.id, image.id
+        ))
+        .body(Body::empty())
+        .unwrap();
+    request.extensions_mut().insert(AuthenticatedUser {
+        user_id: stranger.id,
+        role: "user".to_string(),
+    });
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn record_image_send_debounces_rapid_duplicate_selection() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let buckets = BucketRepository::new(pool.clone());
+    let images_repo = ImageRepository::new(pool.clone());
+
+    let user = users
+        .upsert_by_provider("discord", "owner", None, None)
+        .await
+        .unwrap();
+    let bucket = buckets.create(user.id, "Bucket").await.unwrap();
+    let image = images_repo
+        .create(user.id, bucket.id, "https://example.com/1.png")
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool.clone());
+    let app = build_router_for_tests(state);
+
+    for expected_recorded in [true, false] {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri(format!(
+                "/api/buckets/{}/images/{}/send",
+                bucket.id, image.id
+            ))
+            .body(Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(AuthenticatedUser {
+            user_id: user.id,
+            role: "user".to_string(),
+        });
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["recorded"], expected_recorded);
+    }
+
+    let send_history =
+        memebucket_server::repositories::send_history::SendHistoryRepository::new(pool);
+    let counts = send_history
+        .count_for_images(user.id, &[image.id])
+        .await
+        .unwrap();
+    assert_eq!(counts.get(&image.id).copied(), Some(1));
+}
+
+#[tokio::test]
+async fn record_image_send_rate_limits_after_thirty_in_one_minute() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let buckets = BucketRepository::new(pool.clone());
+    let images_repo = ImageRepository::new(pool.clone());
+
+    let user = users
+        .upsert_by_provider("discord", "owner", None, None)
+        .await
+        .unwrap();
+    let bucket = buckets.create(user.id, "Bucket").await.unwrap();
+
+    let mut image_ids = Vec::new();
+    for i in 0..31 {
+        let image = images_repo
+            .create(user.id, bucket.id, &format!("https://example.com/{i}.png"))
+            .await
+            .unwrap();
+        image_ids.push(image.id);
+    }
+
+    let state = AppState::for_tests(pool);
+    let app = build_router_for_tests(state);
+
+    for (index, image_id) in image_ids.iter().enumerate() {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri(format!(
+                "/api/buckets/{}/images/{}/send",
+                bucket.id, image_id
+            ))
+            .body(Body::empty())
+            .unwrap();
+        request.extensions_mut().insert(AuthenticatedUser {
+            user_id: user.id,
+            role: "user".to_string(),
+        });
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        if index < 30 {
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "request {index} should succeed"
+            );
+        } else {
+            assert_eq!(
+                response.status(),
+                StatusCode::TOO_MANY_REQUESTS,
+                "request {index} should be rate limited"
+            );
+        }
+    }
 }

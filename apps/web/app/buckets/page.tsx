@@ -47,6 +47,12 @@ function BucketsContent() {
   const isSubscribed = activeBucket?.is_subscribed;
   const isSystemBucket = bucketId === "all" || bucketId === "favorites" || activeBucket?.is_read_only;
   const isReadOnly = Boolean(isSubscribed);
+  // The server flags every bucket named "Inbox" as read-only, for owner and
+  // subscribers alike — but the owner's own Inbox is meant to accept new
+  // links, same as the Picker already allows (see isWritablePickerBucket).
+  const isOwnedInbox = Boolean(
+    activeBucket && !isSubscribed && activeBucket.name.trim().toLowerCase() === "inbox"
+  );
 
   const handleDeleteBucket = async (bucket: Bucket) => {
     try {
@@ -211,11 +217,11 @@ function BucketsContent() {
                 ))}
               </div>
             </div>
-            {!isReadOnly && activeBucket && !isSystemBucket && (
+            {!isReadOnly && activeBucket && (!isSystemBucket || isOwnedInbox) && (
               <div className="w-full sm:w-auto flex-grow sm:flex-grow-0 sm:ml-auto">
-                <ImageForm 
-                  bucketId={bucketId} 
-                  onCreated={() => setRefreshKey((k) => k + 1)} 
+                <ImageForm
+                  bucketId={bucketId}
+                  onCreated={() => setRefreshKey((k) => k + 1)}
                 />
               </div>
             )}

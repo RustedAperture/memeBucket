@@ -11,6 +11,7 @@
 
 - Fixed moving an image to another bucket (via drag-and-drop or the bucket dropdown in the image dialog) failing with a 422 error.
 - Pasting a Klipy gif/sticker/clip page link (e.g. klipy.com/gifs/...) now shows a clear message explaining it can't be imported directly, instead of a generic fetch error.
+- Fixed the website hiding the Add Image / Search GIFs / Bulk Add Links toolbar on your own Inbox bucket, matching the Picker's existing support for adding links to Inbox.
 
 ## v0.2.9 - Jul 15, 2026
 

@@ -6,6 +6,10 @@
 
 - Selecting an image in the Picker (web and desktop) now counts toward that image's send count, matching Discord sends.
 
+### Fixed
+
+- Fixed moving an image to another bucket (via drag-and-drop or the bucket dropdown in the image dialog) failing with a 422 error.
+
 ## v0.2.9 - Jul 15, 2026
 
 ### Fixed

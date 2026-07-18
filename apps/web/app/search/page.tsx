@@ -42,7 +42,7 @@ import {
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { apiGet, apiPatch, apiDelete } from "@/lib/api";
+import { apiGet, apiPatch, apiPost, apiDelete } from "@/lib/api";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTouchHold } from "@/hooks/use-touch-hold";
 import { Textarea } from "@/components/ui/textarea";
@@ -525,8 +525,8 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
 
   const handleMoveToBucket = async (newBucketId: string) => {
     try {
-      await apiPatch(`/api/buckets/${currentBucketId}/images/${image.id}/move`, {
-        destinationBucketId: newBucketId,
+      await apiPost(`/api/buckets/${currentBucketId}/images/${image.id}/move`, {
+        bucketId: newBucketId,
       });
       const destBucket = buckets.find((b) => b.id === newBucketId);
       if (destBucket) {

@@ -561,3 +561,72 @@ async fn record_image_send_rate_limits_after_thirty_in_one_minute() {
         }
     }
 }
+
+#[tokio::test]
+async fn move_image_rejects_snake_case_body_and_accepts_bucket_id() {
+    let pool = test_pool().await;
+    let users = UserRepository::new(pool.clone());
+    let buckets = BucketRepository::new(pool.clone());
+    let images_repo = ImageRepository::new(pool.clone());
+
+    let user = users
+        .upsert_by_provider("discord", "owner", None, None)
+        .await
+        .unwrap();
+    let bucket_a = buckets.create(user.id, "Bucket A").await.unwrap();
+    let bucket_b = buckets.create(user.id, "Bucket B").await.unwrap();
+    let image = images_repo
+        .create(user.id, bucket_a.id, "https://example.com/1.png")
+        .await
+        .unwrap();
+
+    let state = AppState::for_tests(pool.clone());
+    let app = build_router_for_tests(state);
+
+    // The frontend used to send `new_bucket_id` (snake_case) — the server's
+    // `MoveImageRequest` only ever accepted `bucketId`, so this shape was
+    // silently 422ing in production. Pin that this is rejected.
+    let bad_payload = serde_json::json!({ "new_bucket_id": bucket_b.id.to_string() });
+    let mut bad_request = Request::builder()
+        .method("POST")
+        .uri(format!(
+            "/api/buckets/{}/images/{}/move",
+            bucket_a.id, image.id
+        ))
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_vec(&bad_payload).unwrap()))
+        .unwrap();
+    bad_request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
+
+    let bad_response = app.clone().oneshot(bad_request).await.unwrap();
+    assert_eq!(bad_response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+    // The correct shape (`bucketId`) succeeds and actually performs the move.
+    let good_payload = serde_json::json!({ "bucketId": bucket_b.id.to_string() });
+    let mut good_request = Request::builder()
+        .method("POST")
+        .uri(format!(
+            "/api/buckets/{}/images/{}/move",
+            bucket_a.id, image.id
+        ))
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_vec(&good_payload).unwrap()))
+        .unwrap();
+    good_request.extensions_mut().insert(AuthenticatedUser {
+        user_id: user.id,
+        role: "user".to_string(),
+    });
+
+    let good_response = app.clone().oneshot(good_request).await.unwrap();
+    assert_eq!(good_response.status(), StatusCode::OK);
+
+    let images_b = images_repo
+        .list_for_bucket(user.id, bucket_b.id)
+        .await
+        .unwrap();
+    assert_eq!(images_b.len(), 1);
+    assert_eq!(images_b[0].id, image.id);
+}

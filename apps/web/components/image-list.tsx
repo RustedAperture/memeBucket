@@ -347,7 +347,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
     const sourceBucketId = sourceBucketIdFor(selectedImage, bucketId);
     if (!sourceBucketId || newBucketId === sourceBucketId) return;
     try {
-      await apiPost(`/api/buckets/${sourceBucketId}/images/${selectedImage.id}/move`, { new_bucket_id: newBucketId });
+      await apiPost(`/api/buckets/${sourceBucketId}/images/${selectedImage.id}/move`, { bucketId: newBucketId });
       setSelectedImage(null);
       if (onMoveImage) {
         onMoveImage();

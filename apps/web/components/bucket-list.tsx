@@ -59,7 +59,7 @@ export function BucketList({ onBucketsChange, onImageMoved, refreshKey }: { onBu
       
       const results = await Promise.allSettled(
         imageIds.map((imageId) =>
-          apiPost(`/api/buckets/${data.sourceBucketId}/images/${imageId}/move`, { new_bucket_id: targetBucket.id })
+          apiPost(`/api/buckets/${data.sourceBucketId}/images/${imageId}/move`, { bucketId: targetBucket.id })
         )
       );
       const movedCount = results.filter((result) => result.status === "fulfilled").length;

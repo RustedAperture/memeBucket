@@ -179,7 +179,7 @@ async fn random_avoids_recent_image_when_alternative_exists() {
         .await
         .unwrap();
     history
-        .record(user.id, &saved_pool, &recent, "public")
+        .record(user.id, saved_pool.id, recent.id, "public")
         .await
         .unwrap();
 
@@ -213,7 +213,7 @@ async fn random_returns_only_image_from_single_image_pool() {
         .await
         .unwrap();
     history
-        .record(user.id, &saved_pool, &only, "public")
+        .record(user.id, saved_pool.id, only.id, "public")
         .await
         .unwrap();
 
@@ -326,7 +326,7 @@ async fn send_history_record_rejects_cross_owner_inputs() {
         .unwrap();
 
     let err = history
-        .record(bob.id, &saved_pool, &image, "public")
+        .record(bob.id, saved_pool.id, image.id, "public")
         .await
         .unwrap_err();
 
@@ -355,11 +355,11 @@ async fn recent_image_ids_for_buckets_prefers_latest_insert_when_sent_at_ties() 
         .unwrap();
 
     history
-        .record(user.id, &saved_pool, &first, "public")
+        .record(user.id, saved_pool.id, first.id, "public")
         .await
         .unwrap();
     history
-        .record(user.id, &saved_pool, &second, "public")
+        .record(user.id, saved_pool.id, second.id, "public")
         .await
         .unwrap();
 

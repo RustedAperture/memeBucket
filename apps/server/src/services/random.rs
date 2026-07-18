@@ -155,8 +155,8 @@ impl RandomService {
         self.history
             .record(
                 requester_user_id,
-                &selected.bucket,
-                &selected.image,
+                selected.bucket.id,
+                selected.image.id,
                 visibility.as_str(),
             )
             .await

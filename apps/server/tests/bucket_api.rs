@@ -428,15 +428,15 @@ async fn shared_pool_preview_uses_viewer_send_count_and_anonymous_gets_zero() {
         .unwrap();
 
     send_history
-        .record(owner.id, &saved_pool, &image, "public")
+        .record(owner.id, saved_pool.id, image.id, "public")
         .await
         .unwrap();
     send_history
-        .record(owner.id, &saved_pool, &image, "private")
+        .record(owner.id, saved_pool.id, image.id, "private")
         .await
         .unwrap();
     send_history
-        .record(subscriber.id, &saved_pool, &image, "public")
+        .record(subscriber.id, saved_pool.id, image.id, "public")
         .await
         .unwrap();
 

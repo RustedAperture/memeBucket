@@ -2,8 +2,6 @@ use sqlx::SqlitePool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::repositories::{buckets::StoredBucket, images::StoredImage};
-
 #[derive(Clone)]
 pub struct SendHistoryRepository {
     pool: SqlitePool,
@@ -14,10 +12,24 @@ pub trait SendHistoryRepo: Send + Sync {
     async fn record(
         &self,
         requester_user_id: Uuid,
-        bucket: &StoredBucket,
-        image: &StoredImage,
+        bucket_id: Uuid,
+        image_id: Uuid,
         visibility: &str,
     ) -> Result<(), sqlx::Error>;
+
+    async fn has_recent_send(
+        &self,
+        requester_user_id: Uuid,
+        image_id: Uuid,
+        window_seconds: i64,
+    ) -> Result<bool, sqlx::Error>;
+
+    async fn count_recent_by_visibility(
+        &self,
+        requester_user_id: Uuid,
+        visibility: &str,
+        window_seconds: i64,
+    ) -> Result<i64, sqlx::Error>;
 
     async fn count_for_images(
         &self,
@@ -44,8 +56,8 @@ impl SendHistoryRepo for SendHistoryRepository {
     async fn record(
         &self,
         requester_user_id: Uuid,
-        bucket: &StoredBucket,
-        image: &StoredImage,
+        bucket_id: Uuid,
+        image_id: Uuid,
         visibility: &str,
     ) -> Result<(), sqlx::Error> {
         let result = sqlx::query(
@@ -81,8 +93,8 @@ impl SendHistoryRepo for SendHistoryRepository {
         .bind(Uuid::new_v4().to_string())
         .bind(requester_user_id.to_string())
         .bind(visibility)
-        .bind(image.id.to_string())
-        .bind(bucket.id.to_string())
+        .bind(image_id.to_string())
+        .bind(bucket_id.to_string())
         .bind(requester_user_id.to_string())
         .bind(requester_user_id.to_string())
         .bind(requester_user_id.to_string())
@@ -94,6 +106,54 @@ impl SendHistoryRepo for SendHistoryRepository {
         }
 
         Ok(())
+    }
+
+    async fn has_recent_send(
+        &self,
+        requester_user_id: Uuid,
+        image_id: Uuid,
+        window_seconds: i64,
+    ) -> Result<bool, sqlx::Error> {
+        let modifier = format!("-{window_seconds} seconds");
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM send_history
+            WHERE owner_user_id = ?
+              AND image_id = ?
+              AND sent_at > datetime('now', ?)
+            "#,
+        )
+        .bind(requester_user_id.to_string())
+        .bind(image_id.to_string())
+        .bind(modifier)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(count > 0)
+    }
+
+    async fn count_recent_by_visibility(
+        &self,
+        requester_user_id: Uuid,
+        visibility: &str,
+        window_seconds: i64,
+    ) -> Result<i64, sqlx::Error> {
+        let modifier = format!("-{window_seconds} seconds");
+        sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*)
+            FROM send_history
+            WHERE owner_user_id = ?
+              AND response_visibility = ?
+              AND sent_at > datetime('now', ?)
+            "#,
+        )
+        .bind(requester_user_id.to_string())
+        .bind(visibility)
+        .bind(modifier)
+        .fetch_one(&self.pool)
+        .await
     }
 
     async fn count_for_images(
@@ -167,5 +227,80 @@ impl SendHistoryRepo for SendHistoryRepository {
         rows.into_iter()
             .map(|id| Uuid::parse_str(&id).map_err(|err| sqlx::Error::Decode(Box::new(err))))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::repositories::{
+        BucketRepo, ImageRepo, UserRepo, buckets::BucketRepository, images::ImageRepository,
+        users::UserRepository,
+    };
+
+    async fn test_pool() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        pool
+    }
+
+    #[tokio::test]
+    async fn has_recent_send_is_true_within_window_and_false_after() {
+        let pool = test_pool().await;
+        let users = UserRepository::new(pool.clone());
+        let buckets = BucketRepository::new(pool.clone());
+        let images = ImageRepository::new(pool.clone());
+        let repo = SendHistoryRepository::new(pool.clone());
+
+        let user = users
+            .upsert_by_provider("discord", "owner", None, None)
+            .await
+            .unwrap();
+        let bucket = buckets.create(user.id, "Bucket").await.unwrap();
+        let image = images
+            .create(user.id, bucket.id, "https://example.com/1.png")
+            .await
+            .unwrap();
+
+        assert!(!repo.has_recent_send(user.id, image.id, 3).await.unwrap());
+
+        repo.record(user.id, bucket.id, image.id, "picker")
+            .await
+            .unwrap();
+
+        assert!(repo.has_recent_send(user.id, image.id, 3).await.unwrap());
+        assert!(!repo.has_recent_send(user.id, image.id, 0).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn count_recent_by_visibility_only_counts_matching_visibility() {
+        let pool = test_pool().await;
+        let users = UserRepository::new(pool.clone());
+        let buckets = BucketRepository::new(pool.clone());
+        let images = ImageRepository::new(pool.clone());
+        let repo = SendHistoryRepository::new(pool.clone());
+
+        let user = users
+            .upsert_by_provider("discord", "owner", None, None)
+            .await
+            .unwrap();
+        let bucket = buckets.create(user.id, "Bucket").await.unwrap();
+        let image = images
+            .create(user.id, bucket.id, "https://example.com/1.png")
+            .await
+            .unwrap();
+
+        repo.record(user.id, bucket.id, image.id, "picker")
+            .await
+            .unwrap();
+        repo.record(user.id, bucket.id, image.id, "public")
+            .await
+            .unwrap();
+
+        let count = repo
+            .count_recent_by_visibility(user.id, "picker", 60)
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
     }
 }

@@ -15,7 +15,7 @@ export default function PrivacyPage() {
           <li>Session records, CSRF token hashes, OAuth state cookies, and expiration timestamps.</li>
           <li>Bucket names, image or GIF URLs, optional notes, creation timestamps, and related internal IDs.</li>
           <li>Share tokens, subscriptions, subscriber counts, whitelist settings, and whitelist membership.</li>
-          <li>Random-send history, including bucket name, selected URL, visibility setting, and timestamp.</li>
+          <li>Send history (via Discord random commands and Picker selections), including bucket name, selected URL, visibility setting, and timestamp.</li>
         </LegalList>
       </LegalSection>
 

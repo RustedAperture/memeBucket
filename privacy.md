@@ -12,7 +12,7 @@ memeBucket stores only the information needed to provide its media bucket featur
 - **Sessions and security tokens:** session records, CSRF token hashes, OAuth state cookies, and expiration timestamps used to keep the web dashboard signed in and protected.
 - **Buckets and images:** bucket names, image or GIF URLs, optional image notes, creation timestamps, and related internal IDs.
 - **Sharing data:** share tokens, bucket subscription records, subscriber counts, whitelist settings, and whitelist membership.
-- **Command usage history:** records of random image sends, including bucket name, selected URL, visibility setting, and timestamp.
+- **Send history:** records of image sends via Discord random commands and Picker selections (web and desktop), including bucket name, selected URL, visibility setting, and timestamp.
 
 ## How We Use Data
 

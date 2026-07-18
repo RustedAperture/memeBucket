@@ -17,6 +17,7 @@
 - Fixed the website hiding the Add Image / Search GIFs / Bulk Add Links toolbar on your own Inbox bucket, matching the Picker's existing support for adding links to Inbox.
 - Fixed the Bulk Add Links dialog growing wider than the screen when a very long link was being processed.
 - Aligned the bucket image selection toolbar radius with the image cards.
+- Fixed Enter not submitting several image and bucket editors; Bulk Add Links still uses Enter for new lines.
 
 ## v0.2.9 - Jul 15, 2026
 

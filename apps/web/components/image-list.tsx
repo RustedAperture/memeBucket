@@ -563,7 +563,13 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleBulkSave();
+            }}
+            className="space-y-4"
+          >
             <div className="space-y-1.5">
               <Label>Favorite</Label>
               <Select
@@ -654,20 +660,20 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                 placeholder="old, duplicate"
               />
             </div>
-          </div>
-
           <DialogFooter>
             <Button
               variant="outline"
+              type="button"
               onClick={() => setBulkDialogOpen(false)}
               disabled={bulkSaving}
             >
               Cancel
             </Button>
-            <Button onClick={handleBulkSave} disabled={bulkSaving}>
+            <Button type="submit" disabled={bulkSaving}>
               Save
             </Button>
           </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -712,7 +718,13 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                 </div>
 
                 {editingDetails ? (
-                  <div className="space-y-3">
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleSaveDetails();
+                    }}
+                    className="space-y-3"
+                  >
                     <div className="space-y-1.5">
                       <Label htmlFor="image-url">Link</Label>
                       <Input
@@ -826,6 +838,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                       <Button
                         variant="outline"
                         size="sm"
+                        type="button"
                         disabled={savingDetails}
                         onClick={() => {
                           setEditingDetails(false);
@@ -840,11 +853,11 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
                       >
                         Cancel
                       </Button>
-                      <Button size="sm" onClick={handleSaveDetails} disabled={savingDetails}>
+                      <Button size="sm" type="submit" disabled={savingDetails}>
                         {savingDetails ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
                       </Button>
                     </div>
-                  </div>
+                  </form>
                 ) : (
                   <div className="space-y-3">
                     <div className="flex min-w-0 gap-2">

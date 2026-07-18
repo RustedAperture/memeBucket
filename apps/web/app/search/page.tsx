@@ -712,7 +712,13 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
               </div>
 
               {editingMetadata ? (
-                <div className="space-y-3">
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleSaveMetadata();
+                  }}
+                  className="space-y-3"
+                >
                   <div className="space-y-1.5">
                     <Label htmlFor="image-url">Link</Label>
                     <Input
@@ -819,6 +825,7 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
                     <Button
                       variant="outline"
                       size="sm"
+                      type="button"
                       onClick={() => {
                         setEditingMetadata(false);
                         setTitleValue(image.title || "");
@@ -832,9 +839,9 @@ function SearchResultCard({ result, readonly, buckets, onDelete }: SearchResultC
                     >
                       Cancel
                     </Button>
-                    <Button size="sm" onClick={handleSaveMetadata}>Save</Button>
+                    <Button size="sm" type="submit">Save</Button>
                   </div>
-                </div>
+                </form>
               ) : (
                 <div className="space-y-3">
                   <div className="flex min-w-0 gap-2">

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added dedicated 404, 429, and 500 error pages with recovery actions.
 - Selecting an image in the Picker (web and desktop) now counts toward that image's send count, matching Discord sends.
 - Pasting a link into the Picker's or bucket page's bulk-add links box now automatically starts a new line, so you can paste the next link right away.
 - The Picker's bulk-add links now shows which specific links failed and why, matching the bucket page's existing failed-imports list.
@@ -15,6 +16,7 @@
 - Pasting a Klipy gif/sticker/clip page link (e.g. klipy.com/gifs/...) now shows a clear message explaining it can't be imported directly, instead of a generic fetch error.
 - Fixed the website hiding the Add Image / Search GIFs / Bulk Add Links toolbar on your own Inbox bucket, matching the Picker's existing support for adding links to Inbox.
 - Fixed the Bulk Add Links dialog growing wider than the screen when a very long link was being processed.
+- Aligned the bucket image selection toolbar radius with the image cards.
 
 ## v0.2.9 - Jul 15, 2026
 

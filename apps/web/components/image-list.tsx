@@ -447,7 +447,7 @@ export function ImageList({ bucketId, columnClass = "columns-2 sm:columns-2 md:c
 
         {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
         {!readonly && selectedImageIds.size > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/40 px-3 py-2 text-sm">
             <span className="font-medium">
               {selectedImageIds.size} image{selectedImageIds.size === 1 ? "" : "s"} selected
             </span>

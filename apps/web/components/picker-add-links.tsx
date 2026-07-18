@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { apiPost } from "@/lib/api";
 import { isWritablePickerBucket, parsePickerLinks, type PickerAddLinksSummary } from "@/lib/picker-add-links";
+import { computePasteWithTrailingNewline } from "@/lib/textarea-paste";
 import type { Bucket } from "@/lib/types";
 
 export type PickerAddLinksProps = {
@@ -149,6 +150,24 @@ export function PickerAddLinks({
               onChange={(event) => {
                 setValue(event.target.value);
                 setValidationMessage(null);
+              }}
+              onPaste={(event) => {
+                const pasted = event.clipboardData.getData("text");
+                if (!pasted) return;
+                event.preventDefault();
+
+                const textarea = event.currentTarget;
+                const { nextValue, nextCursor } = computePasteWithTrailingNewline(
+                  value,
+                  textarea.selectionStart,
+                  textarea.selectionEnd,
+                  pasted
+                );
+                setValue(nextValue);
+                setValidationMessage(null);
+                requestAnimationFrame(() => {
+                  textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                });
               }}
               disabled={isSubmitting}
               placeholder={"https://example.com/one.gif\nhttps://example.com/two.mp4"}

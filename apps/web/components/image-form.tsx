@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { apiPost } from "@/lib/api";
+import { computePasteWithTrailingNewline } from "@/lib/textarea-paste";
 import type { GifSearchSelection } from "@/lib/types";
 import { Plus, Search, X, ListPlus, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { GifSearchModal } from "./gif-search-modal";
@@ -257,6 +258,23 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
                 placeholder="https://example.com/image1.gif&#10;https://example.com/image2.mp4"
                 value={bulkUrls}
                 onChange={(e) => setBulkUrls(e.target.value)}
+                onPaste={(event) => {
+                  const pasted = event.clipboardData.getData("text");
+                  if (!pasted) return;
+                  event.preventDefault();
+
+                  const textarea = event.currentTarget;
+                  const { nextValue, nextCursor } = computePasteWithTrailingNewline(
+                    bulkUrls,
+                    textarea.selectionStart,
+                    textarea.selectionEnd,
+                    pasted
+                  );
+                  setBulkUrls(nextValue);
+                  requestAnimationFrame(() => {
+                    textarea.selectionStart = textarea.selectionEnd = nextCursor;
+                  });
+                }}
                 className="h-48 resize-none font-mono text-xs"
               />
             )}

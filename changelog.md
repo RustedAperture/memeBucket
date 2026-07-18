@@ -5,6 +5,7 @@
 ### Added
 
 - Selecting an image in the Picker (web and desktop) now counts toward that image's send count, matching Discord sends.
+- Pasting a link into the Picker's or bucket page's bulk-add links box now automatically starts a new line, so you can paste the next link right away.
 
 ### Fixed
 

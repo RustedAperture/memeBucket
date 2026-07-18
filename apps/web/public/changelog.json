@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.2.10",
+    "date": "Jul 17, 2026",
+    "sections": [
+      {
+        "heading": "Added",
+        "items": [
+          "Selecting an image in the Picker (web and desktop) now counts toward that image's send count, matching Discord sends."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.2.9",
     "date": "Jul 15, 2026",
     "sections": [

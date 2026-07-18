@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.10 - Jul 17, 2026
+
+### Added
+
+- Selecting an image in the Picker (web and desktop) now counts toward that image's send count, matching Discord sends.
+
 ## v0.2.9 - Jul 15, 2026
 
 ### Fixed

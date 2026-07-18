@@ -14,6 +14,7 @@ pub enum ImageUrlValidationError {
     InvalidHttpUrl,
     FetchFailed,
     UnsupportedContentType,
+    KlipyPageUrlUnsupported,
 }
 
 impl ImageUrlValidationError {
@@ -24,8 +25,33 @@ impl ImageUrlValidationError {
             ImageUrlValidationError::UnsupportedContentType => {
                 "URL must point to an image or a page with image metadata."
             }
+            ImageUrlValidationError::KlipyPageUrlUnsupported => {
+                "Klipy gif/sticker/clip page links can't be imported directly — use \"Search GIFs\" instead to add this."
+            }
         }
     }
+}
+
+/// Klipy blocks server-side fetches of its individual gif/sticker/clip pages
+/// (Cloudflare JS challenge, and robots.txt disallows crawling them), so the
+/// generic page-scraping fallback below can never see these pages' content.
+/// Detected up front to give a clear, actionable error instead of a generic
+/// fetch-failure message.
+fn is_klipy_content_page_url(url_str: &str) -> bool {
+    let Ok(url) = Url::parse(url_str) else {
+        return false;
+    };
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    if !matches!(host, "klipy.com" | "www.klipy.com") {
+        return false;
+    }
+
+    let Some(mut segments) = url.path_segments() else {
+        return false;
+    };
+    matches!(segments.next(), Some("gifs" | "stickers" | "clips")) && segments.next().is_some()
 }
 
 pub fn validate_http_url(value: &str) -> bool {
@@ -46,6 +72,7 @@ pub async fn validate_image_url(value: &str) -> Result<(), ImageUrlValidationErr
     validate_image_url_internal(value).await
 }
 
+#[derive(Debug)]
 pub struct ResolvedImage {
     pub url: String,
     pub notes: Option<String>,
@@ -62,6 +89,10 @@ struct BlueskyPostRef {
 pub async fn resolve_image_url(value: &str) -> Result<ResolvedImage, ImageUrlValidationError> {
     if !validate_http_url(value) {
         return Err(ImageUrlValidationError::InvalidHttpUrl);
+    }
+
+    if is_klipy_content_page_url(value) {
+        return Err(ImageUrlValidationError::KlipyPageUrlUnsupported);
     }
 
     if let Some(status_id) = extract_twitter_status_id(value) {
@@ -1018,6 +1049,44 @@ mod tests {
 
         assert_eq!(resolved.url, url);
         assert_eq!(resolved.notes, None);
+    }
+
+    #[test]
+    fn is_klipy_content_page_url_matches_gifs_stickers_and_clips() {
+        assert!(is_klipy_content_page_url(
+            "https://klipy.com/gifs/cats-kitties-1"
+        ));
+        assert!(is_klipy_content_page_url(
+            "https://www.klipy.com/stickers/some-sticker"
+        ));
+        assert!(is_klipy_content_page_url(
+            "https://klipy.com/clips/some-clip"
+        ));
+    }
+
+    #[test]
+    fn is_klipy_content_page_url_rejects_bare_gifs_root_and_other_hosts() {
+        // The bare "/gifs" root (no slug) is the one path klipy.com's
+        // robots.txt actually allows crawlers to visit — not a content page.
+        assert!(!is_klipy_content_page_url("https://klipy.com/gifs"));
+        assert!(!is_klipy_content_page_url("https://klipy.com/developers"));
+        // Klipy's own asset CDN serves direct media, not a bot-blocked page.
+        assert!(!is_klipy_content_page_url(
+            "https://static.klipy.com/ii/some/asset.gif"
+        ));
+        assert!(!is_klipy_content_page_url(
+            "https://example.com/gifs/cats-kitties-1"
+        ));
+    }
+
+    #[tokio::test]
+    async fn resolve_image_url_rejects_klipy_content_page_urls_with_helpful_message() {
+        let err = resolve_image_url("https://klipy.com/gifs/cats-kitties-1")
+            .await
+            .unwrap_err();
+
+        assert_eq!(err, ImageUrlValidationError::KlipyPageUrlUnsupported);
+        assert!(err.user_message().contains("Search GIFs"));
     }
 
     #[tokio::test]

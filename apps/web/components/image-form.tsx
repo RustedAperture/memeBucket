@@ -252,7 +252,7 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 my-2">
+          <div className="space-y-4 my-2 min-w-0">
             {!isBulkAdding && (
               <Textarea
                 placeholder="https://example.com/image1.gif&#10;https://example.com/image2.mp4"
@@ -280,14 +280,14 @@ export function ImageForm({ bucketId, onCreated }: { bucketId: string; onCreated
             )}
 
             {isBulkAdding && bulkProgress && (
-              <div className="flex flex-col items-center justify-center p-8 space-y-4 border rounded-lg bg-muted/20">
+              <div className="flex min-w-0 flex-col items-center justify-center p-8 space-y-4 border rounded-lg bg-muted/20">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 <div className="text-center w-full min-w-0">
                   <p className="text-sm font-medium">
                     Adding links... ({bulkProgress.current} / {bulkProgress.total})
                   </p>
                   {bulkCurrentUrl ? (
-                    <p className="text-xs text-muted-foreground mt-1 truncate" title={bulkCurrentUrl}>
+                    <p className="text-xs text-muted-foreground mt-1 truncate text-left" title={bulkCurrentUrl}>
                       {bulkCurrentUrl}
                     </p>
                   ) : null}

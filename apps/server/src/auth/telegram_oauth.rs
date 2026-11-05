@@ -4,7 +4,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Redirect},
 };
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;

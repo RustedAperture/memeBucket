@@ -3,7 +3,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Redirect},
 };
-use rand::Rng;
+use rand::RngExt;
 use serde::Deserialize;
 use uuid::Uuid;
 

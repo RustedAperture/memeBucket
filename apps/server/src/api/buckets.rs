@@ -167,7 +167,7 @@ pub async fn rename_bucket(
     }
 }
 
-use rand::Rng;
+use rand::RngExt;
 
 pub async fn share_bucket(
     State(state): State<AppState>,

@@ -340,11 +340,15 @@ fn copy_and_paste_link(app: AppHandle, url: String) -> Result<(), String> {
 
         #[cfg(not(target_os = "macos"))]
         {
-            use enigo::{Enigo, Key, KeyboardControllable};
-            let mut enigo = Enigo::new();
-            enigo.key_down(Key::Control);
-            enigo.key_click(Key::Layout('v'));
-            enigo.key_up(Key::Control);
+            use enigo::{Direction, Enigo, Key, Keyboard, Settings};
+            match Enigo::new(&Settings::default()) {
+                Ok(mut enigo) => {
+                    let _ = enigo.key(Key::Control, Direction::Press);
+                    let _ = enigo.key(Key::Unicode('v'), Direction::Click);
+                    let _ = enigo.key(Key::Control, Direction::Release);
+                }
+                Err(e) => eprintln!("Failed to initialize input simulation for paste: {e}"),
+            }
         }
     });
 
@@ -374,9 +378,14 @@ fn rebuild_tray_menu(app: &AppHandle, pending_version: Option<&str>) {
 }
 
 fn position_near_cursor(window: &tauri::WebviewWindow) {
-    use enigo::{Enigo, MouseControllable};
-    let enigo = Enigo::new();
-    let (cx, cy) = enigo.mouse_location();
+    use enigo::{Enigo, Mouse, Settings};
+    let Some((cx, cy)) = Enigo::new(&Settings::default())
+        .ok()
+        .and_then(|enigo| enigo.location().ok())
+    else {
+        let _ = window.center();
+        return;
+    };
     let positioned = if let Ok(Some(monitor)) = window.current_monitor() {
         let scale = monitor.scale_factor();
         let mpos = monitor.position();
@@ -397,8 +406,6 @@ fn position_near_cursor(window: &tauri::WebviewWindow) {
         false
     };
     if !positioned {
-        let enigo = Enigo::new();
-        let (cx, cy) = enigo.mouse_location();
         let _ = window.set_position(tauri::LogicalPosition::new(cx as f64, (cy - 500).max(0) as f64));
     }
 }

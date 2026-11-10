@@ -1,0 +1,5 @@
+[advisories]
+# libsqlite3-sys 0.37 (bundled SQLite <3.54); sqlx-sqlite 0.9.0 caps it at <0.38.
+# Only exploitable via an attacker-written DB + -wal pair; the server opens only its own DB.
+# Remove once sqlx allows libsqlite3-sys >=0.39.
+ignore = ["RUSTSEC-2026-0459"]

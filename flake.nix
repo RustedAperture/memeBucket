@@ -24,7 +24,7 @@
             rust-analyzer
 
             # Node.js toolchain
-            nodejs_22
+            nodejs_24
 
             # Databases and tools
             sqlite

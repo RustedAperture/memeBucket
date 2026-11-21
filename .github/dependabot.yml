@@ -10,6 +10,10 @@ updates:
     directory: "/apps/web"
     patterns: ["*"]
     multi-ecosystem-group: "weekly-dependencies"
+    ignore:
+      # typescript-eslint (via eslint-config-next) crashes on TS 7; lift once it supports it.
+      - dependency-name: "typescript"
+        versions: [">=6.1.0"]
 
   - package-ecosystem: "cargo"
     directories:
